@@ -425,3 +425,12 @@ a { color:inherit; }
 .admin-report-status.status-rejected { color:var(--danger); }
 .admin-report-actions { display:flex; flex-wrap:wrap; gap:7px; }
 .admin-report-actions .button { min-height:33px; font-size:10px; }
+
+
+.post-report-form { display:grid; gap:10px; margin-top:10px; padding:14px; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); }
+.post-report-form>strong { font-size:12px; }
+.post-report-form label { display:grid; gap:6px; color:var(--muted); font-size:10px; }
+.post-report-form select,.post-report-form textarea { width:100%; min-width:0; padding:10px 11px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--text); font:inherit; font-size:11px; }
+.post-report-form textarea { resize:vertical; line-height:1.8; }
+.post-report-form>div { display:flex; justify-content:flex-end; gap:8px; }
+.post-report-form .button { min-height:34px; font-size:10px; }
