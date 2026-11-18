@@ -1,46 +1,51 @@
 # Android Release Signing
 
-The repository builds Debug packages in the normal Android CI. A Play-ready Release package must be signed with a stable private keystore owned and backed up by the project owner. Never commit the keystore or passwords.
+The repository contains a workflow to produce a signed Release APK and AAB. It has **not** yet been executed with the project owner's permanent keystore. A Debug package is not a Play-ready Release.
 
-## 1. Create or select the permanent upload keystore
+## 1. Select the permanent owner keystore
 
-If this is the first Play release, create a keystore and keep its backup in a secure offline location. Do not generate a new key for every release.
+First check whether the owner already has a permanent signing/upload key. If the app has been published before, preserve that key and follow the official Play App Signing process. Only create a new key for the first release and with the owner's explicit authorization. Keep an encrypted offline backup in an owner-controlled password manager/backup location. Never commit the keystore or passwords.
 
-```bash
-keytool -genkeypair -v \
-  -keystore kaveh-release.jks \
-  -alias kaveh-upload \
-  -keyalg RSA -keysize 4096 -validity 10000
-```
+Example only for a first release when authorized:
 
-Record the keystore password, key alias, and key password in a password manager. If the app is already published, use the existing upload key or the official Play App Signing key-reset process; do not replace it casually.
+    keytool -genkeypair -v -keystore kaveh-release.jks -alias kaveh-upload -keyalg RSA -keysize 4096 -validity 10000
 
 ## 2. Add GitHub Actions secrets
 
-In GitHub: Settings → Secrets and variables → Actions → Secrets, add:
+In GitHub: **Settings → Secrets and variables → Actions → Secrets**, add:
 
-- `ANDROID_KEYSTORE_BASE64`: Base64 encoding of the complete `kaveh-release.jks` file. Linux/macOS: `base64 -w 0 kaveh-release.jks` (on macOS use `base64 kaveh-release.jks | tr -d '\\n'`).
-- `ANDROID_KEYSTORE_PASSWORD`: keystore password.
-- `ANDROID_KEY_ALIAS`: `kaveh-upload` (or the alias you chose).
-- `ANDROID_KEY_PASSWORD`: key password.
+- ANDROID_KEYSTORE_BASE64: Base64 encoding of the complete owner keystore.
+- ANDROID_KEYSTORE_PASSWORD: keystore password.
+- ANDROID_KEY_ALIAS: alias inside the keystore.
+- ANDROID_KEY_PASSWORD: private-key password.
 
-Do not paste passwords or the Base64 keystore into chat, source files, issues, or commit history.
+Do not paste the values or the Base64 keystore into chat, source files, issues, or commit history.
 
 ## 3. Configure Google Sign-in
 
-In Settings → Secrets and variables → Actions → Variables, add repository variable `GOOGLE_WEB_CLIENT_ID` with the Google OAuth **Web application Client ID**. This is an identifier, not a secret.
+In **Settings → Secrets and variables → Actions → Variables**, add Repository variable GOOGLE_WEB_CLIENT_ID with the Web OAuth Client ID. The variable is currently a release prerequisite.
 
-The Google provider must also be enabled in Supabase Authentication → Sign In / Providers → Google, with the matching Web Client ID and the Web Client Secret entered only in the Supabase Dashboard. Add the Android OAuth client using package `com.kaveh.avenger` and the SHA-1 fingerprint of the actual Release/upload certificate. The Android Client ID is not a substitute for the Web Client ID used by Credential Manager.
+The Google provider must be enabled in Supabase Authentication → Sign In / Providers → Google. Enter the Web Client ID and Web Client Secret in Supabase Dashboard only. Add the Android OAuth Client for package com.kaveh.avenger and the SHA-1 fingerprint of the real Release/upload certificate. The Web Client ID is used by Credential Manager as serverClientId.
 
 ## 4. Build and verify
 
-Run Actions → Android Release → Run workflow, or push a version tag such as `v0.1.0`. The workflow:
+Run **Actions → Android Release → Run workflow**, or push an owner-approved version tag. The existing workflow:
 
-- refuses to build a Release if any signing secret is missing;
-- checks that the keystore and alias can be opened;
+- refuses to build if any signing secret is missing;
+- validates the keystore and alias;
 - runs Android unit tests;
-- builds `assembleRelease` and `bundleRelease`;
-- verifies the APK and AAB signatures;
-- publishes APK, AAB, and SHA-256 checksums as a 90-day workflow artifact.
+- builds assembleRelease and bundleRelease;
+- verifies APK and AAB signatures;
+- emits SHA-256 checksums and uploads the APK/AAB artifact for 90 days.
 
-A successful workflow proves package compilation and signature verification, not a full device/OAuth/chat acceptance test. Keep the signing key backed up permanently.
+## 5. Current release gate status (18 November 2026)
+
+- Permanent owner keystore: not available to the current execution environment / not verified.
+- Four signing secrets: not confirmed configured.
+- GitHub Repository variable GOOGLE_WEB_CLIENT_ID: not confirmed configured.
+- Supabase Google Provider: live setting currently reports external.google=false.
+- Android Release workflow: not executed.
+- Signed Release APK/AAB and checksums: not produced.
+- Physical-device install, Google login, session, chat, Realtime and file acceptance: not tested.
+
+Therefore no Debug artifact or prior CI run should be described as a Release. Complete the missing owner-controlled setup first, then run the workflow and test on a physical device.
