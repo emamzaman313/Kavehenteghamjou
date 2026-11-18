@@ -184,7 +184,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
             {busy ? <span className="spinner small"/> : <KeyRound size={18}/>}
             <span>{busy ? 'در حال بررسی کد…' : 'ورود بدون ثبت‌نام ایمیلی'}</span><ArrowLeft size={17}/>
           </button>
-          <p className="auth-access-foot">هر مهمان حساب جداگانه دارد؛ این کد دسترسی مدیر یا کاربران دیگر را نمی‌دهد.</p>
+          <p className="auth-access-foot">هر مهمان حساب جداگانه دارد و به حساب دیگران دسترسی پیدا نمی‌کند. چون ورود ایمیلی انجام نمی‌شود، پس از خروج یا پاک‌شدن داده‌های مرورگر، حساب مهمان قابل بازیابی نیست؛ برای حساب دائمی از ورود ایمیلی استفاده کنید.</p>
           <div className="auth-secondary-actions">
             <button type="button" onClick={() => { setStep('email'); setError(''); setNotice(''); }} disabled={busy}>ثبت‌نام / ورود با ایمیل</button>
           </div>
