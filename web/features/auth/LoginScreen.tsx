@@ -1,17 +1,19 @@
 'use client';
 
-import { ArrowLeft, File, Mail, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, File, KeyRound, Mail, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { BrandMark } from '@/components/ui';
 import { authErrorMessage } from '@/lib/auth-errors';
 
-type LoginStep = 'email' | 'sent';
+type LoginStep = 'email' | 'sent' | 'access';
 
 export default function LoginScreen({ supabase, configured }: { supabase: SupabaseClient | null; configured: boolean }) {
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
+  const [accessCode, setAccessCode] = useState('');
+  const [accessEnabled, setAccessEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -22,6 +24,17 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     const timer = window.setTimeout(() => setResendIn((current) => Math.max(0, current - 1)), 1000);
     return () => window.clearTimeout(timer);
   }, [resendIn]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    void supabase.functions.invoke('access-code-login', { body: { action: 'status' } })
+      .then(({ data, error: functionError }) => {
+        if (active) setAccessEnabled(!functionError && data?.ok === true && data?.enabled === true);
+      })
+      .catch(() => { if (active) setAccessEnabled(false); });
+    return () => { active = false; };
+  }, [supabase]);
 
   const sendLink = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -57,6 +70,56 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     }
   };
 
+  const loginWithAccessCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || busy || accessCode.length !== 6 || accessEnabled !== true) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('access-code-login', {
+        body: { action: 'login', code: accessCode },
+      });
+      if (functionError) {
+        const status = Number((functionError as { context?: { status?: unknown } }).context?.status);
+        setError(status === 429
+          ? 'به‌دلیل چند تلاش ناموفق، ورود با کد موقتاً محدود شده است. ۱۵ دقیقه بعد دوباره تلاش کنید.'
+          : 'اتصال به سرویس ورود با کد برقرار نشد. کمی بعد دوباره تلاش کنید.');
+        return;
+      }
+      if (data?.ok !== true || !data?.session?.access_token || !data?.session?.refresh_token) {
+        const messages: Record<string, string> = {
+          invalid_code: 'کد دسترسی نادرست است. دوباره بررسی کنید.',
+          disabled: 'ورود با کد دسترسی فعلاً توسط مدیر غیرفعال شده است.',
+          rate_limited: 'تعداد تلاش‌های ناموفق زیاد شده است. کمی بعد دوباره تلاش کنید.',
+          not_configured: 'تنظیمات ورود با کد هنوز کامل نشده است.',
+        };
+        setError(messages[String(data?.reason)] || 'ورود مهمان انجام نشد. دوباره تلاش کنید.');
+        return;
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+      if (sessionError) {
+        setError(authErrorMessage(sessionError));
+        return;
+      }
+    } catch (cause) {
+      setError(authErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openAccessCode = () => {
+    setStep('access');
+    setAccessCode('');
+    setError('');
+    setNotice('');
+  };
+
   return <main className="auth-screen">
     <div className="auth-glow auth-glow-a"/><div className="auth-glow auth-glow-b"/>
     <section className="auth-card">
@@ -69,25 +132,65 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       {error && <div className="notice notice-error" role="alert" aria-live="polite">{error}</div>}
       {notice && <div className="notice notice-success" role="status" aria-live="polite">{notice}</div>}
 
-      {step === 'email' ? (
-        <form className="auth-form" onSubmit={(event) => void sendLink(event)}>
-          <label className="auth-label" htmlFor="login-email">آدرس ایمیل</label>
-          <input id="login-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={!configured || busy}/>
-          <button className="google-button" type="submit" disabled={!configured || busy || !email.trim()}>
-            {busy ? <span className="spinner small"/> : <Mail size={18}/>}
-            <span>{busy ? 'در حال ارسال لینک…' : 'ارسال لینک ورود به ایمیل'}</span><ArrowLeft size={17}/>
+      {step === 'email' && (
+        <>
+          <form className="auth-form" onSubmit={(event) => void sendLink(event)}>
+            <label className="auth-label" htmlFor="login-email">آدرس ایمیل</label>
+            <input id="login-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={!configured || busy}/>
+            <button className="google-button" type="submit" disabled={!configured || busy || !email.trim()}>
+              {busy ? <span className="spinner small"/> : <Mail size={18}/>}
+              <span>{busy ? 'در حال ارسال لینک…' : 'ثبت‌نام / ورود با ایمیل'}</span><ArrowLeft size={17}/>
+            </button>
+          </form>
+          <button className="auth-alternate-button" type="button" onClick={openAccessCode} disabled={!configured || busy}>
+            <KeyRound size={17}/> ورود با کد دسترسی
           </button>
-        </form>
-      ) : (
+        </>
+      )}
+
+      {step === 'sent' && (
         <div className="auth-form">
           <p className="auth-code-hint">پیوند ورود برای <b dir="ltr">{email}</b> ارسال شد. صندوق ورودی را باز کنید و روی لینک ورود به کاوه انتقامجو بزنید.</p>
           <div className="auth-secondary-actions">
             <button type="button" onClick={() => { setStep('email'); setError(''); setNotice(''); }} disabled={busy}>تغییر ایمیل</button>
             <button type="button" onClick={() => void sendLink()} disabled={busy || resendIn > 0}>{busy ? 'در حال ارسال…' : resendIn > 0 ? `ارسال دوباره لینک (${resendIn})` : 'ارسال دوباره لینک'}</button>
           </div>
+          <button className="auth-text-button" type="button" onClick={openAccessCode}>ورود با کد دسترسی</button>
         </div>
       )}
-      <p className="auth-foot"><ShieldCheck size={14}/> ورود امن با پیوند یک‌بارمصرف ایمیل؛ بدون نیاز به حساب گوگل</p>
+
+      {step === 'access' && (
+        <form className="auth-form" onSubmit={(event) => void loginWithAccessCode(event)}>
+          <p className="auth-code-hint">کد شش‌کاراکتری دسترسی را وارد کنید. با این روش یک حساب مهمان مستقل برای شما ساخته می‌شود و نیازی به ثبت‌نام ایمیلی نیست.</p>
+          {accessEnabled === false && <div className="notice notice-warn">ورود با کد دسترسی فعلاً غیرفعال است یا سرویس آن در دسترس نیست.</div>}
+          <label className="auth-label" htmlFor="login-access-code">کد دسترسی ۶ کاراکتری</label>
+          <input
+            id="login-access-code"
+            className="auth-input auth-code-input"
+            type="text"
+            inputMode="text"
+            autoComplete="one-time-code"
+            pattern="[A-Za-z0-9]{6}"
+            maxLength={6}
+            dir="ltr"
+            placeholder="••••••"
+            value={accessCode}
+            onChange={(event) => setAccessCode(event.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase())}
+            required
+            disabled={busy || accessEnabled !== true}
+          />
+          <button className="google-button" type="submit" disabled={busy || accessEnabled !== true || accessCode.length !== 6}>
+            {busy ? <span className="spinner small"/> : <KeyRound size={18}/>}
+            <span>{busy ? 'در حال بررسی کد…' : 'ورود بدون ثبت‌نام ایمیلی'}</span><ArrowLeft size={17}/>
+          </button>
+          <p className="auth-access-foot">هر مهمان حساب جداگانه دارد؛ این کد دسترسی مدیر یا کاربران دیگر را نمی‌دهد.</p>
+          <div className="auth-secondary-actions">
+            <button type="button" onClick={() => { setStep('email'); setError(''); setNotice(''); }} disabled={busy}>ثبت‌نام / ورود با ایمیل</button>
+          </div>
+        </form>
+      )}
+
+      <p className="auth-foot"><ShieldCheck size={14}/> ورود امن با پیوند ایمیل یا کد دسترسی مدیریت‌شده</p>
     </section>
     <span className="auth-version">KAVEH AVENGER · WEB</span>
   </main>;
