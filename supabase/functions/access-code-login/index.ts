@@ -107,13 +107,13 @@ async function getCurrentUser(request: Request) {
   return error ? null : data.user;
 }
 
-async function isSiteAdmin(userId: string): Promise<boolean> {
+async function getSiteAdminRole(userId: string): Promise<string | null> {
   const { data, error } = await adminClient
     .from("site_access_admins")
-    .select("user_id")
+    .select("role")
     .eq("user_id", userId)
     .maybeSingle();
-  return !error && Boolean(data);
+  return error || !data ? null : String(data.role);
 }
 
 async function getSettings(): Promise<{ enabled: boolean } | null> {
@@ -211,8 +211,9 @@ Deno.serve(async (request: Request) => {
 
   if (action === "admin_get" || action === "admin_update") {
     const user = await getCurrentUser(request);
-    if (!user || !(await isSiteAdmin(user.id))) {
-      return jsonResponse({ ok: false, isAdmin: false, reason: "not_admin" }, 403, origin);
+    const role = user ? await getSiteAdminRole(user.id) : null;
+    if (!user || !role || !["owner", "admin"].includes(role)) {
+      return jsonResponse({ ok: false, isAdmin: false, reason: "insufficient_role" }, 403, origin);
     }
 
     if (action === "admin_get") {
