@@ -1,61 +1,69 @@
 # راه‌اندازی ورود Google
 
-جریان برنامه از Android Credential Manager برای دریافت ID Token استفاده می‌کند؛ WebView یا ورود با شماره تلفن تلگرام وجود ندارد.
+Web و Android به همان پروژه Supabase متصل‌اند. Web از OAuth + PKCE استفاده می‌کند؛ Android از Credential Manager و Google ID Token. هیچ‌کدام به Telegram یا WebView وابسته نیستند.
+
+## Project و URLهای تأییدشده
+
+- Supabase Project Ref: slwzjufipavuwcbwoyro
+- Project URL: https://slwzjufipavuwcbwoyro.supabase.co
+- Google callback: https://slwzjufipavuwcbwoyro.supabase.co/auth/v1/callback
+- دامنه وب: https://kaveh-avenger.vercel.app
+- Supabase Redirect URL وب: https://kaveh-avenger.vercel.app/auth/callback
+- Local development: http://localhost:3000/auth/callback
+
+مقدار واقعی NEXT_PUBLIC_SUPABASE_URL از Vercel Production بازخوانی شد و با Ref تطبیق داشت. host کوتاه‌شده در تصویر در متغیر Production فعلی ثبت نیست. Browser فقط Publishable key دارد؛ Service Role یا Secret key در کلاینت قرار نمی‌گیرد.
+
+## وضعیت زنده Provider — ۱۸ نوامبر ۲۰۲۶
+
+**Google Provider غیرفعال است.**
+
+endpoint زنده Supabase Auth برای همین Project Ref مقدار external.google=false برگرداند. این نتیجه علت خطای Unsupported provider: provider is not enabled را اثبات می‌کند. کد Web و Android پیام خطا را به‌شکل قابل‌فهم نمایش می‌دهد، اما Provider باید توسط مالک در Dashboard فعال شود؛ تا آن زمان Google login موفق نخواهد شد.
 
 ## Google Cloud
 
-1. Google Cloud project بسازید و Google Auth Platform را پیکربندی کنید.
-2. OAuth Client نوع **Web application** بسازید؛ Client ID وب در اپ Android برای `setServerClientId` استفاده می‌شود. در بخش Authorized redirect URIs مقدار دقیق `https://slwzjufipavuwcbwoyro.supabase.co/auth/v1/callback` را ثبت کنید.
-3. OAuth Client نوع **Android** بسازید و package name `com.kaveh.avenger` را ثبت کنید.
-4. SHA-1 گواهی debug و release را جداگانه ثبت کنید. در زمان انتشار باید SHA-1 واقعی امضای Release هم افزوده شود.
-5. Scopeهای `openid`, `email`, `profile` را فعال کنید.
+1. Google Auth Platform را برای پروژه مالک پیکربندی کنید.
+2. OAuth Client نوع Web application بسازید.
+3. Origin دامنه وب kaveh-avenger.vercel.app را در صورت نیاز در Authorized JavaScript origins ثبت کنید.
+4. در Authorized redirect URIs دقیقاً https://slwzjufipavuwcbwoyro.supabase.co/auth/v1/callback را وارد کنید.
+5. Web Client ID و Secret را ایجاد کنید؛ Secret فقط در Supabase Dashboard وارد می‌شود.
+6. Android OAuth Client جداگانه با package com.kaveh.avenger بسازید.
+7. SHA-1 واقعی Debug و Release را ثبت کنید؛ Release SHA-1 تا زمان استفاده از keystore دائمی قابل اثبات نیست.
+8. scopeهای openid, email و profile را مجاز کنید.
 
 ## Supabase Dashboard
 
-در مسیر Authentication → Sign In / Providers → Google:
+در Authentication → Sign In / Providers → Google:
 
-- Google provider را فعال کنید.
-- Web Client ID را در Client ID و Web Client Secret را در فیلد Secret وارد کنید.
-- اگر چند Client ID دارید، Web Client ID را ابتدا و Android Client ID را نیز به فهرست مجاز اضافه کنید.
-- Save کنید.
+- Google را Enable کنید.
+- Web Client ID و Web Client Secret را در فیلدهای همان Provider وارد کنید.
+- Authorized Client IDs را مطابق UI پروژه تنظیم کنید؛ Web Client ID و Android Client IDهای معتبر را اضافه کنید.
+- Save کنید؛ سپس دوباره Auth settings را بررسی کنید و تأیید کنید external.google=true شده باشد.
 
-Client Secret صرفاً در Dashboard/Supabase نگهداری می‌شود و نباید در Android یا Git قرار بگیرد.
+در Authentication → URL Configuration:
 
-## نشانی‌های بازگشت مجاز در Supabase
-
-در Authentication → URL Configuration، نشانی سایت و callback را در Redirect URLs قرار دهید:
-
-- `https://kaveh-avenger.vercel.app/auth/callback`
-- `http://localhost:3000/auth/callback` (فقط برای توسعه محلی)
-
-Site URL را روی `https://kaveh-avenger.vercel.app` تنظیم کنید.
+- Site URL: https://kaveh-avenger.vercel.app
+- Redirect URLs:
+  - https://kaveh-avenger.vercel.app/auth/callback
+  - http://localhost:3000/auth/callback (فقط توسعه)
 
 ## Android
 
-`local.properties`:
+local.properties یا محیط امن CI:
 
-```properties
-SUPABASE_URL=https://slwzjufipavuwcbwoyro.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-GOOGLE_WEB_CLIENT_ID=...apps.googleusercontent.com
-```
+    SUPABASE_URL=https://slwzjufipavuwcbwoyro.supabase.co
+    SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+    GOOGLE_WEB_CLIENT_ID=...apps.googleusercontent.com
 
-فقط Publishable key در اپ client استفاده می‌شود. هرگز `service_role` یا `sb_secret_...` را قرار ندهید.
+GOOGLE_WEB_CLIENT_ID باید Web OAuth Client ID باشد و به setServerClientId داده شود. Client Secret نباید داخل APK یا Git قرار گیرد.
 
 ## GitHub Actions
 
-برای اینکه APK ساخته‌شده در CI ورود Google را هم داشته باشد، در مخزن GitHub مسیر **Settings → Secrets and variables → Actions → Variables** یک Repository variable با نام دقیق `GOOGLE_WEB_CLIENT_ID` و مقدار Web OAuth Client ID بسازید. این شناسه محرمانه نیست؛ **Web Client Secret** را در این بخش یا در اپ قرار ندهید و فقط در Supabase Dashboard نگه دارید.
+در Settings → Secrets and variables → Actions → Variables یک Repository variable با نام GOOGLE_WEB_CLIENT_ID بسازید. مقدار آن Web OAuth Client ID است و Secret محسوب نمی‌شود؛ Client Secret فقط در Supabase Dashboard نگهداری شود.
 
-اگر این متغیر تنظیم نشود، Android CI همچنان می‌تواند APK بسازد، اما در گزارش اجرا هشدار می‌دهد و Google Sign-in در APK پیکربندی نخواهد شد.
+## nonce اندروید
 
-## الگوریتم nonce
+nonce خام تصادفی تولید می‌شود، SHA-256 آن به Google Credential Manager داده می‌شود و nonce خام همراه ID Token به Supabase Auth ارسال می‌شود تا در سمت سرور اعتبارسنجی شود.
 
-برنامه یک nonce تصادفی تولید می‌کند، SHA-256 hex آن را به Credential Manager می‌دهد و nonce خام را برای `signInWithIdToken` به Supabase می‌فرستد. این دو مقدار باید با هم جفت باشند.
+## تست پذیرش واقعی
 
-## تست پذیرش
-
-- ورود کاربر جدید: Supabase user و پروفایل خودکار ایجاد شود.
-- ورود مجدد: همان UUID داخلی برگردد.
-- ID Token نامعتبر/منقضی رد شود.
-- تغییر شبکه و Refresh نشست تست شود.
-- Sign out نشست را پاک کند.
+بعد از فعال‌سازی Provider: ورود کاربر جدید، UUID ثابت در ورود مجدد، session restore پس از refresh، refresh token، خروج، ورود مجدد، لغو Google prompt و قطع/وصل شبکه را در Web و Android اجرا و ثبت کنید. Workflow ایمیل/رمز عبور اثبات Google login نیست.
