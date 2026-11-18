@@ -23,7 +23,7 @@
 پروژه Supabase با Ref برابر `slwzjufipavuwcbwoyro` فعال است. آخرین ممیزی read-only شامل ۲۶ جدول عمومی با RLS فعال، ۶۸ Policy، ده Migration ثبت‌شده در Remote Ledger و bucket خصوصی `user-files` با سقف ۵۰٬۰۰۰٬۰۰۰ بایت بود. تعداد `auth.users` و `profiles` در زمان ممیزی صفر بود. هیچ Migration یا تغییر داده‌ای در این مأموریت روی Production اجرا نشد.
 
 ### Web
-نسخه وب در `web/` دارای صفحه ورود، فید، گفتگو، فایل‌ها، اکتشاف، پروفایل، اعلان‌ها و تنظیمات است. اتصال Supabase از کلید Publishable و نشست کاربر استفاده می‌کند. ورود OAuth/PKCE در سورس وجود دارد و مدیریت خطای Provider/شبکه و callback به‌روزرسانی و تست شده است؛ اما Google Provider در Supabase و OAuth Client واقعی هنوز باید توسط مالک سرویس تأیید/تنظیم شود. Web CI در Commit مربوط به تغییرات وب موفق شده است: TypeScript، ESLint، ۱۰ تست و Next.js production build. ۹ هشدار lint در کدهای موجود باقی است.
+نسخه وب در `web/` دارای صفحه ورود، فید، گفتگو، فایل‌ها، اکتشاف، پروفایل، اعلان‌ها و تنظیمات است. Deployment فعلی Production: https://kaveh-avenger.vercel.app اتصال Supabase از کلید Publishable و نشست کاربر استفاده می‌کند. ورود OAuth/PKCE در سورس وجود دارد و مدیریت خطای Provider/شبکه و callback به‌روزرسانی و تست شده است؛ اما Google Provider در Supabase و OAuth Client واقعی هنوز باید توسط مالک سرویس تأیید/تنظیم شود. Web CI در Commit مربوط به تغییرات وب موفق شده است: TypeScript، ESLint، ۱۰ تست و Next.js production build. ۹ هشدار lint در کدهای موجود باقی است.
 
 ### Android
 پوسته پنج‌بخشی و کد بومی ورود Google Credential Manager، nonce، پیام‌رسانی، Realtime و آپلود فایل وجود دارد. مدیریت پیام‌های خطای ورود Google به‌روزرسانی شده و تست شده است. Android CI روی Commit فعلی موفق شده و Debug APK/AAB ساخته است. با این حال:

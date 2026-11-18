@@ -101,7 +101,7 @@
 - Project: `kaveh-avenger`; دامنه اصلی: https://kaveh-avenger.vercel.app
 - Vercel Production env `NEXT_PUBLIC_SUPABASE_URL` با `https://slwzjufipavuwcbwoyro.supabase.co` برابر بود؛ Publishable Key نیز تنظیم شده بود.
 - Deployment قبلی READY: `dpl_A7bRxNEdXPfzdmk7iPo2F9sceKJg`، Commit `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
-- Deployment جدید برای Commit `d204f712` با شناسه `dpl_5Z2f6VFMSYbcF5kfM9M9yaZiUZ9R` ایجاد شد. وضعیت در آخرین مشاهده: BUILDING؛ تا READY و بررسی alias، انتشار جدید قطعی نیست.
+- Deployment جدید برای Commit `d204f712` با شناسه `dpl_5Z2f6VFMSYbcF5kfM9M9yaZiUZ9R` ایجاد و وضعیت `READY` آن تأیید شد؛ alias شامل `kaveh-avenger.vercel.app` است. ابزار مرور عمومی نتوانست صفحه را واکشی کند؛ بنابراین تست تعاملی مرورگر/Google OAuth ادعا نمی‌شود.
 
 ## Google OAuth و Release gateها
 

@@ -41,7 +41,7 @@ Run: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44325901682
 
 ## انتشار
 
-یک Production Deployment از Vercel برای SHA `d204f71253c129770dc69436a4373ffd7e46c05c` با شناسه `dpl_5Z2f6VFMSYbcF5kfM9M9yaZiUZ9R` ایجاد شد. وضعیت نهایی آن باید در پنل/اجرای Vercel بررسی شود؛ ساخت این deployment به‌تنهایی تست Google OAuth نیست.
+یک Production Deployment از Vercel برای SHA `d204f71253c129770dc69436a4373ffd7e46c05c` با شناسه `dpl_5Z2f6VFMSYbcF5kfM9M9yaZiUZ9R` ایجاد و وضعیت آن `READY` تأیید شد. alias شامل `kaveh-avenger.vercel.app` است؛ این تأیید، تست Google OAuth یا تست مرورگر را جایگزین نمی‌کند.
 
 دامنه اصلی پروژه: https://kaveh-avenger.vercel.app
 
