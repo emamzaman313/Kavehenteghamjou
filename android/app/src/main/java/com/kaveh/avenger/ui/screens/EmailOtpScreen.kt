@@ -153,14 +153,3 @@ fun EmailOtpScreen(
         }
     }
 }
-
-@Composable
-fun LoadingScreen() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(16.dp))
-            Text("در حال آماده‌سازی فضای شما…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
