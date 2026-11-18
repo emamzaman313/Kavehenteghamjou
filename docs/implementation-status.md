@@ -11,16 +11,16 @@
 - در زمان بازبینی، تعداد کاربران Auth، پروفایل‌ها، پست‌ها، پیام‌ها و فایل‌های محصول صفر بود.
 - trigger `private.handle_new_user()` روی `auth.users` نصب است و پس از ثبت‌نام، پروفایل و تنظیمات و state رتبه را می‌سازد.
 - bucket `user-files` خصوصی و سقف واقعی آن `50,000,000` بایت است؛ MIME allowlist ندارد.
-- Realtime publication شامل `messages`, `notifications`, `posts` است.
+- Realtime publication شامل `conversation_members`, `messages`, `notifications`, `posts` است.
 - RPC `public.create_direct_conversation(p_other_user_id uuid)` موجود و SECURITY INVOKER است؛ منطق داخلی در schema خصوصی است.
 - Security Advisor: `lints=[]`.
 - Performance Advisor: چند unused-index INFO و یک WARN به‌علت دو SELECT policy مجازکننده در `file_assets` (مالک و فایل اشتراکی). این هشدار مستند شده و بدون تست دسترسی دوکاربره دستکاری نشد.
 
 ## وضعیت Migrationها
 
-- Remote ledger دارای ۸ migration است.
+- Remote ledger در بازبینی زنده ۱۰ migration دارد؛ دو migration جدیدتر `20261118124842 kaveh_conversation_last_message_at_trigger` و `20261118131339 kaveh_realtime_conversation_read_receipts` نیز در ledger ثبت‌اند.
 - چهار migration اول در مخزن محلی موجود نیستند: foundation schema، message edit permissions، RLS hardening، membership/privilege hardening.
-- چهار migration آخر در `supabase/migrations/` وجود دارند.
+- شش migration آخر در `supabase/migrations/` وجود دارند.
 - فایل `initial_schema_draft_NOT_FOR_DEPLOY.sql` صرفاً draft قدیمی است و قابل اجرای مجدد نیست. برای محیط جدید، باید baseline نهایی از schema/policies زنده استخراج و روی پروژهٔ خالی آزمایش شود.
 - در این مرحله هیچ DDL یا داده‌ای در Supabase تغییر داده نشد.
 
@@ -43,7 +43,7 @@
 
 - Web CI در Run شماره `44315394232` روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` موفق شد: نصب وابستگی‌های قفل‌شده، TypeScript، ESLint، Vitest، Next.js Production Build و Upload Artifact همگی موفق‌اند.
 - Android CI جدیدتر در Run شماره `44317068603` روی commit `b40007478fb6e405d9421bbba74d38e31fde7b01` موفق شد: JDK 21، Android SDK 36، Gradle 9.5.0، Unit Tests، Assemble Debug APK، Bundle Debug AAB و Upload Artifact همگی موفق‌اند.
-- Security checks در Run شماره `44317161759` روی commit `735c6d2e58dfc228931be2065197acc8f898a1ed` موفق شد؛ Gitleaks و Dependency audit هر دو موفق‌اند. اجرای commit مستندسازی بعدی نیز در حال بررسی است.
+- Security checks در Run شماره `44317161759` روی commit `735c6d2e58dfc228931be2065197acc8f898a1ed` موفق شد؛ Gitleaks و Dependency audit هر دو موفق‌اند. اجرای commit مستندسازی بعدی در حال اجراست.
 - APK و AAB واقعی از Artifact شماره `14433695793` استخراج و صحت ZIP/نوع فایل بررسی شد. SHA-256 فایل APK: `0662a6fc5b9e912f627b60dad41299b17312d0e74446633b7fdbdb7f82c100f7`.
 - Web build از Artifact شماره `14432456595` استخراج و ZIP آن بدون خطا بررسی شد.
 - هشدار واقعی CI: متغیر Repository با نام `GOOGLE_WEB_CLIENT_ID` تنظیم نشده است؛ بنابراین Google Sign-in در APK ساخته‌شده پیکربندی نشده و ورود Google در این خروجی قابل تأیید نیست. این مقدار باید از Web OAuth Client ID معتبر Google Cloud در GitHub Actions → Variables اضافه شود؛ Client Secret نباید در APK یا GitHub Variables قرار گیرد.
@@ -65,9 +65,9 @@
 ## GitHub و استقرار
 
 - مخزن اصلی فعال: `https://github.com/emamzaman313/Kavehenteghamjou`؛ شاخه `main`.
-- آخرین commit مشاهده‌شده هنگام این گزارش: `735c6d2e58dfc228931be2065197acc8f898a1ed`.
+- آخرین commit مشاهده‌شده هنگام این گزارش: `f599bb22386906099a0127fd6f88a2c6a98e54d2`.
 - Commitهای جدید شامل صفحه‌بندی چت Android، پیوست و دانلود امن، بارگذاری پیوست‌های پیام‌های قدیمی، اصلاح decode پاسخ PostgREST و مستندسازی وضعیت Realtime هستند.
-- Web Production deployment قبلی در Vercel با وضعیت READY روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` وجود دارد: `https://kaveh-avenger.vercel.app`. Deployment جدید روی commit `a2680356f316dbbf588c35c20d626ef5498601f6` ایجاد شده و در زمان ثبت این گزارش هنوز BUILDING است.
+- Web Production deployment قبلی در Vercel با وضعیت READY روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` وجود دارد: `https://kaveh-avenger.vercel.app`. Deployment جدید روی commit `a2680356f316dbbf588c35c20d626ef5498601f6` ایجاد شده و وضعیت آن باید پس از تکمیل build دوباره تأیید شود.
 - تلاش برای اتصال مجدد GitHub integration از طریق Vercel با خطای نیاز به نصب GitHub Integration مواجه شد؛ ایجاد پروژه جدید انجام نشد و پروژه موجود حذف یا جایگزین نشد.
 - CI و Artifactها:
   - Web: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44315394232`
