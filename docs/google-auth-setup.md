@@ -59,3 +59,12 @@ GOOGLE_WEB_CLIENT_ID=...apps.googleusercontent.com
 - ID Token نامعتبر/منقضی رد شود.
 - تغییر شبکه و Refresh نشست تست شود.
 - Sign out نشست را پاک کند.
+
+
+## وضعیت ممیزی ۱۸ نوامبر ۲۰۲۶
+
+- در آخرین اجرای Android CI، متغیر Repository با نام دقیق `GOOGLE_WEB_CLIENT_ID` خالی بود؛ Workflow هشدار داد که Google Sign-in در APK ساخته‌شده پیکربندی نشده است.
+- Supabase URL محیط Production در Vercel با پروژه `slwzjufipavuwcbwoyro` برابر است؛ اختلافی که در گزارش قدیمی دیده می‌شد در مقدار فعلی Production وجود ندارد.
+- Google Provider در Supabase Dashboard از اتصال فعلی قابل مشاهده یا تغییر نبود؛ بنابراین فعال‌بودن Provider و وجود Client Secret معتبر هنوز تأیید نشده است.
+- تست واقعی Google OAuth در Web و Android انجام نشده است. تست‌های فعلی فقط رفتار پیام خطا و الگوریتم nonce را پوشش می‌دهند.
+- مرجع CI Android: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44326092783

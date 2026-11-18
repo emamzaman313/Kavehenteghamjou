@@ -44,3 +44,12 @@ Run Actions → Android Release → Run workflow, or push a version tag such as 
 - publishes APK, AAB, and SHA-256 checksums as a 90-day workflow artifact.
 
 A successful workflow proves package compilation and signature verification, not a full device/OAuth/chat acceptance test. Keep the signing key backed up permanently.
+
+
+## وضعیت Release در ممیزی ۱۸ نوامبر ۲۰۲۶
+
+- Android CI روی Commit `d204f71253c129770dc69436a4373ffd7e46c05c` موفق شد و فقط Debug APK/AAB تولید کرد.
+- Artifact: `14437042579` — https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44326092783
+- این Artifact Release نیست؛ signing دائمی مالک، اجرای Android Release workflow، بررسی امضای Release و نصب روی دستگاه واقعی هنوز انجام نشده‌اند.
+- در همان اجرای CI، `GOOGLE_WEB_CLIENT_ID` خالی بود. حتی پس از ثبت keystore secrets نیز باید Web OAuth Client ID و Google Provider جداگانه تنظیم شوند.
+- وضعیت کلید/گذرواژهٔ مالک را از روی مخزن حدس نزنید و هرگز آن‌ها را در چت درخواست/منتشر نکنید.
