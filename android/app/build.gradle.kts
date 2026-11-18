@@ -13,6 +13,17 @@ val localProperties = Properties().apply {
 fun localValue(key: String): String = localProperties.getProperty(key, "")
 fun asBuildConfig(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+// Keep the AndroidX Lifecycle artifacts aligned to the last release compatible
+// with this application's compileSdk 36. Lifecycle 2.11.0 requires API 37.
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "androidx.lifecycle") {
+            useVersion("2.10.0")
+            because("The app deliberately compiles against the stable Android SDK 36")
+        }
+    }
+}
+
 android {
     namespace = "com.kaveh.avenger"
     compileSdk = 36
