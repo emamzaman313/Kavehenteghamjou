@@ -18,6 +18,35 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
 
+  const refreshOverview = async () => {
+    setOverviewLoading(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'overview' } });
+    setOverviewLoading(false);
+    if (error || data?.ok !== true) {
+      notify('دریافت آمار مدیریت ناموفق بود.', 'error');
+      return;
+    }
+    setOverview(data);
+  };
+
+  useEffect(() => { void refreshOverview(); }, [supabase]);
+
+  const moderatePost = async (postId: string, visibility: 'public' | 'private') => {
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'moderate_post', postId, visibility } });
+    if (error || data?.ok !== true) return notify('تغییر وضعیت پست انجام نشد.', 'error');
+    notify(visibility === 'private' ? 'پست از دید عموم مخفی شد.' : 'پست دوباره عمومی شد.');
+    await refreshOverview();
+  };
+
+  const deletePost = async (postId: string) => {
+    if (deleteCandidate !== postId) { setDeleteCandidate(postId); return; }
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'delete_post', postId } });
+    setDeleteCandidate(null);
+    if (error || data?.ok !== true) return notify('حذف پست انجام نشد.', 'error');
+    notify('پست و رسانه‌های پیوست آن حذف شدند.');
+    await refreshOverview();
+  };
+
   useEffect(() => {
     let active = true;
     void supabase.functions.invoke('access-code-login', { body: { action: 'admin_get' } })
