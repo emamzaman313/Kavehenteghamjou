@@ -81,31 +81,44 @@ Remote migration ledger ده نسخه دارد:
 ## CI و Build
 
 ### Web
-
-- Web CI موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44317894080
-- Commit بررسی‌شده: `e7cf84ce6e0302a629d054c362999910bf9861c1`
-- Node.js 22، npm ci، TypeScript، ESLint، Vitest و Next.js Production Build همگی موفق.
-- Vercel Production deployment با وضعیت READY روی Commit `9a8b33d02405529b98aef69e7f38d7e700d98752` است و alias اصلی آن https://kaveh-avenger.vercel.app است. Commitهای بعدی فقط Android/مستندات را تغییر داده‌اند.
+- Web CI موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44320577871
+- Commit بررسی‌شده: `f9989232a076646e3528a99329d94902ff938d37`؛ شامل اسکریپت E2E و فرمان تست آن.
+- npm ci، TypeScript، ESLint، Vitest و Next.js Production Build موفق شدند.
+- Vitest: ۴ تست موفق؛ ESLint: صفر خطا و ۹ هشدار.
+- آخرین Vercel Production deployment: `dpl_A7bRxNEdXPfzdmk7iPo2F9sceKJg`، وضعیت READY، Commit: `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
+- دامنه اصلی https://kaveh-avenger.vercel.app و مسیر `/auth/callback` هر دو HTTP 200؛ manifest نیز HTTP 200 است.
 
 ### Android
-
-- Android CI موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44318216746
-- Commit بررسی‌شده: `a3983ef065511b9c260352e3d14aa8b8e05ac68d`
-- JDK 21، Gradle 9.5.0، Android SDK 36، Unit Tests، `assembleDebug` و `bundleDebug` همگی موفق.
-- Artifact واقعی: `14433493531`
-- APK: 25,546,890 بایت؛ SHA-256: `2bd55155f6ac84be73966e35afdaab1145ffe843cfef451a2b8060710eb51ac1`
-- AAB: 21,951,556 بایت؛ SHA-256: `a47aaeb1e89d2b0f4854cd3c17d77652fae7a0797ca66d12e5b13c51f3bce24b`
-- هر دو فایل از Artifact استخراج شدند و `unzip -t` برای هر دو بدون خطا تمام شد.
-- خروجی Debug است؛ Release signing انجام نشده و روی دستگاه واقعی تست نشده است.
+- Android CI موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44320228293
+- Commit بررسی‌شده: `4847386942727c373d4bf841240e40e3339c0f54`.
+- JDK 21، Gradle 9.5.0، Android SDK 36، دو Unit Test مربوط به nonce، `assembleDebug` و `bundleDebug` موفق.
+- Artifact واقعی: `14434103107`.
+- APK Debug: 25,546,890 بایت؛ SHA-256: `8e747548addafcff155a7ceeb8b53330b4d139b6c73258ed2659a29b2a847fdc`.
+- AAB Debug: 21,951,740 بایت؛ SHA-256: `d0a447e17322da5d898d15b748e665e4c6baacdcd02a8f45abb6a3ede90c2735`.
+- ZIP artifact سالم بود و APK به‌عنوان Android package شناسایی شد. این خروجی‌ها Debug هستند؛ Release signing انجام نشده و روی دستگاه فیزیکی تست نشده‌اند.
 
 ### Security
+- آخرین Security checks موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44321023690
+- Commit بررسی‌شده: `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
+- Gitleaks و audit وابستگی‌های production موفق‌اند؛ audit وابستگی‌های production هیچ آسیب‌پذیری گزارش نکرد.
+- در کل dependency graph توسعه ۱۶ هشدار High از زنجیره وابستگی `picomatch` گزارش شد؛ advisory فعلی هنوز نسخه اصلاح‌شده معرفی نکرده است. این هشدار را پنهان یا با downgrade اجباری حل‌شده اعلام نکنید.
+- هیچ secret واقعی در مخزن شناسایی نشد.
 
-- Security checks موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44318216809
-- Gitleaks، audit وابستگی‌های production و audit کل dependency graph موفق‌اند.
+## Workflowهای پذیرش و انتشار افزوده‌شده
+
+- `.github/workflows/android-release.yml`: ساخت Release APK/AAB با keystore رمزگذاری‌شده در GitHub Secrets، بررسی امضا و SHA-256. این Workflow هنوز اجرا نشده؛ چهار Secret امضای Release و Repository Variable مربوط به Google Client ID لازم است.
+- `docs/android-release-signing.md`: راهنمای ساخت/نگهداری keystore و ثبت secrets.
+- `.github/workflows/chat-e2e.yml` و `web/scripts/e2e-chat.mjs`: آزمون دوحسابی واقعی ورود، RPC گفتگوی خصوصی، پیام، Realtime، read cursor، آپلود/دانلود فایل و رد دسترسی anonymous.
+- `docs/chat-e2e-setup.md`: راهنمای ساخت دو حساب آزمایشی و ثبت چهار GitHub Secrets. آزمون E2E هنوز اجرا نشده؛ حساب‌های Auth در Supabase صفر هستند.
+- این اسکریپت داده‌های آزمایشی را حذف نمی‌کند؛ باید فقط با دو حساب اختصاصی تست اجرا شود.
 
 ## Google OAuth
 
-متغیر Repository با نام دقیق `GOOGLE_WEB_CLIENT_ID` در GitHub Actions تنظیم نشده است؛ بنابراین Google Sign-in در APK ساخته‌شده پیکربندی نشده است. راهنمای تنظیم Repository Variable در `docs/google-auth-setup.md` ثبت شده است. Web Client Secret باید فقط در Supabase Dashboard نگهداری شود و نباید در GitHub، Web client یا APK قرار گیرد.
+- Repository Variable با نام دقیق `GOOGLE_WEB_CLIENT_ID` در GitHub Actions هنوز تنظیم نشده است؛ لاگ Android CI این مقدار را خالی نشان داد.
+- بنابراین Google Sign-in در APK ساخته‌شده پیکربندی نشده است؛ وجود کد Google Credential Manager به معنی آماده بودن ورود نیست.
+- وضعیت Google Provider در Supabase Dashboard هنوز از راه دور قابل تأیید نبود؛ باید Web Client ID و Web Client Secret در Provider ثبت شوند.
+- راهنمای `docs/google-auth-setup.md` اکنون URIهای دقیق را ثبت می‌کند: Google authorized redirect URI برابر `https://slwzjufipavuwcbwoyro.supabase.co/auth/v1/callback` و Supabase Redirect URL برابر `https://kaveh-avenger.vercel.app/auth/callback`.
+- Web Client Secret فقط باید در Supabase Dashboard بماند؛ آن را در چت، GitHub Variables یا APK قرار ندهید.
 
 ## برند
 
@@ -113,9 +126,12 @@ Remote migration ledger ده نسخه دارد:
 
 ## کارهای بعدی با اولویت
 
-1. تنظیم Google OAuth Client ID در GitHub Repository Variables و تکمیل Provider/redirectها در Supabase.
-2. ورود دو حساب واقعی و اجرای سناریوی پیام، read cursor، unread count و فایل بین Web و Android.
-3. تست RLS و Storage با دو JWT مستقل و تست APK روی دستگاه فیزیکی.
-4. تکمیل Delivered/typing/online، Reply/edit/delete، جست‌وجوی پیام و پیش‌نمایش رسانه.
-5. اضافه‌کردن retry و resumable upload و progress بایت‌به‌بایت.
-6. بازیابی تاریخچه قدیمی Git فقط در صورت دسترسی به clone اصلی یا Git bundle دارای `.git`.
+1. ایجاد یا انتخاب keystore دائمی Release و ثبت چهار Secret: `ANDROID_KEYSTORE_BASE64`، `ANDROID_KEYSTORE_PASSWORD`، `ANDROID_KEY_ALIAS`، `ANDROID_KEY_PASSWORD`.
+2. ساخت Web OAuth Client در Google Cloud، تنظیم Supabase Google Provider، ثبت `GOOGLE_WEB_CLIENT_ID` به‌عنوان GitHub Repository Variable و ثبت SHA-1 گواهی Release در Android OAuth Client.
+3. ساخت دو حساب اختصاصی آزمایش با ایمیل تأییدشده و ثبت Secrets: `KAVEH_E2E_USER_A_EMAIL`، `KAVEH_E2E_USER_A_PASSWORD`، `KAVEH_E2E_USER_B_EMAIL`، `KAVEH_E2E_USER_B_PASSWORD`؛ سپس اجرای Workflow با نام Chat E2E.
+4. اجرای Android Release Workflow، بررسی APK/AAB امضاشده و آزمایش روی دستگاه فیزیکی.
+5. آزمون واقعی Google OAuth و session restore در Web و Android؛ آزمون دسترسی فایل برای عضو گفتگو و کاربر غیرعضو.
+6. تکمیل Delivered/typing/online، Reply/edit/delete، جست‌وجوی پیام، پیش‌نمایش رسانه، retry و resumable upload.
+7. بازیابی تاریخچه قدیمی Git فقط در صورت دسترسی به clone اصلی یا Git bundle دارای `.git`.
+
+هیچ داده‌ای در Supabase حذف یا تغییر داده نشده و Migration جدیدی روی پروژه زنده اجرا نشده است.
