@@ -13,6 +13,16 @@ val localProperties = Properties().apply {
 fun localValue(key: String): String = localProperties.getProperty(key, "")
 fun asBuildConfig(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+// Release signing is configured only from local.properties (never committed).
+// CI writes these properties from encrypted GitHub Actions secrets.
+val releaseStoreFile = localValue("ANDROID_KEYSTORE_PATH")
+val releaseStorePassword = localValue("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = localValue("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = localValue("ANDROID_KEY_PASSWORD")
+val releaseSigningConfigured = listOf(
+    releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword
+).all { it.isNotBlank() } && file(releaseStoreFile).exists()
+
 // Keep the AndroidX Lifecycle artifacts aligned to the last release compatible
 // with this application's compileSdk 36. Lifecycle 2.11.0 requires API 37.
 configurations.configureEach {
@@ -37,6 +47,26 @@ android {
         buildConfigField("String", "SUPABASE_URL", asBuildConfig(localValue("SUPABASE_URL")))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", asBuildConfig(localValue("SUPABASE_PUBLISHABLE_KEY")))
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", asBuildConfig(localValue("GOOGLE_WEB_CLIENT_ID")))
+    }
+
+    signingConfigs {
+        create("release") {
+            if (releaseSigningConfigured) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     buildFeatures {
