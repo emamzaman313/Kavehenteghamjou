@@ -1,13 +1,13 @@
 package com.kaveh.avenger.auth
 
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.OtpType
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.OTP
 
 class EmailOtpRepository(private val supabase: SupabaseClient) {
     suspend fun sendCode(email: String) {
-        supabase.auth.sendOtpTo(Email) {
+        supabase.auth.signInWith(OTP) {
             this.email = email.trim().lowercase()
         }
     }
