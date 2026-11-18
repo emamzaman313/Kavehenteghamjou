@@ -57,15 +57,15 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       });
       if (authError) {
         setError(authErrorMessage(authError));
-        if (Number((authError as { status?: unknown }).status) === 429) setResendIn(10);
+        if (Number((authError as { status?: unknown }).status) === 429) setResendIn(30);
         return;
       }
 
       setEmail(normalizedEmail);
       setEmailOtp('');
       setStep('sent');
-      setResendIn(10);
-      setNotice('ایمیل ورود ارسال شد. می‌توانید روی پیوند ورود داخل ایمیل بزنید یا کد ۶ رقمی آن را در همین صفحه وارد کنید. پوشه هرزنامه را هم بررسی کنید.');
+      setResendIn(30);
+      setNotice('ایمیل ورود ارسال شد. کد فقط در آخرین ایمیل معتبر است؛ اگر چند ایمیل گرفته‌اید، کد جدیدترین ایمیل را وارد کنید. همچنین می‌توانید پیوند ورود همان ایمیل را باز کنید. پوشه هرزنامه را هم بررسی کنید.');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
@@ -166,7 +166,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
             <input id="login-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={!configured || busy}/>
             <button className="google-button" type="submit" disabled={!configured || busy || !email.trim()}>
               {busy ? <span className="spinner small"/> : <Mail size={18}/>}
-              <span>{busy ? 'در حال ارسال لینک…' : 'ثبت‌نام / ورود با ایمیل'}</span><ArrowLeft size={17}/>
+              <span>{busy ? 'در حال ارسال ایمیل…' : 'ثبت‌نام / ورود با ایمیل'}</span><ArrowLeft size={17}/>
             </button>
           </form>
           <button className="auth-alternate-button" type="button" onClick={openAccessCode} disabled={!configured || busy}>
@@ -203,7 +203,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
           </form>
           <div className="auth-secondary-actions">
             <button type="button" onClick={() => { setStep('email'); setError(''); setNotice(''); }} disabled={busy}>تغییر ایمیل</button>
-            <button type="button" onClick={() => void sendLink()} disabled={busy || resendIn > 0}>{busy ? 'در حال ارسال…' : resendIn > 0 ? `ارسال دوباره لینک (${resendIn})` : 'ارسال دوباره لینک'}</button>
+            <button type="button" onClick={() => void sendLink()} disabled={busy || resendIn > 0}>{busy ? 'در حال ارسال…' : resendIn > 0 ? `ارسال دوباره ایمیل (${resendIn})` : 'ارسال دوباره ایمیل'}</button>
           </div>
           <button className="auth-text-button" type="button" onClick={openAccessCode}>ورود با کد دسترسی</button>
         </div>
