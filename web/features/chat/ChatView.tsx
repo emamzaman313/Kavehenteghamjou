@@ -105,7 +105,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     void loadMessages(active);
     const channel = supabase.channel(`chat:${active}`).on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${active}` }, () => { void loadMessages(active); void loadConversations(); }).subscribe((status) => { setRealtimeStatus(status); if (status === 'SUBSCRIBED') { void loadMessages(active); void loadConversations(); } });
     return () => { void supabase.removeChannel(channel); };
-  }, [active, supabase, loadMessages]);
+  }, [active, supabase, loadMessages, loadConversations]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const loadOlderMessages = async () => {
