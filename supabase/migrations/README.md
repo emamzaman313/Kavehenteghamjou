@@ -24,6 +24,7 @@ The following versions were read from the live Supabase migration ledger. Filena
 | `20261118212549` | `kaveh_admin_audit_log` | Included (`20261118212549_kaveh_admin_audit_log.sql`) |
 | `20261118212800` | `kaveh_admin_rbac_roles` | Included (`20261118212800_kaveh_admin_rbac_roles.sql`) |
 | `20261118213526` | `kaveh_user_moderation_audit` | Included (`20261118213526_kaveh_user_moderation_audit.sql`) |
+| `20261118214059` | `kaveh_admin_role_management` | Included (`20261118214059_kaveh_admin_role_management.sql`) |
 
 **Important:** the live migration ledger is authoritative. The first four original SQL bodies have not yet been exported into this repository. An early local SQL draft is archived at `supabase/archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` and is explicitly non-deployable because it predates the final RLS and privilege fixes.
 
@@ -56,3 +57,8 @@ Migration `20261118212800_kaveh_admin_rbac_roles` adds the `role` column to the 
 Migration `20261118213526_kaveh_user_moderation_audit` extends the existing audit constraints to allow `warn_user`, `ban_user`, and `unban_user` events with `target_type='user'`. Existing post audit rows are preserved. The `admin-console` Edge Function lists Auth users server-side for owner/admin only, protects all accounts in `site_access_admins` and the acting administrator from moderation, and uses Auth Admin `updateUserById` with a bounded set of ban durations. Warnings and ban/unban events are written to the in-app `notifications` table and recorded in `admin_audit_logs`.
 
 A ban prevents new sign-ins and refreshes while active. An already-issued access JWT can remain usable until its expiry; this is not an instant global session revocation mechanism. The web admin panel shows this caveat before moderation actions.
+
+
+## Owner-managed administrator roles
+
+Migration `20261118214059_kaveh_admin_role_management` extends the audit action constraint for `set_admin_role` and `remove_admin_role`. Only an existing `owner` can assign `admin`, `moderator`, or `support` roles to existing Auth users or revoke those roles. The `owner` role itself cannot be assigned, changed, or removed through this endpoint, and the acting owner cannot change their own role. All role changes are audited and send an in-app notification to the affected user. The web panel exposes these controls only when the server confirms `can_manage_admins=true`.
