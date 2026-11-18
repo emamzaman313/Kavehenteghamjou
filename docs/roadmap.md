@@ -45,3 +45,12 @@
 - [ ] تست واحد، integration، RLS، عملکرد و accessibility
 - [ ] build reproducible، SBOM و license report
 - [ ] Release signing با Keystore واقعی مالک
+
+
+## اصلاح وضعیت بر اساس ممیزی زنده ۱۸ نوامبر ۲۰۲۶
+
+- Web: TypeScript، Next.js Production Build و ۱۰ تست Vitest روی Commit b9ad73e9c0d8dd67a7678aecfba723ea18ebeffe موفق؛ ESLint صفر خطا و ۹ هشدار.
+- Web OAuth: Provider در Supabase با external.google=false خاموش است؛ تنظیم Dashboard و تست واقعی Google در انتظار اقدام مالک.
+- Backend: ۲۶/۲۶ جدول RLS-enabled، ۶۸ Policy؛ تعداد Auth users و messages در بازبینی Read-only صفر.
+- Dependencies: npm audit --omit=dev صفر؛ کل graph توسعه ۱۶ High شامل picomatch <=4.0.7. نسخه اصلاح‌شده در Registry موجود نبود؛ downgrade عمده انجام نشد.
+- Android: خطایابی Google Auth در سورس و تست واحد اضافه شده، اما Release signing و physical-device acceptance هنوز انجام نشده‌اند.
