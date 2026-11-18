@@ -293,3 +293,23 @@ a { color:inherit; }
 .auth-secondary-actions button { border:0; background:transparent; color:#c79b57; font-size:10px; padding:7px 3px; }
 .auth-secondary-actions button:disabled { opacity:.5; }
 .notice-success { color:#9ad9b6; background:rgba(101,184,138,.1); border:1px solid rgba(101,184,138,.2); }
+
+
+/* Shared access-code and owner settings */
+.auth-alternate-button,.auth-text-button { display:inline-flex; align-items:center; justify-content:center; gap:9px; border:1px solid rgba(226,185,111,.28); border-radius:12px; background:rgba(199,155,87,.07); color:#e2b96f; min-height:43px; padding:0 15px; font-size:11px; font-weight:700; margin-top:12px; width:100%; }
+.auth-alternate-button:hover,.auth-text-button:hover { background:rgba(199,155,87,.14); }
+.auth-alternate-button:disabled,.auth-text-button:disabled { opacity:.5; cursor:not-allowed; }
+.auth-text-button { min-height:34px; border:0; background:transparent; margin-top:2px; }
+.auth-access-foot { color:#8e897f; font-size:9px; line-height:1.8; text-align:center; margin:0; }
+.admin-access-card { max-width:720px; gap:16px; }
+.admin-access-card>p { line-height:2; }
+.admin-toggle-row { align-items:center; }
+.admin-toggle-row>div { display:grid; gap:6px; }
+.admin-toggle-row strong { color:var(--text); font-size:12px; }
+.admin-toggle-row small { color:var(--muted); font-size:10px; }
+.admin-code-input { letter-spacing:7px; font-weight:800; text-align:center; }
+.admin-security-note { color:var(--muted); font-size:10px; line-height:1.9; margin:0; }
+.admin-access-footer { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; border-top:1px solid var(--line); padding-top:15px; }
+.admin-access-footer>span { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:10px; }
+.admin-access-footer>span svg { color:var(--accent); }
+.admin-loading { min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--muted); font-size:11px; }
