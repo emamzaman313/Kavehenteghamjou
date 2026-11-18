@@ -135,3 +135,16 @@ Remote migration ledger ده نسخه دارد:
 7. بازیابی تاریخچه قدیمی Git فقط در صورت دسترسی به clone اصلی یا Git bundle دارای `.git`.
 
 هیچ داده‌ای در Supabase حذف یا تغییر داده نشده و Migration جدیدی روی پروژه زنده اجرا نشده است.
+
+
+## ممیزی تکمیلی و شواهد زنده — ۱۸ نوامبر ۲۰۲۶
+
+این بخش مرجع جدیدتر برای وضعیت متغیرهای Production، Provider و تست‌های وب است و بندهای تاریخی بالاتر را به‌روزرسانی می‌کند.
+
+- Supabase Project Ref slwzjufipavuwcbwoyro در هر دو اتصال مدیریتی ACTIVE_HEALTHY بود. SQL صرفاً Read-only: تعداد ۲۶ جدول عمومی، ۲۶ جدول RLS-enabled، ۶۸ Policy، صفر Auth user، صفر profile، صفر message و صفر file_asset. Bucket user-files private با سقف ۵۰٬۰۰۰٬۰۰۰ بایت. هیچ داده، Policy یا Migration تغییر نکرد.
+- Vercel Production مقدار NEXT_PUBLIC_SUPABASE_URL برابر https://slwzjufipavuwcbwoyro.supabase.co داشت. Deployment جاری READY بود ولی روی Commit 77dc96d4b4d9c02aa5962001fdf0f4777193fa22 قرار داشت؛ HTTP 200 سایت و callback به معنای OAuth موفق نیست.
+- Auth settings زنده external.google=false بود. این نتیجه، عبارت تاریخی «Provider از راه دور قابل‌تأیید نبود» را اصلاح می‌کند: Google Provider اکنون به‌طور قطعی غیرفعال مشاهده شد. فعال‌سازی آن به Supabase Dashboard مالک و ثبت Web Client ID/Secret از Google Cloud نیاز دارد.
+- main در Commit d204f71253c129770dc69436a4373ffd7e46c05c شامل helper خطای Google وب، مدیریت callback error و مدیریت خطای Google Android همراه تست واحد بود.
+- شاخه fix/web-pkce-single-exchange-2026-11-18 از همین main منشعب شد. Commit کد تست‌شده b9ad73e9c0d8dd67a7678aecfba723ea18ebeffe: npm ci موفق، TypeScript موفق، Vitest دو فایل/۱۰ تست موفق، Next.js Production Build موفق، ESLint صفر خطا/۹ هشدار و npm audit --omit=dev صفر آسیب‌پذیری.
+- npm audit کل زنجیره توسعه ۱۶ High و صفر Critical گزارش کرد. picomatch@4.0.7 آخرین نسخه npm registry بود و advisory نسخه‌های <=4.0.7 را پوشش می‌داد؛ 4.0.8 موجود نبود. npm فقط downgrade عمده Vitest به 3.1.4 را پیشنهاد کرد؛ downgrade یا workaround اجباری اعمال نشد.
+- Android Release workflow و Chat E2E در این ممیزی اجرا نشدند؛ keystore، signing secrets و دو حساب اختصاصی در دسترس نبودند. APK/AAB Release و تست گوشی واقعی تولید یا ادعا نشده است.
