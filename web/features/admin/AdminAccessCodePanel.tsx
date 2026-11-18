@@ -1,14 +1,14 @@
 'use client';
 
 import { Activity, Eye, EyeOff, Film, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader } from '@/components/ui';
 import { isValidAccessCode, normalizeAccessCode } from '@/lib/access-code';
 
 export default function AdminAccessCodePanel({ supabase, notify }: { supabase: SupabaseClient; notify: Notify }) {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -18,7 +18,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
 
-  const refreshOverview = async () => {
+  const refreshOverview = useCallback(async () => {
     setOverviewLoading(true);
     const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'overview' } });
     setOverviewLoading(false);
@@ -27,9 +27,9 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
       return;
     }
     setOverview(data);
-  };
+  }, [supabase, notify]);
 
-  useEffect(() => { void refreshOverview(); }, [supabase]);
+  useEffect(() => { void refreshOverview(); }, [refreshOverview]);
 
   const moderatePost = async (postId: string, visibility: 'public' | 'private') => {
     const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'moderate_post', postId, visibility } });
@@ -155,7 +155,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
               onChange={(event) => setNewCode(normalizeAccessCode(event.target.value))}
               disabled={saving}
             />
-            <p className="admin-security-note">کد اولیه 123456 است. برای امنیت بیشتر آن را به کدی غیرقابل حدس تغییر دهید. کد در پایگاه داده به‌صورت هش ذخیره می‌شود و پس از ذخیره قابل مشاهده نیست.</p>
+            <p className="admin-security-note">کد دسترسی فقط به‌صورت هش امن در پایگاه داده نگهداری می‌شود و پس از ذخیره قابل مشاهده نیست. برای استفاده عمومی، یک کد تصادفی و غیرقابل حدس انتخاب کنید.</p>
             <div className="admin-access-footer">
               <span><KeyRound size={14}/> پنج تلاش اشتباه، محدودیت ۱۵ دقیقه‌ای ایجاد می‌کند.</span>
               <button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>
