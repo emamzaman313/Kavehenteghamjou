@@ -5,7 +5,6 @@ import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.OTP
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class EmailOtpRepository(private val supabase: SupabaseClient) {
@@ -37,7 +36,7 @@ class EmailOtpRepository(private val supabase: SupabaseClient) {
             this.email = email.trim().lowercase()
             this.password = password
         }
-        supabase.auth.modifyUser {
+        supabase.auth.updateUser {
             data {
                 put("account_password_ready", true)
             }
