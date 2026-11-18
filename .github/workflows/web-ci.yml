@@ -35,8 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22.16.0"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
 
       - name: Generate lockfile when repository has no lockfile yet
         run: |
@@ -68,7 +66,7 @@ jobs:
         with:
           name: kaveh-web-build
           path: |
-            web/.next
-            web/package-lock.json
+            .next
+            package-lock.json
           if-no-files-found: warn
           retention-days: 14
