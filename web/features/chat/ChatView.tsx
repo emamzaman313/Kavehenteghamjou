@@ -95,9 +95,15 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
         setAttachmentsByMessage(grouped);
       } else setAttachmentsByMessage({});
     } else { setAttachmentsByMessage({}); }
-    const { error: readError } = await supabase.from('conversation_members').update({ last_read_at: new Date().toISOString() }).eq('conversation_id', conversationId).eq('user_id', userId);
-    if (readError) notify(`ثبت وضعیت خواندن ناموفق بود: ${readError.message}`, 'error');
-    else void loadConversations();
+    const newestLoadedMessageAt = rows.at(-1)?.created_at;
+    if (newestLoadedMessageAt) {
+      const { error: readError } = await supabase.from('conversation_members')
+        .update({ last_read_at: newestLoadedMessageAt })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId);
+      if (readError) notify(`ثبت وضعیت خواندن ناموفق بود: ${readError.message}`, 'error');
+      else void loadConversations();
+    }
   }, [supabase, userId, notify, loadConversations]);
 
   useEffect(() => {
