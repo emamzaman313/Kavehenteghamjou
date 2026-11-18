@@ -1,20 +1,22 @@
 'use client';
 import { Activity, CircleHelp, Copy, Heart, MessageCircle, Send, ShieldCheck, Sparkles, Zap } from 'lucide-react';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Post, Profile } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
 import { formatDate } from '@/lib/format';
 import { Avatar, EmptyState, SectionHeader } from '@/components/ui';
+import PostComposer from '@/features/feed/PostComposer';
+
+type PostAttachment = { id: string; post_id: string; bucket_id: string; object_path: string; original_name: string; mime_type: string | null; byte_size: number };
 
 export default function FeedView({ supabase, userId, notify, onGoChats }: { supabase: SupabaseClient; userId: string; notify: Notify; onGoChats: () => void }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [body, setBody] = useState('');
+  const [attachments, setAttachments] = useState<Record<string, PostAttachment[]>>({});
   const [loading, setLoading] = useState(true);
-  const [publishing, setPublishing] = useState(false);
   const [commentsFor, setCommentsFor] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [commentRows, setCommentRows] = useState<Record<string, { id: string; body: string; author_id: string; created_at: string }[]>>({});
@@ -26,15 +28,19 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     const rows = (data ?? []) as Post[]; setPosts(rows);
     const ids = [...new Set(rows.map((p) => p.author_id))];
     if (ids.length) {
-      const [{ data: people }, { data: reactions }] = await Promise.all([
+      const [{ data: people }, { data: reactions }, { data: media }] = await Promise.all([
         supabase.from('profiles').select('*').in('id', ids),
         supabase.from('post_reactions').select('post_id,user_id').in('post_id', rows.map((p) => p.id)),
+        supabase.from('post_attachments').select('*').in('post_id', rows.map((p) => p.id)).order('created_at'),
       ]);
       const map: Record<string, Profile> = {}; (people ?? []).forEach((p) => { map[p.id] = p as Profile; }); setAuthors(map);
+      const mediaMap: Record<string, PostAttachment[]> = {};
+      (media ?? []).forEach((item) => { const row = item as PostAttachment; (mediaMap[row.post_id] ??= []).push(row); });
+      setAttachments(mediaMap);
       const myLikes = new Set<string>(); const total: Record<string, number> = {};
       (reactions ?? []).forEach((r) => { total[r.post_id] = (total[r.post_id] ?? 0) + 1; if (r.user_id === userId) myLikes.add(r.post_id); });
       setLiked(myLikes); setCounts(total);
-    }
+    } else { setAuthors({}); setAttachments({}); setLiked(new Set()); setCounts({}); }
     setLoading(false);
   }, [supabase, userId, notify]);
   useEffect(() => { void load(); }, [load]);
@@ -43,14 +49,7 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     return () => { void supabase.removeChannel(channel); };
   }, [supabase, load]);
 
-  const publish = async (event: FormEvent) => {
-    event.preventDefault(); if (!body.trim()) return;
-    setPublishing(true);
-    const { error } = await supabase.from('posts').insert({ author_id: userId, body: body.trim(), visibility: 'public', comments_enabled: true, published_at: new Date().toISOString() });
-    setPublishing(false);
-    if (error) notify(`انتشار پست انجام نشد: ${error.message}`, 'error');
-    else { setBody(''); notify('پست با موفقیت منتشر شد.'); void load(); }
-  };
+
 
   const toggleLike = async (postId: string) => {
     if (liked.has(postId)) {
@@ -85,8 +84,8 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
 
   return <div className="feed-layout"><div className="feed-main">
     <SectionHeader eyebrow="جریان محتوا" title="سلام، خوش اومدی" description="آنچه در جامعهٔ کاوه می‌گذرد، همین‌جاست." action={<button className="button button-quiet" onClick={onGoChats}><MessageCircle size={17}/> گفتگوها</button>}/>
-    <form className="composer-card" onSubmit={publish}><div className="composer-top"><Avatar profile={{ display_name: 'شما' }} size="md"/><textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="چه چیزی می‌خواهی با دیگران به اشتراک بگذاری؟" rows={3} maxLength={5000}/></div><div className="composer-bottom"><span><Sparkles size={15}/> انتشار عمومی در فید</span><button className="button button-primary" disabled={publishing || !body.trim()}>{publishing ? 'در حال انتشار…' : 'انتشار پست'}<Send size={16}/></button></div></form>
+    <PostComposer supabase={supabase} userId={userId} notify={notify} onPublished={() => void load()}/>\n    
     <div className="feed-toolbar"><div><strong>تازه‌ترین‌ها</strong><span>محتوای عمومی جامعه</span></div><button className="icon-button" onClick={() => void load()} title="تازه‌سازی"><Activity size={18}/></button></div>
-    {loading ? <div className="skeleton-list">{[1,2,3].map((n) => <div className="skeleton-card" key={n}/>)}</div> : posts.length === 0 ? <EmptyState icon={<Sparkles/>} title="هنوز پستی منتشر نشده" description="اولین پست را تو منتشر کن و فید را زنده کن."/> : posts.map((post) => <article className="post-card" key={post.id}><div className="post-author"><Avatar profile={authors[post.author_id]} size="md"/><div><strong>{authors[post.author_id]?.display_name ?? 'کاربر کاوه'}</strong><small>{authors[post.author_id]?.username ? `@${authors[post.author_id].username} · ` : ''}{formatDate(post.published_at ?? post.created_at)}</small></div></div><p className="post-body">{post.body}</p><div className="post-meta"><span><Activity size={14}/> انتشار عمومی</span><span>{counts[post.id] ?? 0} واکنش</span></div><div className="post-actions"><button className={liked.has(post.id) ? 'is-liked' : ''} onClick={() => void toggleLike(post.id)}><Heart size={18} fill={liked.has(post.id) ? 'currentColor' : 'none'}/> پسندیدن</button><button onClick={() => void loadComments(post.id)}><MessageCircle size={18}/> دیدگاه‌ها</button><button onClick={() => void copyPostLink(post.id)}><Copy size={18}/> کپی پیوند</button></div>{commentsFor === post.id && <div className="comments-box">{(commentRows[post.id] ?? []).map((comment) => <div className="comment-row" key={comment.id}><Avatar profile={authors[comment.author_id]} size="sm"/><p>{comment.body}</p></div>)}<div className="comment-compose"><input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="دیدگاهت را بنویس…" onKeyDown={(e) => { if (e.key === 'Enter') void addComment(post.id); }}/><button className="icon-button" onClick={() => void addComment(post.id)} title="ارسال دیدگاه"><Send size={17}/></button></div></div>}</article>)}
+    {loading ? <div className="skeleton-list">{[1,2,3].map((n) => <div className="skeleton-card" key={n}/>)}</div> : posts.length === 0 ? <EmptyState icon={<Sparkles/>} title="هنوز پستی منتشر نشده" description="اولین پست را تو منتشر کن و فید را زنده کن."/> : posts.map((post) => <article className="post-card" key={post.id}><div className="post-author"><Avatar profile={authors[post.author_id]} size="md"/><div><strong>{authors[post.author_id]?.display_name ?? 'کاربر کاوه'}</strong><small>{authors[post.author_id]?.username ? `@${authors[post.author_id].username} · ` : ''}{formatDate(post.published_at ?? post.created_at)}</small></div></div>{post.body && <p className="post-body">{post.body}</p>}{attachments[post.id]?.length ? <div className="post-media-grid">{attachments[post.id].map((item) => { const { data } = supabase.storage.from(item.bucket_id).getPublicUrl(item.object_path); const url = data.publicUrl; return item.mime_type?.startsWith('image/') ? <a className="post-media-link" href={url} target="_blank" rel="noreferrer" key={item.id}><img className="post-media-image" src={url} alt={item.original_name} loading="lazy"/></a> : item.mime_type?.startsWith('video/') ? <video className="post-media-video" key={item.id} controls playsInline preload="metadata" src={url}/> : <a className="post-file-attachment" href={url} download={item.original_name} target="_blank" rel="noreferrer" key={item.id}><span>{item.original_name}</span></a>; })}</div> : null}<div className="post-meta"><span><Activity size={14}/> انتشار عمومی</span><span>{counts[post.id] ?? 0} واکنش</span></div><div className="post-actions"><button className={liked.has(post.id) ? 'is-liked' : ''} onClick={() => void toggleLike(post.id)}><Heart size={18} fill={liked.has(post.id) ? 'currentColor' : 'none'}/> پسندیدن</button><button onClick={() => void loadComments(post.id)}><MessageCircle size={18}/> دیدگاه‌ها</button><button onClick={() => void copyPostLink(post.id)}><Copy size={18}/> کپی پیوند</button></div>{commentsFor === post.id && <div className="comments-box">{(commentRows[post.id] ?? []).map((comment) => <div className="comment-row" key={comment.id}><Avatar profile={authors[comment.author_id]} size="sm"/><p>{comment.body}</p></div>)}<div className="comment-compose"><input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="دیدگاهت را بنویس…" onKeyDown={(e) => { if (e.key === 'Enter') void addComment(post.id); }}/><button className="icon-button" onClick={() => void addComment(post.id)} title="ارسال دیدگاه"><Send size={17}/></button></div></div>}</article>)}
   </div><aside className="feed-aside"><div className="welcome-card"><div className="welcome-icon"><Zap size={21}/></div><span className="eyebrow">به کاوه خوش آمدی</span><h3>فضای تو،<br/>قوانین تو.</h3><p>گفتگو کن، محتوای ارزشمند بساز و فایل‌هایت را در فضای خصوصی نگه دار.</p><div className="welcome-stats"><span><strong>۵۰ MB</strong><small>سقف هر فایل</small></span><span><strong>خصوصی</strong><small>فضای ذخیره‌سازی</small></span></div></div><div className="side-info-card"><div className="side-info-title"><ShieldCheck size={17}/><strong>امنیت حساب</strong></div><p>دسترسی به پیام‌ها و فایل‌ها بر اساس نشست و سیاست‌های دیتابیس کنترل می‌شود.</p><span className="status-line"><i/> نشست احرازشده</span></div><div className="side-info-card"><div className="side-info-title"><CircleHelp size={17}/><strong>راهنمای سریع</strong></div><p>برای شروع گفتگو، از بخش اکتشاف یک کاربر را پیدا کن. فایل‌ها از بخش فایل‌های من قابل بارگذاری‌اند.</p></div></aside></div>;
 }
