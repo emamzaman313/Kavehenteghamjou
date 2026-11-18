@@ -15,7 +15,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [loadError, setLoadError] = useState('');
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'audit' | 'access'>('overview');
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
-  const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; admin_role: string | null }[]>([]);
+  const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; is_banned: boolean; admin_role: string | null }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userReasons, setUserReasons] = useState<Record<string, string>>({});
   const [userDurations, setUserDurations] = useState<Record<string, string>>({});
@@ -188,7 +188,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <div className="admin-audit-heading"><strong>مدیریت کاربران ({managedUsers.length})</strong><button className="button button-quiet" type="button" onClick={() => void refreshUsers()}><Activity size={15}/> تازه‌سازی</button></div>
           <p className="admin-user-policy-note">اخطار فقط در سوابق ثبت می‌شود. مسدودسازی ورود، ورود و تمدید نشست‌های جدید را متوقف می‌کند؛ نشست‌های دارای توکن فعال ممکن است تا زمان انقضای توکن دسترسی فعلی کار کنند. حساب‌های مدیریتی از این عملیات محافظت شده‌اند.</p>
           {usersLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت کاربران…</span></div> : managedUsers.length === 0 ? <p>کاربری برای نمایش پیدا نشد.</p> : managedUsers.map((user) => {
-            const isBanned = Boolean(user.banned_until && Date.parse(user.banned_until) > Date.now());
+            const isBanned = user.is_banned;
             const roleLabel = user.admin_role === 'owner' ? 'مالک' : user.admin_role === 'admin' ? 'مدیر' : user.admin_role === 'moderator' ? 'ناظر' : user.admin_role === 'support' ? 'پشتیبانی' : '';
             return <div className="admin-managed-user" key={user.id}>
               <div className="admin-user-row">
