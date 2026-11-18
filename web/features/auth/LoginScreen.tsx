@@ -6,6 +6,7 @@ import type { FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { BrandMark } from '@/components/ui';
 import { authErrorMessage } from '@/lib/auth-errors';
+import { normalizeAccessCode } from '@/lib/access-code';
 
 type LoginStep = 'email' | 'sent' | 'access';
 
@@ -175,7 +176,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
             dir="ltr"
             placeholder="••••••"
             value={accessCode}
-            onChange={(event) => setAccessCode(event.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase())}
+            onChange={(event) => setAccessCode(normalizeAccessCode(event.target.value))}
             required
             disabled={busy || accessEnabled !== true}
           />
