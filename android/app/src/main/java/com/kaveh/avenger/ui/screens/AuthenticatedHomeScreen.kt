@@ -1,5 +1,6 @@
 package com.kaveh.avenger.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,9 +47,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.kaveh.avenger.R
 import com.kaveh.avenger.data.SupabaseClientProvider
 import kotlinx.coroutines.launch
 
@@ -68,13 +72,22 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         topBar = {
             TopAppBar(
                 title = {
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text("کاوه انتقامجو", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            "فضای شخصی ارتباط و رسانه",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_launcher),
+                            contentDescription = "نماد کاوه انتقامجو",
+                            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
                         )
+                        Spacer(Modifier.width(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text("کاوه انتقامجو", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "فضای شخصی ارتباط و رسانه",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 },
                 actions = {
