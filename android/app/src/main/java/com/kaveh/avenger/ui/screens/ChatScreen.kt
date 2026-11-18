@@ -128,21 +128,21 @@ fun ChatScreen(
         errorText = null
         try {
             val memberships = supabase.postgrest["conversation_members"].select {
-                eq("user_id", userId)
+                filter { eq("user_id", userId) }
             }.decodeList<ConversationMemberRow>()
 
             val loaded = memberships.mapNotNull { membership ->
                 val conversation = supabase.postgrest["conversations"].select {
-                    eq("id", membership.conversationId)
+                    filter { eq("id", membership.conversationId) }
                 }.decodeList<ConversationRow>().firstOrNull() ?: return@mapNotNull null
 
                 val otherMember = supabase.postgrest["conversation_members"].select {
-                    eq("conversation_id", conversation.id)
+                    filter { eq("conversation_id", conversation.id) }
                 }.decodeList<ConversationMemberRow>().firstOrNull { it.userId != userId }
 
                 val profile = otherMember?.let { member ->
                     supabase.postgrest["profiles"].select {
-                        eq("id", member.userId)
+                        filter { eq("id", member.userId) }
                     }.decodeList<ProfileRow>().firstOrNull()
                 }
 
@@ -167,8 +167,10 @@ fun ChatScreen(
     suspend fun loadMessages(conversationId: String) {
         try {
             val loaded = supabase.postgrest["messages"].select {
-                eq("conversation_id", conversationId)
-                exact("deleted_at", null)
+                filter {
+                    eq("conversation_id", conversationId)
+                    exact("deleted_at", null)
+                }
                 order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                 limit(count = 100)
             }.decodeList<MessageRow>().reversed()
@@ -179,8 +181,10 @@ fun ChatScreen(
             supabase.postgrest["conversation_members"].update({
                 set("last_read_at", Instant.now().toString())
             }) {
-                eq("conversation_id", conversationId)
-                eq("user_id", userId)
+                filter {
+                    eq("conversation_id", conversationId)
+                    eq("user_id", userId)
+                }
             }
         } catch (exception: Exception) {
             errorText = exception.message ?: "دریافت پیام‌ها ناموفق بود."
