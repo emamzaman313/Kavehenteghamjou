@@ -7,30 +7,30 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Provisional neutral/champagne tokens. Replace accent values only after the supplied original brand icon is available.
+// Electric blue and cyan brand palette aligned with the supplied Kaveh emblem.
 private val KavehDark = darkColorScheme(
-    primary = Color(0xFFD8B873),
-    onPrimary = Color(0xFF191714),
-    secondary = Color(0xFFB9A779),
-    background = Color(0xFF101010),
-    onBackground = Color(0xFFF5F1E8),
-    surface = Color(0xFF1A1917),
+    primary = Color(0xFF168BFF),
+    onPrimary = Color(0xFF03101F),
+    secondary = Color(0xFF80D8FF),
+    background = Color(0xFF050912),
+    onBackground = Color(0xFFF2F8FF),
+    surface = Color(0xFF0D1728),
     onSurface = Color(0xFFF5F1E8),
-    surfaceVariant = Color(0xFF292722),
-    onSurfaceVariant = Color(0xFFC8C1B2),
+    surfaceVariant = Color(0xFF18263A),
+    onSurfaceVariant = Color(0xFFB5C5D9),
     error = Color(0xFFFF6B6B)
 )
 
 private val KavehLight = lightColorScheme(
-    primary = Color(0xFF82672C),
+    primary = Color(0xFF075BC7),
     onPrimary = Color(0xFFFFFFFF),
-    secondary = Color(0xFF756342),
-    background = Color(0xFFF7F5F0),
-    onBackground = Color(0xFF171612),
+    secondary = Color(0xFF167CA8),
+    background = Color(0xFFF2F7FD),
+    onBackground = Color(0xFF101C2C),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF171612),
-    surfaceVariant = Color(0xFFECE8DE),
-    onSurfaceVariant = Color(0xFF5F5A4E),
+    surfaceVariant = Color(0xFFE2ECF7),
+    onSurfaceVariant = Color(0xFF53677F),
     error = Color(0xFFBA1A1A)
 )
 
