@@ -5,7 +5,7 @@
 ## Google Cloud
 
 1. Google Cloud project بسازید و Google Auth Platform را پیکربندی کنید.
-2. OAuth Client نوع **Web application** بسازید؛ Client ID وب در اپ Android برای `setServerClientId` استفاده می‌شود.
+2. OAuth Client نوع **Web application** بسازید؛ Client ID وب در اپ Android برای `setServerClientId` استفاده می‌شود. در بخش Authorized redirect URIs مقدار دقیق `https://slwzjufipavuwcbwoyro.supabase.co/auth/v1/callback` را ثبت کنید.
 3. OAuth Client نوع **Android** بسازید و package name `com.kaveh.avenger` را ثبت کنید.
 4. SHA-1 گواهی debug و release را جداگانه ثبت کنید. در زمان انتشار باید SHA-1 واقعی امضای Release هم افزوده شود.
 5. Scopeهای `openid`, `email`, `profile` را فعال کنید.
@@ -20,6 +20,15 @@
 - Save کنید.
 
 Client Secret صرفاً در Dashboard/Supabase نگهداری می‌شود و نباید در Android یا Git قرار بگیرد.
+
+## نشانی‌های بازگشت مجاز در Supabase
+
+در Authentication → URL Configuration، نشانی سایت و callback را در Redirect URLs قرار دهید:
+
+- `https://kaveh-avenger.vercel.app/auth/callback`
+- `http://localhost:3000/auth/callback` (فقط برای توسعه محلی)
+
+Site URL را روی `https://kaveh-avenger.vercel.app` تنظیم کنید.
 
 ## Android
 
