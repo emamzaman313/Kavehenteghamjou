@@ -85,16 +85,16 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
+      const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
-        token: emailOtp,
+        token: normalizeOtp(emailOtp),
         type: 'email',
       });
       if (verifyError) {
         setError(authErrorMessage(verifyError));
         return;
       }
-      setNotice('کد تأیید شد. در حال ورود به حساب شما…');
+      if (!verifyData.session?.access_token || !verifyData.session?.refresh_token) {\n        setError('کد تأیید شد اما نشست ورود از سرویس دریافت نشد. دوباره کد تازه درخواست کنید.');\n        return;\n      }\n      const { error: sessionError } = await supabase.auth.setSession({\n        access_token: verifyData.session.access_token,\n        refresh_token: verifyData.session.refresh_token,\n      });\n      if (sessionError) {\n        setError(authErrorMessage(sessionError));\n        return;\n      }\n      setNotice('کد تأیید شد. در حال ورود به حساب شما…');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
