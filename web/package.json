@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e:chat": "node scripts/e2e-chat.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -26,7 +27,7 @@
     "eslint": "^9.39.0",
     "eslint-config-next": "^16.0.0",
     "tailwindcss": "^4.1.17",
-    "typescript": "^5.9.3",
+    "typescript": "^5.9.0",
     "vitest": "4.1.12",
     "@eslint/eslintrc": "^3.3.1"
   }
