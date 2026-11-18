@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getSupabase } from '@/lib/supabase';
 
@@ -29,5 +30,5 @@ export default function AuthCallbackPage() {
     return () => { active = false; };
   }, [router]);
 
-  return <main className="callback-screen"><div className="spinner"/><p>{message}</p><a href="/">بازگشت به کاوه</a></main>;
+  return <main className="callback-screen"><div className="spinner"/><p>{message}</p><Link href="/">بازگشت به کاوه</Link></main>;
 }
