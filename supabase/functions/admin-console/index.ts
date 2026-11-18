@@ -27,7 +27,7 @@ Deno.serve(async (request: Request) => {
   if (!bearer || bearer === anonKey) return respond({ ok: false, reason: "unauthorized" }, 401, origin);
   const { data: authData, error: authError } = await auth.auth.getUser(bearer);
   if (authError || !authData.user) return respond({ ok: false, reason: "unauthorized" }, 401, origin);
-  const { data: adminRow } = await admin.from("site_access_admins").select("user_id").eq("user_id", authData.user.id).maybeSingle();
+  const { data: adminRow } = await admin.from("site_access_admins").select("user_id,role").eq("user_id", authData.user.id).maybeSingle();
   if (!adminRow) return respond({ ok: false, reason: "not_admin" }, 403, origin);
 
   let body: Record<string, unknown>;
@@ -73,6 +73,7 @@ Deno.serve(async (request: Request) => {
   }
 
   if (body.action === "moderate_post") {
+    if (!["owner", "admin", "moderator"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
     if (!validId(body.postId) || !["public", "private", "followers"].includes(String(body.visibility))) return respond({ ok: false, reason: "invalid_post_update" }, 400, origin);
     const audit = await beginAudit("moderate_post", body.postId, { visibility: body.visibility });
     if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
@@ -86,6 +87,7 @@ Deno.serve(async (request: Request) => {
   }
 
   if (body.action === "delete_post") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
     if (!validId(body.postId)) return respond({ ok: false, reason: "invalid_post_id" }, 400, origin);
     const audit = await beginAudit("delete_post", body.postId);
     if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
