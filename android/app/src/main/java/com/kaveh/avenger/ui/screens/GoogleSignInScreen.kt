@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaveh.avenger.auth.GoogleAuthRepository
+import com.kaveh.avenger.auth.GoogleAuthErrorMessage
 import com.kaveh.avenger.data.SupabaseClientProvider
 import kotlinx.coroutines.launch
 
@@ -115,7 +116,7 @@ fun GoogleSignInScreen(
                                 try {
                                     authRepository.signIn(context)
                                 } catch (error: Exception) {
-                                    errorMessage = error.localizedMessage ?: "ورود انجام نشد. دوباره تلاش کنید."
+                                    errorMessage = GoogleAuthErrorMessage.from(error)
                                 } finally {
                                     isLoading = false
                                 }
