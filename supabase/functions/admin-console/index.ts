@@ -58,6 +58,16 @@ Deno.serve(async (request: Request) => {
     return !error;
   }
 
+  if (body.action === "audit_logs") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const { data, error } = await admin.from("admin_audit_logs")
+      .select("id,actor_id,action,target_type,target_id,status,details,created_at,completed_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) return respond({ ok: false, reason: "audit_query_failed" }, 500, origin);
+    return respond({ ok: true, events: data ?? [] }, 200, origin);
+  }
+
   if (body.action === "overview") {
     const [users, userCount, posts, comments, media, latestPosts] = await Promise.all([
       admin.from("profiles").select("id,display_name,username,created_at").order("created_at", { ascending: false }).limit(30),
