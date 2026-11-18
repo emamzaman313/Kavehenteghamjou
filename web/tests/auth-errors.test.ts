@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authErrorMessage } from '../lib/auth-errors';
+import { authErrorMessage, getOAuthCallbackError } from '../lib/auth-errors';
 
 describe('authErrorMessage', () => {
   it('explains that Google sign-in must be enabled when Supabase rejects the provider', () => {
@@ -22,5 +22,27 @@ describe('authErrorMessage', () => {
     expect(message).not.toContain('access_token');
     expect(message).not.toContain('secret');
     expect(message).toContain('دوباره');
+  });
+});
+
+describe('getOAuthCallbackError', () => {
+  it('reads provider errors returned in the query string', () => {
+    const error = getOAuthCallbackError(
+      '?error=server_error&error_code=provider_disabled&error_description=Google+is+disabled',
+      '',
+    );
+    expect(authErrorMessage(error)).toContain('Google');
+  });
+
+  it('reads provider errors returned in the URL fragment', () => {
+    const error = getOAuthCallbackError(
+      '',
+      '#error=access_denied&error_description=User+cancelled',
+    );
+    expect(authErrorMessage(error)).toContain('لغو');
+  });
+
+  it('returns null when the callback contains no OAuth error', () => {
+    expect(getOAuthCallbackError('?code=authorization-code', '')).toBeNull();
   });
 });
