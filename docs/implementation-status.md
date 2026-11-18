@@ -1,6 +1,6 @@
 # وضعیت پیاده‌سازی و آزمون
 
-تاریخ: ۱۸ نوامبر ۲۰۲۶ — مرحله دوم، بازبینی محیط و ایجاد پایه وب
+تاریخ: ۱۸ نوامبر ۲۰۲۶ — به‌روزرسانی CI، چت و خروجی‌های Build
 
 ## وضعیت واقعی Supabase — بازبینی مجدد و تأییدشده
 
@@ -39,27 +39,38 @@
 
 مواردی که هنوز در وب کامل نیستند: آپلود resumable/multipart و progress بایت‌به‌بایت، صف retry پایدار، انتشار پست دارای رسانه، گروه/کانال، استوری، تماس، Push، PWA کامل و پنل مدیریت.
 
-## Build و آزمون
+## Build و آزمون — GitHub Actions
 
-- Java 21 و Node.js 22 موجودند.
-- Gradle، Android SDK، Android Build Tools و `ANDROID_HOME` در این محیط موجود نیستند؛ APK/AAB ساخته نشده‌اند.
-- DNS/دسترسی شبکه از محیط container به `registry.npmjs.org` و `supabase.com` برقرار نبود؛ بنابراین npm dependencies نصب، lockfile تولید، typecheck، lint، Vitest و production build اجرا نشدند.
-- تمام ۲۰ فایل TypeScript/TSX با TypeScript `transpileModule` بررسی نحوی شدند: صفر syntax diagnostic.
-- ۷ assertion اجرایی با TypeScript transpile شده روی قواعد سقف فایل، پسوند آزاد، نام Unicode، پاک‌سازی جداکننده مسیر و قالب حجم موفق شدند. تست‌های Vitest معادل در `web/tests/format.test.ts` نوشته شده‌اند، اما خود Vitest به‌دلیل نصب‌نبودن وابستگی‌ها اجرا نشد.
-- `npm run build` اجرا شد اما به‌علت نبود `node_modules` با `next: not found` متوقف شد. `tsc --noEmit` نیز به‌علت نبود React/Next/Supabase type packages قابل تکمیل نبود.
-- تست واقعی OAuth، Realtime بین دو حساب، RLS با JWTهای مستقل، upload/download در مرورگر و تست دستگاه اندروید هنوز اجرا نشده‌اند.
+- Web CI در Run شماره `44315394232` روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` موفق شد: نصب وابستگی‌های قفل‌شده، TypeScript، ESLint، Vitest، Next.js Production Build و Upload Artifact همگی موفق‌اند.
+- Android CI در Run شماره `44316617068` روی commit `8278aaf748a2c96d8576a0529de088c5fe24a209` موفق شد: JDK 21، Android SDK 36، Gradle 9.5.0، Unit Tests، Assemble Debug APK، Bundle Debug AAB و Upload Artifact همگی موفق‌اند.
+- Security checks در Run شماره `44316617112` موفق شد. در اجرای جدیدتر، Secret scanning نیز موفق بوده؛ Dependency audit هنوز در حال اجراست.
+- APK و AAB واقعی از Artifact شماره `14432552632` استخراج و صحت ZIP/نوع فایل بررسی شد. SHA-256 فایل APK: `f5f9bc57e7504031db32623d1ee497465753682527d116728f7a133b40816bc1`.
+- Web build از Artifact شماره `14432456595` استخراج و ZIP آن بدون خطا بررسی شد.
+- اجرای جدیدتر Android روی commit `b40007478fb6e405d9421bbba74d38e31fde7b01` پس از موفقیت Unit Tests، در زمان ثبت این گزارش در مرحله Assemble بود؛ این اجرا جایگزین موفقیت Build قبلی اعلام نشده است.
+- تست واقعی OAuth با Provider فعال، Realtime بین دو حساب مستقل، RLS با JWTهای مستقل، upload/download end-to-end در دو کلاینت و تست روی دستگاه فیزیکی هنوز انجام نشده‌اند.
 
 ## اندروید
 
-کد قبلی Kotlin/Compose، Google Credential Manager و upload باقی است. این مرحله هنوز تغییرات اندروید و Build آن را تکمیل نکرده است. آپلود اندروید فعلی فایل را در ByteArray buffer می‌کند و برای فایل‌های بزرگ نیاز به بازطراحی stream/resumable دارد.
+- نسخه Kotlin/Jetpack Compose حفظ شده و چت به Supabase متصل است: فهرست گفتگوها، تاریخچه پیام، ارسال پیام، Realtime، read cursor و صفحه‌بندی پیام‌های قدیمی.
+- پیوست فایل خصوصی و دریافت امن از Storage به مسیر چت اضافه شده است؛ decode پاسخ insert نیز با آرایه PostgREST سازگار شده است.
+- Unit Tests و ساخت Debug APK/AAB در CI موفق شده‌اند. فایل APK خروجی CI قابل نصب به‌عنوان Debug build است؛ روی دستگاه فیزیکی هنوز تست نشده است.
+- Gradle Wrapper رسمی در Workflow تولید و در شاخه main ذخیره شده است. نسخه‌های Build تأییدشده: JDK 21، Gradle 9.5.0، Android SDK 36.
+- آپلود فعلی Android هنوز فایل را در حافظه ByteArray نگه می‌دارد؛ برای فایل‌های بزرگ، streaming/resumable و progress بایت‌به‌بایت باقی است.
+- Google Sign-in، session restore و چت end-to-end روی دستگاه واقعی هنوز با حساب واقعی آزمایش نشده‌اند.
 
 ## برند
 
 لوگوی اصلی در فایل‌های قابل دسترسی workspace نبود؛ هیچ لوگو یا آیکون جایگزینی ساخته نشده است. PWA manifest وب بدون آیکون رسمی اضافه شده و PWA کامل/قابل نصب اعلام نمی‌شود.
 
-## Git
+## GitHub و استقرار
 
-- شاخهٔ کاری `feature/phase-1-foundation` حفظ شد. Commitهای پایه `fa33cd5` و مرحله اول `b9d4438` هستند.
-- Commit مرحله دوم وب: `cab5a8c` (`feat(web): add Supabase-connected Kaveh web client`).
-- تغییرات مرحله دوم به‌صورت محلی commit شده‌اند. مخزن GitHub قابل خواندن است، اما API write در تلاش قبلی با `403 Resource not accessible by integration` رد شده؛ بنابراین این Commit هنوز Push نشده است. برای Push، اتصال GitHub باید مجوز Contents / Git Data: write داشته باشد.
+- مخزن اصلی فعال: `https://github.com/emamzaman313/Kavehenteghamjou`؛ شاخه `main`.
+- آخرین commit مشاهده‌شده هنگام این گزارش: `735c6d2e58dfc228931be2065197acc8f898a1ed`.
+- Commitهای جدید شامل صفحه‌بندی چت Android، پیوست و دانلود امن، بارگذاری پیوست‌های پیام‌های قدیمی، اصلاح decode پاسخ PostgREST و مستندسازی وضعیت Realtime هستند.
+- Web Production deployment در Vercel با وضعیت READY روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` وجود دارد: `https://kaveh-avenger.vercel.app`. هنوز تأیید نشده که deployment روی آخرین commit فعلی main قرار دارد.
+- تلاش برای اتصال مجدد GitHub integration از طریق Vercel با خطای نیاز به نصب GitHub Integration مواجه شد؛ ایجاد پروژه جدید انجام نشد و پروژه موجود حذف یا جایگزین نشد.
+- CI و Artifactها:
+  - Web: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44315394232`
+  - Android: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44316617068`
+  - Security: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44316617112`
 - گزارش آزمون جزئی در `docs/test-report-stage-2.md` ثبت شده است.
