@@ -94,6 +94,7 @@ Deno.serve(async (request: Request) => {
         created_at: user.created_at,
         last_sign_in_at: user.last_sign_in_at ?? null,
         banned_until: user.banned_until ?? null,
+        is_banned: Boolean(user.banned_until && Date.parse(user.banned_until) > Date.now()),
         admin_role: adminRoleById.get(user.id) ?? null,
       };
     }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
