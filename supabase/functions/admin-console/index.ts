@@ -38,10 +38,10 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role",
+    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report",
     targetId: string,
     details: Record<string, unknown> = {},
-    targetType: "post" | "user" = "post",
+    targetType: "post" | "user" | "report" = "post",
   ) {
     const { data, error } = await admin.from("admin_audit_logs").insert({
       actor_id: authData.user.id,
@@ -71,6 +71,56 @@ Deno.serve(async (request: Request) => {
       .limit(100);
     if (error) return respond({ ok: false, reason: "audit_query_failed" }, 500, origin);
     return respond({ ok: true, events: data ?? [] }, 200, origin);
+  }
+
+  if (body.action === "reports_list") {
+    if (!["owner", "admin", "moderator"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const { data, error } = await admin.from("reports")
+      .select("id,reporter_id,target_type,target_id,reason,details,status,created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) return respond({ ok: false, reason: "reports_query_failed" }, 500, origin);
+    return respond({ ok: true, reports: data ?? [] }, 200, origin);
+  }
+
+  if (body.action === "review_report") {
+    if (!["owner", "admin", "moderator"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    if (!validId(body.reportId)) return respond({ ok: false, reason: "invalid_report_id" }, 400, origin);
+    const status = String(body.status ?? "");
+    if (!["reviewing", "resolved", "rejected"].includes(status)) return respond({ ok: false, reason: "invalid_report_status" }, 400, origin);
+    const { data: report, error: reportError } = await admin.from("reports")
+      .select("id,reporter_id,target_type,target_id,status")
+      .eq("id", body.reportId).maybeSingle();
+    if (reportError || !report) return respond({ ok: false, reason: "report_not_found" }, 404, origin);
+    const audit = await beginAudit("review_report", report.id, {
+      status,
+      reported_target_type: report.target_type,
+      reported_target_id: report.target_id,
+      previous_status: report.status,
+    }, "report");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const { error } = await admin.from("reports").update({ status }).eq("id", report.id);
+    if (error) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "report_update_failed" }, 500, origin);
+    }
+    let notificationSent = true;
+    if (status === "resolved" || status === "rejected") {
+      const message = status === "resolved"
+        ? "گزارشی که ثبت کرده بودید بررسی و تأیید شد."
+        : "گزارشی که ثبت کرده بودید بررسی شد و تخلفی برای آن تأیید نشد.";
+      const { error: notificationError } = await admin.from("notifications").insert({
+        recipient_id: report.reporter_id,
+        actor_id: authData.user.id,
+        kind: "report_update",
+        entity_type: "report",
+        entity_id: report.id,
+        payload: { message, status },
+      });
+      notificationSent = !notificationError;
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, auditRecorded, notificationSent }, 200, origin);
   }
 
   if (body.action === "users_list") {
