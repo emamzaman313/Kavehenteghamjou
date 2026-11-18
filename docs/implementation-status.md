@@ -1,7 +1,7 @@
 # وضعیت واقعی پیاده‌سازی و آزمون کاوه انتقامجو
 
 آخرین بازبینی: ۱۸ نوامبر ۲۰۲۶ (UTC)
-آخرین Commit کد بررسی‌شده در `main`: `e3e040d1b02ac01f9d9518908f763cda43bb4c0a`
+آخرین Commit کد بررسی‌شده در `main`: `61684899711c286f809503271d360624ff14fb58`
 
 این سند بین کد، تست خودکار، Build، تست End-to-End و آماده‌بودن Release تفاوت می‌گذارد. موفقیت Build اثبات ورود OAuth واقعی، تست دستگاه یا رفتار دوحسابی نیست.
 
@@ -107,8 +107,9 @@
 - Project: `kaveh-avenger`; دامنه اصلی: https://kaveh-avenger.vercel.app
 - Vercel Production env `NEXT_PUBLIC_SUPABASE_URL` با `https://slwzjufipavuwcbwoyro.supabase.co` برابر بود؛ Publishable Key نیز تنظیم شده بود.
 - Deployment قبلی READY: `dpl_A7bRxNEdXPfzdmk7iPo2F9sceKJg`، Commit `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
-- Deployment قبلی برای Commit `dd774609` با شناسه `dpl_3wkivPRGzz6ZhinkiK7hkoCEjtw2` وضعیت `READY` داشت؛ انتشار Commit جدیدِ شامل ورود با کد، جداگانه در سوابق Vercel بررسی می‌شود.
-- Build موفق CI به‌تنهایی تست واقعی مرورگر، تحویل ایمیل، ایجاد حساب مهمان یا ورود عملی با کد را اثبات نمی‌کند.
+- آخرین Production Deployment در این بررسی: `dpl_H9yqYhHQ57cY6Bb3HkCKjPSo3B94`، Commit `b70b0a98ee7b711f238198c080183dde8ef4d99e`، وضعیت `READY` و alias شامل `kaveh-avenger.vercel.app`.
+- پس از آن، فقط Edge Function نسخه ۳ به‌روزرسانی شده و نیازی به تغییر باندل وب ندارد؛ به‌روزرسانی Edge Function مستقل از Vercel انجام می‌شود.
+- Build موفق CI به‌تنهایی تحویل ایمیل، ایجاد حساب مهمان یا ورود عملی با کد را اثبات نمی‌کند.
 
 ## Google OAuth و Release gateها
 
@@ -154,7 +155,7 @@
 ### Supabase
 - سه جدول خصوصی برای تنظیمات، مدیران مجاز و تلاش‌های ناموفق اضافه شد؛ هر سه RLS-enabled هستند و دسترسی مستقیم `anon`/`authenticated` از آن‌ها لغو شده است.
 - توابع بررسی hash، ذخیره تنظیمات و محدودسازی تلاش‌ها فقط برای `service_role` قابل اجرا هستند.
-- Edge Function به نام `access-code-login` با `verify_jwt=false` و نسخه ۲ مستقر است؛ مسیرهای مدیریتی در بدنه تابع Bearer token را اعتبارسنجی و نقش مدیر را از جدول خصوصی می‌خوانند. Rate limit فقط از هدر IP پروکسی مورد اعتماد استفاده می‌کند.
+- Edge Function به نام `access-code-login` با `verify_jwt=false` و نسخه ۳ مستقر است؛ مسیرهای مدیریتی در بدنه تابع Bearer token را اعتبارسنجی و نقش مدیر را از جدول خصوصی می‌خوانند. Rate limit فقط از هدر IP پروکسی مورد اعتماد استفاده می‌کند. CORS دامنه اصلی و زیردامنه‌های Vercel مختص همین پروژه را می‌پذیرد و Origin مبهم `null` را نیز برای preflight پاسخ می‌دهد.
 - بررسی دیتابیس: کد مقداردهی‌شده موفق، کد اشتباه ناموفق، قابلیت روشن، و یک مدیر در فهرست ثبت شده است.
 - محدودیت: چون کد اولیه ساده و مشترک است، مالک باید بلافاصله آن را از پنل مدیریت عوض کند.
 
