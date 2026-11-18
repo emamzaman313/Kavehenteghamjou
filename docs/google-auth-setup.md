@@ -33,6 +33,12 @@ GOOGLE_WEB_CLIENT_ID=...apps.googleusercontent.com
 
 فقط Publishable key در اپ client استفاده می‌شود. هرگز `service_role` یا `sb_secret_...` را قرار ندهید.
 
+## GitHub Actions
+
+برای اینکه APK ساخته‌شده در CI ورود Google را هم داشته باشد، در مخزن GitHub مسیر **Settings → Secrets and variables → Actions → Variables** یک Repository variable با نام دقیق `GOOGLE_WEB_CLIENT_ID` و مقدار Web OAuth Client ID بسازید. این شناسه محرمانه نیست؛ **Web Client Secret** را در این بخش یا در اپ قرار ندهید و فقط در Supabase Dashboard نگه دارید.
+
+اگر این متغیر تنظیم نشود، Android CI همچنان می‌تواند APK بسازد، اما در گزارش اجرا هشدار می‌دهد و Google Sign-in در APK پیکربندی نخواهد شد.
+
 ## الگوریتم nonce
 
 برنامه یک nonce تصادفی تولید می‌کند، SHA-256 hex آن را به Credential Manager می‌دهد و nonce خام را برای `signInWithIdToken` به Supabase می‌فرستد. این دو مقدار باید با هم جفت باشند.
