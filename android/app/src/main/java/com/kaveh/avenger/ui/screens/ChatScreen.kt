@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.result.decodeAs
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -99,6 +98,11 @@ private data class ProfileRow(
     val id: String,
     @SerialName("display_name") val displayName: String,
     val username: String? = null
+)
+
+@Serializable
+private data class DirectConversationParams(
+    @SerialName("p_other_user_id") val otherUserId: String
 )
 
 private data class ChatConversation(
@@ -209,7 +213,7 @@ fun ChatScreen(
         try {
             val conversationId = supabase.postgrest.rpc(
                 "create_direct_conversation",
-                mapOf("p_other_user_id" to profile.id)
+                DirectConversationParams(profile.id)
             ).decodeAs<String>()
             loadConversations()
             activeConversation = conversations.firstOrNull { it.id == conversationId }
