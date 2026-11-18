@@ -17,9 +17,36 @@ describe('authErrorMessage', () => {
     expect(authErrorMessage(new TypeError('Failed to fetch'))).toContain('اتصال');
   });
 
-  it('uses email-specific guidance for unknown OTP errors', () => {
-    const message = authErrorMessage({ message: 'unexpected OTP failure' });
-    expect(message).toContain('ایمیل');
+  it('gives a specific instruction when a one-time sign-in link is expired', () => {
+    const message = authErrorMessage({
+      code: 'otp_expired',
+      message: 'token has expired or is invalid',
+    });
+    expect(message).toContain('لینک ورود');
+    expect(message).toContain('لینک تازه');
+  });
+
+  it('explains the email send rate limit without suggesting an SMTP failure', () => {
+    const message = authErrorMessage({
+      status: 429,
+      code: 'over_email_send_rate_limit',
+      message: 'For security purposes, you can only request this after 8 seconds.',
+    });
+    expect(message).toContain('چند لحظه صبر');
+    expect(message).not.toContain('SMTP');
+  });
+
+  it('explains when the Supabase redirect URL is not allow-listed', () => {
+    const message = authErrorMessage({
+      message: 'redirect_to is not allowed',
+    });
+    expect(message).toContain('URL Configuration');
+    expect(message).toContain('kaveh-avenger.vercel.app');
+  });
+
+  it('uses email-specific guidance for unknown sign-in errors', () => {
+    const message = authErrorMessage({ message: 'unexpected email sign-in failure' });
+    expect(message).toContain('لینک ورود ایمیل');
     expect(message).not.toContain('گوگل');
   });
 
@@ -27,7 +54,7 @@ describe('authErrorMessage', () => {
     const message = authErrorMessage({ message: '{"access_token":"secret"}' });
     expect(message).not.toContain('access_token');
     expect(message).not.toContain('secret');
-    expect(message).toContain('دوباره');
+    expect(message).toContain('بررسی');
   });
 });
 
@@ -46,6 +73,14 @@ describe('getOAuthCallbackError', () => {
       '#error=access_denied&error_description=User+cancelled',
     );
     expect(authErrorMessage(error)).toContain('لغو');
+  });
+
+  it('reads an expired magic-link callback error', () => {
+    const error = getOAuthCallbackError(
+      '?error=access_denied&error_code=otp_expired&error_description=Token+has+expired',
+      '',
+    );
+    expect(authErrorMessage(error)).toContain('لینک ورود');
   });
 
   it('returns null when the callback contains no OAuth error', () => {
