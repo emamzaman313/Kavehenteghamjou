@@ -35,10 +35,13 @@ async function signIn(client, email, password, label) {
 }
 
 function timeout(promise, ms, label) {
+  let timer;
   return Promise.race([
     promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out: ${label}`)), ms)),
-  ]);
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Timed out: ${label}`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 try {
