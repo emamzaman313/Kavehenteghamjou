@@ -36,15 +36,21 @@ import kotlinx.coroutines.launch
 @Composable
 fun EmailOtpScreen(
     authRepository: EmailOtpRepository,
-    initialMessage: String? = null
+    initialMessage: String? = null,
+    initialEmail: String = "",
+    passwordSetupRequired: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
-    var email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf(initialEmail) }
     var code by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordConfirm by remember { mutableStateOf("") }
     var codeSent by remember { mutableStateOf(false) }
+    var passwordLoginMode by remember { mutableStateOf(false) }
+    var setupPasswordMode by remember { mutableStateOf(passwordSetupRequired) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf(initialMessage.orEmpty()) }
-    var infoMessage by remember { mutableStateOf("") }
+    var infoMessage by remember { mutableStateOf(if (passwordSetupRequired) "ایمیل شما تأیید شده است؛ برای تکمیل ثبت‌نام رمز عبور بسازید." else "") }
 
     fun sendCode() {
         scope.launch {
@@ -54,11 +60,54 @@ fun EmailOtpScreen(
             try {
                 authRepository.sendCode(email)
                 codeSent = true
-                infoMessage = "کد ورود به ایمیل شما ارسال شد. تمام ارقام کد را وارد کنید. صندوق ورودی و هرزنامه را بررسی کنید."
+                passwordLoginMode = false
+                infoMessage = "کد تأیید به ایمیل شما ارسال شد. تمام ارقام کد را وارد کنید."
             } catch (error: Exception) {
                 errorMessage = error.message ?: "ارسال کد انجام نشد. دوباره تلاش کنید."
             } finally {
                 isLoading = false
+            }
+        }
+    }
+
+    fun loginWithPassword() {
+        scope.launch {
+            isLoading = true
+            errorMessage = ""
+            infoMessage = ""
+            try {
+                authRepository.loginWithPassword(email, password)
+            } catch (error: Exception) {
+                errorMessage = "ایمیل یا رمز عبور صحیح نیست. اگر حساب ندارید، ثبت‌نام با کد ایمیل را انجام دهید."
+            } finally {
+                isLoading = false
+                password = ""
+            }
+        }
+    }
+
+    fun savePassword() {
+        if (password.length < 8) {
+            errorMessage = "رمز عبور باید حداقل ۸ نویسه داشته باشد."
+            return
+        }
+        if (password != passwordConfirm) {
+            errorMessage = "تکرار رمز عبور دقیقاً با رمز اول یکسان نیست."
+            return
+        }
+        scope.launch {
+            isLoading = true
+            errorMessage = ""
+            infoMessage = ""
+            try {
+                authRepository.setAccountPassword(password)
+                infoMessage = "ثبت‌نام با موفقیت تکمیل شد. از این پس با ایمیل و رمز عبور وارد شوید."
+            } catch (error: Exception) {
+                errorMessage = error.message ?: "ذخیره رمز عبور انجام نشد. دوباره تلاش کنید."
+            } finally {
+                isLoading = false
+                password = ""
+                passwordConfirm = ""
             }
         }
     }
@@ -76,7 +125,11 @@ fun EmailOtpScreen(
                 Text("کاوه انتقامجو", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "برای ورود، ایمیل خود را وارد کنید تا کد تأیید یک‌بارمصرف برایتان ارسال شود.",
+                    when {
+                        setupPasswordMode -> "ایمیل تأیید شده است. برای تکمیل حساب، رمز عبور انتخاب کنید."
+                        passwordLoginMode -> "با ایمیل و رمز عبور حساب خود وارد شوید."
+                        else -> "برای ثبت‌نام، ایمیل خود را وارد کنید تا کد تأیید برایتان ارسال شود."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -89,10 +142,34 @@ fun EmailOtpScreen(
                     label = { Text("آدرس ایمیل") },
                     placeholder = { Text("name@example.com") },
                     singleLine = true,
-                    enabled = !isLoading && !codeSent,
+                    enabled = !isLoading && !codeSent && !setupPasswordMode,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                 )
-                if (codeSent) {
+
+                if (setupPasswordMode || passwordLoginMode) {
+                    Spacer(Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it; errorMessage = "" },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(if (setupPasswordMode) "انتخاب رمز عبور" else "رمز عبور") },
+                        placeholder = { Text(if (setupPasswordMode) "حداقل ۸ نویسه" else "رمز حساب شما") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    )
+                    if (setupPasswordMode) {
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = passwordConfirm,
+                            onValueChange = { passwordConfirm = it; errorMessage = "" },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("تکرار رمز عبور") },
+                            placeholder = { Text("دقیقاً همان رمز را دوباره وارد کنید") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                        )
+                    }
+                } else if (codeSent) {
                     Spacer(Modifier.height(14.dp))
                     Text("کد ارسال‌شده به $email را وارد کنید.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(8.dp))
@@ -101,11 +178,12 @@ fun EmailOtpScreen(
                         onValueChange = { code = it.filter(Char::isDigit).map { digit -> digit.digitToInt().toString() }.joinToString(""); errorMessage = "" },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("کد تأیید ایمیل") },
-                        placeholder = { Text("کد دریافتی در ایمیل") },
+                        placeholder = { Text("تمام ارقام کد دریافتی") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                 }
+
                 if (infoMessage.isNotBlank()) {
                     Spacer(Modifier.height(12.dp))
                     Text(infoMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -117,28 +195,66 @@ fun EmailOtpScreen(
                 Spacer(Modifier.height(20.dp))
                 Button(
                     onClick = {
-                        if (!codeSent) sendCode()
-                        else scope.launch {
-                            isLoading = true
-                            errorMessage = ""
-                            try {
-                                authRepository.verifyCode(email, code)
-                            } catch (error: Exception) {
-                                errorMessage = error.message ?: "کد واردشده معتبر نیست یا منقضی شده است."
-                            } finally {
-                                isLoading = false
+                        when {
+                            setupPasswordMode -> savePassword()
+                            passwordLoginMode -> loginWithPassword()
+                            !codeSent -> sendCode()
+                            else -> scope.launch {
+                                isLoading = true
+                                errorMessage = ""
+                                try {
+                                    authRepository.verifyCode(email, code)
+                                    setupPasswordMode = true
+                                    infoMessage = "ایمیل تأیید شد. اکنون رمز عبور خود را انتخاب کنید."
+                                } catch (error: Exception) {
+                                    errorMessage = error.message ?: "کد واردشده معتبر نیست یا منقضی شده است."
+                                } finally {
+                                    isLoading = false
+                                }
                             }
                         }
                     },
-                    enabled = !isLoading && if (codeSent) code.isNotBlank() else email.contains("@") && email.substringAfter("@").contains("."),
+                    enabled = !isLoading && when {
+                        setupPasswordMode -> password.length >= 8 && password == passwordConfirm
+                        passwordLoginMode -> email.contains("@") && password.isNotBlank()
+                        codeSent -> code.isNotBlank()
+                        else -> email.contains("@") && email.substringAfter("@").contains(".")
+                    },
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     if (isLoading) CircularProgressIndicator()
-                    else Text(if (codeSent) "تأیید کد و ورود" else "ارسال کد ورود به ایمیل", fontWeight = FontWeight.SemiBold)
+                    else Text(
+                        when {
+                            setupPasswordMode -> "تکمیل ثبت‌نام و ساخت حساب"
+                            passwordLoginMode -> "ورود با رمز عبور"
+                            codeSent -> "تأیید ایمیل و ادامه ثبت‌نام"
+                            else -> "ارسال کد ثبت‌نام به ایمیل"
+                        },
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
-                if (codeSent) {
+
+                if (!passwordSetupRequired && !setupPasswordMode) {
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            passwordLoginMode = !passwordLoginMode
+                            codeSent = false
+                            code = ""
+                            password = ""
+                            errorMessage = ""
+                            infoMessage = ""
+                        },
+                        enabled = !isLoading,
+                        colors = ButtonDefaults.textButtonColors()
+                    ) {
+                        Text(if (passwordLoginMode) "ثبت‌نام با کد ایمیل" else "قبلاً حساب ساخته‌اید؟ ورود با رمز")
+                    }
+                }
+
+                if (codeSent && !setupPasswordMode) {
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = { codeSent = false; code = ""; errorMessage = ""; infoMessage = "" },
@@ -148,7 +264,12 @@ fun EmailOtpScreen(
                     Button(onClick = { sendCode() }, enabled = !isLoading) { Text("ارسال دوباره کد") }
                 }
                 Spacer(Modifier.height(18.dp))
-                Text("ورود امن با کد یک‌بارمصرف ایمیل؛ بدون نیاز به حساب گوگل", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                Text(
+                    "رمز عبور در سرویس امن احراز هویت به‌صورت هش‌شده نگهداری می‌شود.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
