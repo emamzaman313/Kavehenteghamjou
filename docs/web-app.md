@@ -37,3 +37,10 @@
 - PWA کامل نیست: manifest اولیه وجود دارد، اما Service Worker و آیکون رسمی برند در workspace فعلی در دسترس نیست.
 - آپلود فعلی استاندارد Supabase Storage است؛ انتقال resumable/multipart و پیشرفت بایت‌به‌بایت باقی مانده است.
 - UI گروه/کانال، استوری، تماس، Push، و پنل مدیریت واقعی باقی مانده‌اند.
+
+
+## ممیزی تکمیلی OAuth و تست — ۱۸ نوامبر ۲۰۲۶
+
+Vercel Production به URL درست Supabase یعنی https://slwzjufipavuwcbwoyro.supabase.co متصل است. endpoint Auth مقدار external.google=false برگرداند؛ Provider غیرفعال است و این علت خطای provider is not enabled است.
+
+در شاخه fix/web-pkce-single-exchange-2026-11-18، Commit کد b9ad73e9c0d8dd67a7678aecfba723ea18ebeffe با npm ci، typecheck، Next.js build و ۱۰ تست Vitest تأیید شد. ESLint بدون error و با ۹ warning بود؛ npm audit --omit=dev صفر و کل dev graph دارای ۱۶ High بود. ورود واقعی Google و تست نشست OAuth تا فعال‌سازی Provider انجام نشده است.
