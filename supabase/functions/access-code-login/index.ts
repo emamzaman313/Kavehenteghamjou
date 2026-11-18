@@ -142,14 +142,15 @@ async function getRetrySeconds(ipHash: string): Promise<number> {
 async function createGuestSession() {
   const id = crypto.randomUUID().replaceAll("-", "");
   const email = `guest-${id}@guest.kaveh.invalid`;
+  const displayName = `مهمان-${id.slice(0, 4).toUpperCase()}`;
   const password = `${crypto.randomUUID()}${crypto.randomUUID()}`;
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     user_metadata: {
-      full_name: "کاربر مهمان",
-      display_name: "کاربر مهمان",
+      full_name: displayName,
+      display_name: displayName,
       access_method: "shared_code",
     },
   });
