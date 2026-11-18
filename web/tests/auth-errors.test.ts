@@ -17,6 +17,12 @@ describe('authErrorMessage', () => {
     expect(authErrorMessage(new TypeError('Failed to fetch'))).toContain('اتصال');
   });
 
+  it('uses email-specific guidance for unknown OTP errors', () => {
+    const message = authErrorMessage({ message: 'unexpected OTP failure' });
+    expect(message).toContain('ایمیل');
+    expect(message).not.toContain('گوگل');
+  });
+
   it('does not expose raw provider payloads for unknown authentication errors', () => {
     const message = authErrorMessage({ message: '{"access_token":"secret"}' });
     expect(message).not.toContain('access_token');
