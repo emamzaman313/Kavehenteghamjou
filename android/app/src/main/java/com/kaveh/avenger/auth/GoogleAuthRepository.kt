@@ -7,8 +7,10 @@ import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.kaveh.avenger.BuildConfig
-import io.github.jan.supabase.auth.OAuthProviders
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
@@ -40,7 +42,9 @@ class GoogleAuthRepository(private val supabase: SupabaseClient) {
         ) { "Google did not return an ID token credential." }
 
         val googleToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-        supabase.auth.signInWithIdToken(OAuthProviders.GOOGLE, token = googleToken) {
+        supabase.auth.signInWith(IDToken) {
+            idToken = googleToken
+            provider = Google
             nonce = rawNonce
         }
     }
