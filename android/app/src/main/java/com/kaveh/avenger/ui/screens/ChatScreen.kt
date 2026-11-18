@@ -177,12 +177,16 @@ fun ChatScreen(
             messages.clear()
             messages.addAll(loaded)
 
-            supabase.postgrest["conversation_members"].update({
-                set("last_read_at", Instant.now().toString())
-            }) {
-                filter {
-                    eq("conversation_id", conversationId)
-                    eq("user_id", userId)
+            // Advance the read cursor only through the latest message actually
+            // fetched from the server; do not use the device clock.
+            loaded.lastOrNull()?.createdAt?.let { latestFetchedAt ->
+                supabase.postgrest["conversation_members"].update({
+                    set("last_read_at", latestFetchedAt)
+                }) {
+                    filter {
+                        eq("conversation_id", conversationId)
+                        eq("user_id", userId)
+                    }
                 }
             }
         } catch (exception: Exception) {
