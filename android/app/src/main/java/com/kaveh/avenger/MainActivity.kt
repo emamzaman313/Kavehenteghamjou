@@ -19,6 +19,9 @@ import com.kaveh.avenger.ui.theme.KavehTheme
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.collect
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,11 +46,25 @@ private fun KavehRoot() {
 
             when (val status = sessionStatus) {
                 null, SessionStatus.Initializing -> LoadingScreen()
-                is SessionStatus.Authenticated -> AuthenticatedHomeScreen(
-                    email = status.session.user?.email,
-                    userId = status.session.user?.id.orEmpty(),
-                    onSignOut = { supabase.auth.signOut() }
-                )
+                is SessionStatus.Authenticated -> {
+                    val user = status.session.user
+                    val provider = user?.appMetadata?.get("provider")?.jsonPrimitive?.contentOrNull
+                    val isGuest = user?.userMetadata?.get("access_method")?.jsonPrimitive?.contentOrNull == "shared_code"
+                    val passwordReady = user?.userMetadata?.get("account_password_ready")?.jsonPrimitive?.booleanOrNull == true
+                    if (provider == "email" && !isGuest && !passwordReady) {
+                        EmailOtpScreen(
+                            authRepository = authRepository,
+                            initialEmail = user.email.orEmpty(),
+                            passwordSetupRequired = true
+                        )
+                    } else {
+                        AuthenticatedHomeScreen(
+                            email = user?.email,
+                            userId = user?.id.orEmpty(),
+                            onSignOut = { supabase.auth.signOut() }
+                        )
+                    }
+                }
                 is SessionStatus.NotAuthenticated -> EmailOtpScreen(authRepository)
                 is SessionStatus.RefreshFailure -> EmailOtpScreen(
                     authRepository = authRepository,
