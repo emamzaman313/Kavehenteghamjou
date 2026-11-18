@@ -4,19 +4,33 @@ import { ArrowLeft, File, MessageCircle, ShieldCheck, Sparkles } from 'lucide-re
 import { useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { BrandMark } from '@/components/ui';
+import { authErrorMessage } from '@/lib/auth-errors';
 
 export default function LoginScreen({ supabase, configured }: { supabase: SupabaseClient | null; configured: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const signIn = async () => {
-    if (!supabase) return;
-    setBusy(true); setError('');
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback`, queryParams: { access_type: 'offline', prompt: 'select_account' } },
-    });
-    if (authError) { setError(authError.message); setBusy(false); }
+    if (!supabase || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: { access_type: 'offline', prompt: 'select_account' },
+        },
+      });
+      if (authError) setError(authErrorMessage(authError));
+    } catch (cause) {
+      setError(authErrorMessage(cause));
+    } finally {
+      // A successful OAuth call has already initiated navigation; failures must
+      // always release the control so the user can retry.
+      setBusy(false);
+    }
   };
+
   return <main className="auth-screen">
     <div className="auth-glow auth-glow-a"/><div className="auth-glow auth-glow-b"/>
     <section className="auth-card">
@@ -25,11 +39,11 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       <h1>کاوه <em>انتقامجو</em></h1>
       <p className="auth-copy">گفتگو، انتشار و اشتراک‌گذاری فایل؛ در یک فضای شخصی و امن.</p>
       <div className="auth-features"><span><MessageCircle size={15}/> گفتگوهای زنده</span><span><File size={15}/> فضای فایل خصوصی</span><span><Sparkles size={15}/> هویت اجتماعی</span></div>
-      {!configured && <div className="notice notice-error">تنظیمات اتصال Supabase در محیط وب کامل نیست. فایل <code>web/.env.local</code> را از روی نمونه بسازید.</div>}
-      {error && <div className="notice notice-error">ورود انجام نشد: {error}</div>}
+      {!configured && <div className="notice notice-error">تنظیمات اتصال Supabase در محیط وب کامل نیست. مدیر فنی باید متغیرهای عمومی Supabase را در محیط Production بررسی کند.</div>}
+      {error && <div className="notice notice-error" role="alert" aria-live="polite">{error}</div>}
       <button className="google-button" onClick={signIn} disabled={!configured || busy}>
         {busy ? <span className="spinner small"/> : <GoogleGlyph/>}
-        <span>{busy ? 'در حال انتقال به گوگل…' : 'ورود امن با حساب گوگل'}</span><ArrowLeft size={17}/>
+        <span>{busy ? 'در حال انتقال به گوگل…' : error ? 'تلاش دوباره با Google' : 'ورود امن با حساب گوگل'}</span><ArrowLeft size={17}/>
       </button>
       <p className="auth-foot"><ShieldCheck size={14}/> حساب مستقل کاوه؛ بدون نیاز به حساب تلگرام</p>
     </section>
