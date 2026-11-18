@@ -60,7 +60,7 @@ export function authErrorMessage(error: unknown): string {
     markers.includes('over_email_send_rate_limit') ||
     markers.includes('too many requests')
   ) {
-    return 'درخواست ارسال لینک زیاد بوده است. چند لحظه صبر کنید و سپس فقط یک بار لینک ورود تازه درخواست کنید.';
+    return 'درخواست ارسال کد زیاد بوده است. حدود ۳۰ ثانیه صبر کنید و سپس فقط یک بار کد تازه درخواست کنید.';
   }
 
   if (
@@ -94,7 +94,7 @@ export function authErrorMessage(error: unknown): string {
     return 'فرایند ورود لغو شد. برای ادامه دوباره تلاش کنید.';
   }
 
-  return 'ارسال یا تکمیل لینک ورود ایمیل موفق نشد. صندوق ورودی و اتصال اینترنت را بررسی کنید؛ اگر مشکل ادامه داشت، تنظیمات ارسال ایمیل و نشانی بازگشت ورود در Supabase باید بررسی شود.';
+  return 'ارسال یا تأیید کد ایمیل موفق نشد. صندوق ورودی و اتصال اینترنت را بررسی کنید؛ اگر مشکل ادامه داشت، قالب OTP و تنظیمات ارسال ایمیل در Supabase باید بررسی شود.';
 }
 
 /** Read provider errors returned in either the query string or URL fragment. */
