@@ -36,7 +36,7 @@ export default function KavehApp() {
   const supabase = useMemo(() => getSupabase(), []);
   const configured = Boolean(supabase);
   const [session, setSession] = useState<Session | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [authReady, setAuthReady] = useState(!supabase);
   const [tab, setTab] = useState<Tab>('home');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dark, setDark] = useState(true);
@@ -45,7 +45,7 @@ export default function KavehApp() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (!supabase) { setAuthReady(true); return; }
+    if (!supabase) return;
     let alive = true;
     supabase.auth.getSession().then(({ data }) => {
       if (alive) { setSession(data.session); setAuthReady(true); }
@@ -64,7 +64,7 @@ export default function KavehApp() {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     if (error) notify(`دریافت پروفایل ناموفق بود: ${error.message}`, 'error');
     else setProfile(data as Profile | null);
-  }, [supabase, session?.user.id, notify]);
+  }, [supabase, session, notify]);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
 
