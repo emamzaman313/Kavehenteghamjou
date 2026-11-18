@@ -1,43 +1,47 @@
 # کاوه انتقامجو | Kaveh Avenger
 
-اپلیکیشن مستقل اندرویدی برای پیام‌رسانی، اشتراک‌گذاری فایل و شبکه اجتماعی.
+محصول مستقل ارتباطی و شبکه اجتماعی با کلاینت وب و اپلیکیشن بومی Android؛ بدون وابستگی به حساب تلگرام، MTProto یا سرورهای تلگرام.
 
-> این محصول هیچ وابستگی‌ای به حساب تلگرام، MTProto یا سرورهای تلگرام ندارد. سورس رسمی Telegram Android صرفاً مرجع مهندسی است و هیچ کد Telegram در این مخزن کپی نشده است.
+## فناوری و اتصال
 
-## فناوری‌ها
+- Android: Kotlin، Jetpack Compose و Material 3؛ شناسه بسته com.kaveh.avenger، حداقل SDK 26، هدف/کامپایل SDK 36.
+- Web: Next.js، React و TypeScript.
+- Backend مشترک: Supabase Auth، PostgreSQL، RLS، Realtime و Private Storage.
+- Supabase Project Ref: slwzjufipavuwcbwoyro.
+- Bucket فایل خصوصی: user-files با سقف سخت 50,000,000 بایت.
 
-- Android: Kotlin + Jetpack Compose + Material 3
-- Identity: Google Credential Manager → Supabase Auth
-- Backend: Supabase PostgreSQL + RLS + Realtime + private Storage
-- Minimum SDK: 26
-- Per-file server limit: `50,000,000` bytes
+## وضعیت واقعی در ۱۸ نوامبر ۲۰۲۶
+
+- **Backend:** پروژه فعال است؛ ۲۶ جدول عمومی از ۲۶ جدول دارای RLS، تعداد ۶۸ Policy و Bucket خصوصی با سقف ۵۰٬۰۰۰٬۰۰۰ بایت در ممیزی Read-only تأیید شد. در بازبینی فعلی Auth users، profiles، messages و file_assets همگی صفر بودند.
+- **Web:** نصب قفل‌شده وابستگی‌ها، TypeScript، ESLint، Vitest و Next.js Production Build روی شاخه اصلاح احراز هویت موفق شدند. Vitest هشت تست را پاس کرد؛ ESLint بدون خطا و با ۹ هشدار بود.
+- **Google OAuth وب:** هنوز آماده استفاده نیست. پیکربندی Production وب به پروژه صحیح Supabase اشاره می‌کند، اما تنظیم زنده Auth نشان می‌دهد external.google=false. بنابراین ورود واقعی تا فعال‌سازی Provider در Supabase و ثبت OAuth credentials در Google Cloud ممکن نیست.
+- **Android:** کد ورود native، چت، Realtime و فایل در سورس وجود دارد؛ چند قابلیت پیام‌رسانی/اجتماعی پیشرفته هنوز ناقص‌اند. Buildهای Debug تاریخی در CI گزارش شده‌اند، اما Release امضاشده، Google OAuth واقعی و آزمون روی گوشی فیزیکی تأیید نشده‌اند.
+- **انتقال فایل Android:** پیاده‌سازی فعلی کل فایل را در حافظه Buffer می‌کند؛ WorkManager، upload resumable و پیشرفت بایت‌به‌بایت کامل نیستند.
+- **امنیت وابستگی‌ها:** npm audit در زنجیره توسعه ۱۶ هشدار High گزارش می‌کند که از جمله از picomatch <=4.0.7 ناشی می‌شوند. نسخه اصلاح‌شده‌ای در npm registry مشاهده نشد؛ downgrade عمده Vitest راه‌حل قابل‌قبولی نیست.
+
+گزارش کامل و تاریخچه شواهد در docs/implementation-status.md نگهداری می‌شود. وضعیت اجرایی قابلیت‌ها در docs/roadmap.md و معماری در docs/architecture.md آمده است.
 
 ## ساختار
 
-- `android/app/` — اپلیکیشن Android
-- `supabase/` — توصیف backend و ledger مهاجرت‌های اعمال‌شده
-- `docs/` — ممیزی Telegram، معماری، وضعیت، تست و نقشه راه
+- android/app/ — کلاینت بومی Android
+- web/ — نسخه وب Next.js
+- supabase/ — Migrationهای موجود و توصیف Backend
+- docs/ — معماری، OAuth، انتشار و شواهد تست
+- .github/workflows/ — CI وب/اندروید، آزمون دوحسابی و Android Release
 
-## وضعیت فعلی
+## اجرای وب
 
-زیرساخت Supabase واقعی فعال است: ۲۶ جدول، ۶۸ RLS policy، Storage خصوصی با سقف ۵۰٬۰۰۰٬۰۰۰ بایت، Realtime پایه و RPC ایجاد گفتگوی مستقیم. اپ Android دارای کد ورود Google native، پوستهٔ پنج‌تب و کد انتخاب/آپلود فایل است؛ هنوز Build/دستگاه تست نشده و قابلیت‌های کامل پیام‌رسان/شبکه اجتماعی آمادهٔ انتشار نیستند.
+در web/ فایل .env.example را به .env.local کپی و فقط متغیرهای عمومی Supabase را مقداردهی کنید؛ سپس npm ci، npm run typecheck، npm run lint، npm test و npm run build را اجرا کنید.
 
-گزارش‌ها: `docs/telegram-source-audit.md`, `docs/feature-inventory.md`, `docs/architecture.md`, `docs/implementation-status.md`, `docs/roadmap.md`, `docs/google-auth-setup.md`.
+## ساخت Android
 
-## راه‌اندازی محلی
+Android Studio، JDK سازگار با Gradle، Android SDK 36 و local.properties خصوصی لازم است. مسیر ورود Google و انتشار در این راهنماهاست:
 
-۱. Android Studio و JDK 17 نصب کنید؛ Android SDK 36 را فراهم کنید. ۲. فایل `local.properties.example` را به `local.properties` کپی کنید. ۳. Supabase Publishable Key و Google Web Client ID را وارد کنید. ۴. Provider Google را مطابق `docs/google-auth-setup.md` در Google Cloud و Supabase تنظیم کنید. ۵. Sync و Build بگیرید.
+- docs/google-auth-setup.md
+- docs/android-release-signing.md
 
-از Service Role Key، Google Client Secret یا Keystore در برنامهٔ Android استفاده نکنید. `local.properties` در `.gitignore` است.
+هیچ Google Client Secret، Supabase Service Role/Secret Key یا Keystore نباید در Git، مرورگر یا APK قرار گیرد. فایل local.properties و Keystore نباید Commit شوند.
 
-## هویت بصری
+## موارد تأییدنشده
 
-نام «کاوه انتقامجو» حفظ شده است. آیکون یا لوگوی جایگزین ساخته نشده؛ تصویر اصلی‌ای که در گفت‌وگوی قبلی ارائه شده در فایل‌های قابل‌دسترسی workspace فعلی موجود نبود، بنابراین دارایی برند جایگزین نشده است.
-
-## نسخه وب
-
-نسخه وب مستقل در `web/` ساخته شده و از همان Supabase پروژه اندروید استفاده می‌کند. راهنمای نصب و OAuth در `web/README.md` و وضعیت اتصال قابلیت‌ها در `docs/web-app.md` قرار دارد. برای اجرا، `web/.env.example` را به `.env.local` کپی و Publishable Key را تنظیم کنید؛ هیچ Service Role Key نباید در مرورگر قرار بگیرد.
-
-## بازبینی مرحله دوم
-
-وضعیت واقعی دیتابیس و اختلاف Migrationهای Remote با فایل‌های محلی در `supabase/remote-state-snapshot.md` ثبت شده است. فایل Snapshot صرفاً مستند است و نباید اجرا شود. تست syntax فایل‌های TS/TSX انجام شده، اما به‌دلیل نبود دسترسی npm registry، dependency install و production build هنوز انجام نشده است.
+ورود واقعی Google تا فعال‌سازی Provider، تست دوحسابی Web/Android، تست RLS با حساب‌های مستقل، Release signing، نصب روی دستگاه فیزیکی، انتقال resumable و Push notification هنوز تأیید نشده‌اند. صفحه یا کلاس موجود به‌تنهایی معیار تکمیل قابلیت نیست.
