@@ -23,7 +23,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [userDurations, setUserDurations] = useState<Record<string, string>>({});
   const [userBusy, setUserBusy] = useState<string | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
-  const [reportRows, setReportRows] = useState<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: string }[]>([]);
+  const [reportRows, setReportRows] = useState<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: string; target_summary: string | null; target_author_id: string | null }[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number }; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -285,6 +285,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
               <span className={`admin-report-status status-${report.status}`}>{report.status === 'open' ? 'باز' : report.status === 'reviewing' ? 'در حال بررسی' : report.status === 'resolved' ? 'تأیید و بسته‌شده' : 'ردشده'}</span>
             </div>
             <small>دلیل: {report.reason} · گزارش‌دهنده: {report.reporter_id.slice(0, 8)}… · شناسه هدف: {report.target_id.slice(0, 8)}…</small>
+            {report.target_summary && <p className="admin-report-target">محتوای هدف: {report.target_summary}</p>}
             {report.details && <p className="admin-report-details">{report.details}</p>}
             <small>{new Date(report.created_at).toLocaleString('fa-IR')}</small>
             {report.status !== 'resolved' && report.status !== 'rejected' && <div className="admin-report-actions">
