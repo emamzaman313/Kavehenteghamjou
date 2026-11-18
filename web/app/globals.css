@@ -434,3 +434,5 @@ a { color:inherit; }
 .post-report-form textarea { resize:vertical; line-height:1.8; }
 .post-report-form>div { display:flex; justify-content:flex-end; gap:8px; }
 .post-report-form .button { min-height:34px; font-size:10px; }
+
+.admin-report-target { margin:0; padding:9px 11px; border-inline-start:3px solid var(--accent-strong); border-radius:8px; background:var(--surface-soft); font-size:10px; line-height:1.8; overflow-wrap:anywhere; }
