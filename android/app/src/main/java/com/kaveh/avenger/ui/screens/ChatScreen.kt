@@ -382,7 +382,8 @@ fun ChatScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 if (mine) {
-                                    val read = activeConversation?.peerReadAt?.let { it >= message.createdAt } == true
+                                    val read = activeConversation?.kind == "direct" &&
+                                        activeConversation?.peerReadAt?.let { it >= message.createdAt } == true
                                     Text(
                                         if (read) "✓✓ خوانده شد" else "✓ ارسال شد",
                                         style = MaterialTheme.typography.labelSmall,
