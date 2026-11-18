@@ -59,3 +59,8 @@ Android Studio، JDK 21 و Android SDK 36 لازم است. `local.properties.exa
 خروجی CI فعلی Android از نوع Debug است. انتشار Release نیازمند keystore دائمی مالک و چهار GitHub Secret مستندشده در [docs/android-release-signing.md](docs/android-release-signing.md) است. تست دوحسابی واقعی نیازمند دو حساب اختصاصی Supabase و Secrets مستندشده در [docs/chat-e2e-setup.md](docs/chat-e2e-setup.md) است.
 
 هیچ قابلیت آزمایش‌نشده‌ای به‌عنوان آماده انتشار معرفی نمی‌شود. برای جزئیات محدودیت‌ها، گام‌های باقی‌مانده و شواهد زنده به `docs/implementation-status.md` و `docs/roadmap.md` مراجعه کنید.
+
+
+## تکمیل ممیزی زنده — ۱۸ نوامبر ۲۰۲۶
+
+در ممیزی Read-only، Auth settings پروژه Supabase مقدار external.google=false برگرداند؛ بنابراین ورود Google تا فعال‌سازی Provider توسط مالک در Supabase Dashboard قابل استفاده نیست. کد callback وب برای جلوگیری از تبادل تکراری PKCE در شاخه اصلاحی به‌روزرسانی شده است. TypeScript، Build، ۱۰ تست Vitest و Production dependency audit روی Commit آزمایشی موفق؛ ESLint بدون خطا و با ۹ هشدار بود. Android Release امضاشده و آزمون روی گوشی فیزیکی هنوز تأیید نشده‌اند.

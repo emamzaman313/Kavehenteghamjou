@@ -140,3 +140,17 @@
 7. آزمون محدودیت‌های فایل و RLS با حساب مجاز و غیرمجاز.
 
 هیچ داده‌ای از Supabase حذف نشده، هیچ migration اجراشده‌ای دوباره اجرا نشده و هیچ secret در مخزن قرار داده نشده است.
+
+
+## ممیزی تکمیلی و شواهد زنده — ۱۸ نوامبر ۲۰۲۶
+
+این بخش جدیدتر، وضعیت متغیرهای Production و Provider را نسبت به بخش‌های تاریخی بالا به‌روزرسانی می‌کند.
+
+- Supabase project slwzjufipavuwcbwoyro در هر دو اتصال مدیریتی ACTIVE_HEALTHY بود. SQL صرفاً Read-only: ۲۶ جدول عمومی، ۲۶ جدول دارای RLS، ۶۸ Policy، صفر Auth user، صفر profile، صفر message و صفر file_asset. Bucket user-files خصوصی با سقف ۵۰٬۰۰۰٬۰۰۰ بایت. هیچ DDL، داده، Policy یا Migration تغییر نکرد.
+- Vercel Production مقدار NEXT_PUBLIC_SUPABASE_URL برابر https://slwzjufipavuwcbwoyro.supabase.co داشت و Project Ref را تأیید کرد. Deployment جدید روی Commit d204f712 توسط مالک ایجاد شد و در آخرین وضعیت READY با alias شامل دامنه اصلی بود؛ این Deploy، OAuth واقعی را اثبات نمی‌کند.
+- endpoint زنده Supabase Auth مقدار external.google=false برگرداند. بنابراین Provider گوگل واقعاً غیرفعال است و علت خطای provider is not enabled در سرور قرار دارد؛ فعال‌سازی به Supabase Dashboard و Web OAuth Client ID/Secret در Google Cloud نیازمند اقدام مالک است.
+- main تا Commit 1f7159932001f3000d86aab114f5f884fdaf6384 پیش رفت. شاخه تکمیلی fix/web-pkce-single-exchange-2026-11-18-v2 از همین main منشعب شد.
+- اصلاح callback در این شاخه ابتدا نشست پایدار را بازیابی می‌کند، در نبود آن PKCE code را فقط یک بار با exchangeCodeForSession مبادله می‌کند، اجرای تکراری React Strict Mode را مهار می‌کند و پس از موفقیت code را از URL حذف می‌کند. detectSessionInUrl=false است تا پردازش خودکار و دستی هم‌زمان نشوند.
+- روی نسخه کد پیش از افزودن مستندات (Commit b9ad73e9c0d8dd67a7678aecfba723ea18ebeffe)، npm ci و TypeScript موفق؛ Vitest دو فایل/۱۰ تست موفق؛ Next.js Production Build موفق؛ ESLint صفر خطا/۹ هشدار؛ npm audit --omit=dev صفر آسیب‌پذیری.
+- npm audit کل dependency graph توسعه ۱۶ High و صفر Critical گزارش کرد. picomatch@4.0.7 آخرین نسخه موجود npm بود و advisory نسخه‌های <=4.0.7 را پوشش می‌داد؛ نسخه 4.0.8 موجود نبود. npm تنها downgrade عمده Vitest به 3.1.4 را پیشنهاد کرد؛ downgrade ناسازگار انجام نشد.
+- Android CI روی main Commit d204f712 با موفقیت تمام شد و Debug APK/AAB ساخت؛ این خروجی Release نیست. Android Release workflow و Chat E2E با دو کاربر مستقل هنوز اجرا نشده‌اند؛ keystore و signing secrets و حساب‌های آزمایشی اختصاصی در دسترس نبودند. APK/AAB Release یا تست دستگاه واقعی ادعا نمی‌شود.

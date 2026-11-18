@@ -112,24 +112,26 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         ) {
             Spacer(Modifier.height(14.dp))
             when (tabs[selectedTab]) {
-                MainTab.Home -> HomeOverview(email)
+                MainTab.Home -> SocialFeedScreen(
+                    supabase = SupabaseClientProvider.client,
+                    userId = userId
+                )
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
                 )
-                MainTab.Publish -> FileUploadScreen(userId = userId)
-                MainTab.Explore -> ModulePlaceholder(
-                    eyebrow = "کشف محتوای عمومی",
-                    title = "اکتشاف",
-                    description = "جدول‌های فید، دنبال‌کردن، واکنش و نظر ایجاد شده‌اند. جست‌وجو و فید صفحه‌بندی‌شده هنوز به رابط کاربری متصل نشده‌اند.",
-                    status = "طرح داده آماده؛ فید و جست‌وجو در حال توسعه"
+                MainTab.Publish -> PublishHubScreen(
+                    supabase = SupabaseClientProvider.client,
+                    userId = userId,
+                    onPublished = { selectedTab = 0 }
                 )
-                MainTab.Profile -> ModulePlaceholder(
-                    eyebrow = "هویت کاربری",
-                    title = "پروفایل شما",
-                    description = "ورود گوگل به نشست Supabase متصل است و پس از ایجاد کاربر، پروفایل پایه از Trigger دیتابیس ساخته می‌شود. نمایش و ویرایش پروفایل هنوز در حال توسعه است.",
-                    status = email ?: "حساب Google متصل",
-                    detail = "رتبه و نشان‌ها از سمت سرور نگهداری می‌شوند؛ کلاینت مجوز تغییر امتیاز یا رتبه ندارد."
+                MainTab.Explore -> ExploreScreen(
+                    supabase = SupabaseClientProvider.client,
+                    userId = userId
+                )
+                MainTab.Profile -> ProfileScreen(
+                    supabase = SupabaseClientProvider.client,
+                    userId = userId
                 )
             }
             Spacer(Modifier.height(18.dp))

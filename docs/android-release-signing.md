@@ -53,3 +53,8 @@ A successful workflow proves package compilation and signature verification, not
 - این Artifact Release نیست؛ signing دائمی مالک، اجرای Android Release workflow، بررسی امضای Release و نصب روی دستگاه واقعی هنوز انجام نشده‌اند.
 - در همان اجرای CI، `GOOGLE_WEB_CLIENT_ID` خالی بود. حتی پس از ثبت keystore secrets نیز باید Web OAuth Client ID و Google Provider جداگانه تنظیم شوند.
 - وضعیت کلید/گذرواژهٔ مالک را از روی مخزن حدس نزنید و هرگز آن‌ها را در چت درخواست/منتشر نکنید.
+
+
+## وضعیت واقعی گیت انتشار — ۱۸ نوامبر ۲۰۲۶
+
+Android CI روی main Commit d204f712 موفق شد و فقط Debug APK/AAB تولید کرد. Android Release workflow هنوز با keystore دائمی مالک اجرا نشده، امضای Release و SHA-256 وجود ندارد و نصب روی گوشی فیزیکی آزمایش نشده است. Provider زنده Supabase نیز external.google=false گزارش می‌کند؛ پس ورود واقعی Google آماده نیست. تکمیل این گیت‌ها به keystore مالک، چهار signing secret، Repository variable مربوط به GOOGLE_WEB_CLIENT_ID، پیکربندی Google Cloud/Supabase و دستگاه فیزیکی نیاز دارد.

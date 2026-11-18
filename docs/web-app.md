@@ -51,3 +51,12 @@ Run: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44325901682
 - تست دوحسابی چت، RLS و اشتراک فایل هنوز اجرا نشده؛ برای آن دو حساب اختصاصی لازم است.
 - Android و Web upload progress و resumable transfer یکسان و تکمیل‌شده ندارند.
 - PWA کامل، Service Worker، برند/آیکون رسمی، FCM، گروه/کانال، استوری، تماس و پنل مدیریت واقعی در محدوده نسخه فعلی آماده نیستند.
+
+
+## ممیزی تکمیلی OAuth/PKCE — ۱۸ نوامبر ۲۰۲۶
+
+Vercel Production به URL صحیح Supabase یعنی https://slwzjufipavuwcbwoyro.supabase.co اشاره دارد. Auth settings زنده مقدار external.google=false برگرداند؛ Provider خاموش است و علت خطای provider is not enabled همین تنظیم Backend است.
+
+شاخه fix/web-pkce-single-exchange-2026-11-18-v2، callback را طوری اصلاح می‌کند که detectSessionInUrl=false باشد و خود صفحه callback مالک تبادل PKCE باشد. نشست موجود پیش از تبادل بازیابی می‌شود؛ Promise مشترک مانع exchange دوگانه در React Strict Mode است؛ authorization code پس از موفقیت از URL پاک می‌شود.
+
+روی Commit کد آزمایش‌شده b9ad73e9c0d8dd67a7678aecfba723ea18ebeffe: npm ci، TypeScript و Next.js build موفق؛ Vitest دو فایل/۱۰ تست موفق؛ ESLint بدون خطا/۹ هشدار؛ npm audit --omit=dev صفر. این نتایج تست واقعی ورود Google یا session در مرورگر نیستند؛ Provider در Supabase خاموش است.
