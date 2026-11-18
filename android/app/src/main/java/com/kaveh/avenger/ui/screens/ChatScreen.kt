@@ -364,7 +364,7 @@ fun ChatScreen(
                 )
             ) {
                 select()
-            }.decodeSingle<MessageIdRow>()
+            }.decodeList<MessageIdRow>().single()
             supabase.postgrest.from("message_attachments").insert(
                 MessageAttachmentInsert(
                     messageId = message.id,

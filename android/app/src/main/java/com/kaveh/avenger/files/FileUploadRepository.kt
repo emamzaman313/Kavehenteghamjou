@@ -92,7 +92,7 @@ class FileUploadRepository(private val supabase: SupabaseClient) {
             )
         ) {
             select()
-        }.decodeSingle<FileAssetIdRow>()
+        }.decodeList<FileAssetIdRow>().single()
 
         return UploadedFile(
             fileAssetId = insertedAsset.id,
