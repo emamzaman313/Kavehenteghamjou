@@ -24,7 +24,7 @@ class EmailOtpRepository(private val supabase: SupabaseClient) {
     }
 
     suspend fun setAccountPassword(password: String) {
-        supabase.auth.modifyUser {
+        supabase.auth.updateUser {
             this.password = password
             data {
                 put("account_password_ready", true)
@@ -33,7 +33,7 @@ class EmailOtpRepository(private val supabase: SupabaseClient) {
     }
 
     suspend fun loginWithPassword(email: String, password: String) {
-        supabase.auth.loginWith(Email) {
+        supabase.auth.signInWith(Email) {
             this.email = email.trim().lowercase()
             this.password = password
         }
