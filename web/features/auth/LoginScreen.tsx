@@ -52,7 +52,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         email: normalizedEmail,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          
         },
       });
       if (authError) {
@@ -166,7 +166,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
             <input id="login-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={!configured || busy}/>
             <button className="google-button" type="submit" disabled={!configured || busy || !email.trim()}>
               {busy ? <span className="spinner small"/> : <Mail size={18}/>}
-              <span>{busy ? 'در حال ارسال ایمیل…' : 'ثبت‌نام / ورود با ایمیل'}</span><ArrowLeft size={17}/>
+              <span>{busy ? 'در حال ارسال کد…' : 'ثبت‌نام / ورود با ایمیل'}</span><ArrowLeft size={17}/>
             </button>
           </form>
           <button className="auth-alternate-button" type="button" onClick={openAccessCode} disabled={!configured || busy}>
@@ -177,7 +177,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
 
       {step === 'sent' && (
         <div className="auth-form">
-          <p className="auth-code-hint">ایمیل ورود برای <b dir="ltr">{email}</b> ارسال شد. لینک داخل ایمیل را باز کنید یا کد شش‌رقمی را اینجا وارد کنید.</p>
+          <p className="auth-code-hint">کد ورود برای <b dir="ltr">{email}</b> ارسال شد. کد شش‌رقمی آخرین ایمیل را در کادر زیر وارد کنید.</p>
           <form className="auth-form" onSubmit={(event) => void verifyEmailOtp(event)}>
             <label className="auth-label" htmlFor="login-email-otp">کد تأیید ۶ رقمی</label>
             <input
@@ -203,7 +203,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
           </form>
           <div className="auth-secondary-actions">
             <button type="button" onClick={() => { setStep('email'); setError(''); setNotice(''); }} disabled={busy}>تغییر ایمیل</button>
-            <button type="button" onClick={() => void sendLink()} disabled={busy || resendIn > 0}>{busy ? 'در حال ارسال…' : resendIn > 0 ? `ارسال دوباره ایمیل (${resendIn})` : 'ارسال دوباره ایمیل'}</button>
+            <button type="button" onClick={() => void sendLink()} disabled={busy || resendIn > 0}>{busy ? 'در حال ارسال…' : resendIn > 0 ? `ارسال دوباره کد (${resendIn})` : 'ارسال دوباره ایمیل'}</button>
           </div>
           <button className="auth-text-button" type="button" onClick={openAccessCode}>ورود با کد دسترسی</button>
         </div>
@@ -240,7 +240,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         </form>
       )}
 
-      <p className="auth-foot"><ShieldCheck size={14}/> ورود امن با پیوند ایمیل یا کد دسترسی مدیریت‌شده</p>
+      <p className="auth-foot"><ShieldCheck size={14}/> ورود امن با کد ایمیل یا کد دسترسی مدیریت‌شده</p>
     </section>
     <span className="auth-version">KAVEH AVENGER · WEB</span>
   </main>;
