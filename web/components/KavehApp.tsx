@@ -129,14 +129,14 @@ export default function KavehApp() {
     <main className="main-area">
       <header className="topbar">
         <div className="topbar-title"><span className="eyebrow"><i/> فضای شخصی شما</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
-        <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title="تغییر تم"><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><Avatar profile={profile} size="sm"/></div>
+        <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title="تغییر تم"><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       <div className="content-scroll">
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
         {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'files' && <FilesView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'discover' && <DiscoverView supabase={supabase} userId={session.user.id} initialSearch={search} notify={notify} onOpenChat={() => setTab('chats')}/>}
-        {tab === 'profile' && <ProfileView supabase={supabase} userId={session.user.id} profile={profile} onSaved={loadProfile} notify={notify}/>}
+        {tab === 'profile' && <ProfileView supabase={supabase} userId={session.user.id} profile={profile} accountLabel={session.user.user_metadata?.access_method === 'shared_code' ? 'حساب مهمان مستقل' : session.user.email ? 'حساب ایمیل' : 'حساب کاربری'} onSaved={loadProfile} notify={notify}/>}
         {tab === 'notifications' && <NotificationsView supabase={supabase} userId={session.user.id} notify={notify} onUnreadChange={setUnread}/>}
         {tab === 'settings' && <SettingsView supabase={supabase} userId={session.user.id} dark={dark} onTheme={setDark} notify={notify} onSignOut={() => void supabase.auth.signOut()}/>}
         {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify}/>}
