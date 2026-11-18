@@ -37,6 +37,27 @@ Deno.serve(async (request: Request) => {
     body = parsed as Record<string, unknown>;
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
+  async function beginAudit(action: "moderate_post" | "delete_post", targetId: string, details: Record<string, unknown> = {}) {
+    const { data, error } = await admin.from("admin_audit_logs").insert({
+      actor_id: authData.user.id,
+      action,
+      target_type: "post",
+      target_id: targetId,
+      status: "started",
+      details,
+    }).select("id").single();
+    if (error || !data?.id) return { id: null as string | null, error };
+    return { id: data.id as string, error: null };
+  }
+
+  async function finishAudit(id: string, status: "succeeded" | "failed") {
+    const { error } = await admin.from("admin_audit_logs").update({
+      status,
+      completed_at: new Date().toISOString(),
+    }).eq("id", id);
+    return !error;
+  }
+
   if (body.action === "overview") {
     const [users, userCount, posts, comments, media, latestPosts] = await Promise.all([
       admin.from("profiles").select("id,display_name,username,created_at").order("created_at", { ascending: false }).limit(30),
@@ -53,25 +74,43 @@ Deno.serve(async (request: Request) => {
 
   if (body.action === "moderate_post") {
     if (!validId(body.postId) || !["public", "private", "followers"].includes(String(body.visibility))) return respond({ ok: false, reason: "invalid_post_update" }, 400, origin);
+    const audit = await beginAudit("moderate_post", body.postId, { visibility: body.visibility });
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
     const { error } = await admin.from("posts").update({ visibility: body.visibility, updated_at: new Date().toISOString() }).eq("id", body.postId);
-    if (error) return respond({ ok: false, reason: "update_failed" }, 500, origin);
-    return respond({ ok: true }, 200, origin);
+    if (error) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "update_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, auditRecorded }, 200, origin);
   }
 
   if (body.action === "delete_post") {
     if (!validId(body.postId)) return respond({ ok: false, reason: "invalid_post_id" }, 400, origin);
+    const audit = await beginAudit("delete_post", body.postId);
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
     const { data: files, error: fileError } = await admin.from("post_attachments").select("bucket_id,object_path").eq("post_id", body.postId);
-    if (fileError) return respond({ ok: false, reason: "lookup_failed" }, 500, origin);
+    if (fileError) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "lookup_failed" }, 500, origin);
+    }
     for (const bucket of [...new Set((files ?? []).map((file) => file.bucket_id))]) {
       const paths = (files ?? []).filter((file) => file.bucket_id === bucket).map((file) => file.object_path);
       if (paths.length) {
         const { error } = await admin.storage.from(bucket).remove(paths);
-        if (error) return respond({ ok: false, reason: "media_delete_failed" }, 500, origin);
+        if (error) {
+          await finishAudit(audit.id, "failed");
+          return respond({ ok: false, reason: "media_delete_failed" }, 500, origin);
+        }
       }
     }
     const { error } = await admin.from("posts").delete().eq("id", body.postId);
-    if (error) return respond({ ok: false, reason: "delete_failed" }, 500, origin);
-    return respond({ ok: true }, 200, origin);
+    if (error) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "delete_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, auditRecorded }, 200, origin);
   }
 
   return respond({ ok: false, reason: "unknown_action" }, 400, origin);
