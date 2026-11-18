@@ -195,7 +195,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         <div className="auth-form">
           <p className="auth-code-hint">کد ورود برای <b dir="ltr">{email}</b> ارسال شد. تمام ارقام کد آخرین ایمیل را در کادر زیر وارد کنید.</p>
           <form className="auth-form" onSubmit={(event) => void verifyEmailOtp(event)}>
-            <label className="auth-label" htmlFor="login-email-otp">کد تأیید ایمیل</label>
+            <label className="auth-label" htmlFor="login-email-otp">کد تأیید ایمیل (هر تعداد رقم)</label>
             <input
               id="login-email-otp"
               className="auth-input auth-code-input"
@@ -203,7 +203,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
               inputMode="numeric"
               autoComplete="one-time-code"
               dir="ltr"
-              placeholder="۱۲۳۴۵۶"
+              placeholder="تمام ارقام کد ایمیل را وارد کنید"
               value={emailOtp}
               onChange={(event) => setEmailOtp(normalizeOtp(event.target.value))}
               required
