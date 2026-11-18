@@ -38,16 +38,17 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   if (body.action === "overview") {
-    const [users, posts, comments, media, latestPosts] = await Promise.all([
+    const [users, userCount, posts, comments, media, latestPosts] = await Promise.all([
       admin.from("profiles").select("id,display_name,username,created_at").order("created_at", { ascending: false }).limit(30),
+      admin.from("profiles").select("id", { count: "exact", head: true }),
       admin.from("posts").select("id", { count: "exact", head: true }),
       admin.from("comments").select("id", { count: "exact", head: true }),
       admin.from("post_attachments").select("id", { count: "exact", head: true }),
       admin.from("posts").select("id,author_id,body,visibility,created_at").order("created_at", { ascending: false }).limit(30),
     ]);
-    const firstError = users.error || posts.error || comments.error || media.error || latestPosts.error;
+    const firstError = users.error || userCount.error || posts.error || comments.error || media.error || latestPosts.error;
     if (firstError) return respond({ ok: false, reason: "query_failed" }, 500, origin);
-    return respond({ ok: true, stats: { users: users.data?.length ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0, media: media.count ?? 0 }, users: users.data ?? [], posts: latestPosts.data ?? [] }, 200, origin);
+    return respond({ ok: true, stats: { users: userCount.count ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0, media: media.count ?? 0 }, users: users.data ?? [], posts: latestPosts.data ?? [] }, 200, origin);
   }
 
   if (body.action === "moderate_post") {
