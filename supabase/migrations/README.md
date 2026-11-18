@@ -35,4 +35,4 @@ The shared access-code feature stores only a bcrypt hash in `public.site_access_
 
 The live project now has a dedicated public Storage bucket, `post-media`, for media that users explicitly attach to public posts. Uploads are limited to 50 MB and stored under the authenticated user's UUID prefix. The original private cloud file is not made public: selecting a cloud file copies its bytes into this dedicated public-post bucket, and only that copy is shared. The `public.post_attachments` table has RLS enabled, explicit authenticated-role grants, and policies that require ownership on insert/delete and visibility of the parent post on read.
 
-The shared access-code feature remains disabled in production until the owner sets a non-guessable six-character code in the admin panel. The old default `123456` is not considered safe for public use.
+The shared access-code feature was initially disabled because the default `123456` is unsafe. It is now enabled with a newly generated random six-character code; only its bcrypt hash is stored in the live database. The plaintext invite code is intentionally not committed to Git.
