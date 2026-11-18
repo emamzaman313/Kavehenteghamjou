@@ -112,12 +112,12 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         ) {
             Spacer(Modifier.height(14.dp))
             when (tabs[selectedTab]) {
-                MainTab.Home -> HomeOverview(email)
+                MainTab.Home -> SocialFeedScreen(\n                    supabase = SupabaseClientProvider.client,\n                    userId = userId\n                )
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
                 )
-                MainTab.Publish -> FileUploadScreen(userId = userId)
+                MainTab.Publish -> SocialFeedScreen(\n                    supabase = SupabaseClientProvider.client,\n                    userId = userId,\n                    composerOnly = true,\n                    onPublished = { selectedTab = 0 }\n                )
                 MainTab.Explore -> ExploreScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
