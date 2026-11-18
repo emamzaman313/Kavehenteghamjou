@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Send
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.result.decodeAs
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -122,6 +124,11 @@ fun ChatScreen(
     var refreshing by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var realtimeConnected by remember { mutableStateOf(false) }
+    var showNewConversation by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val searchResults = remember { mutableStateListOf<ProfileRow>() }
+    var searchingPeople by remember { mutableStateOf(false) }
+    var creatingConversationFor by remember { mutableStateOf<String?>(null) }
 
     suspend fun loadConversations() {
         loading = true
@@ -165,6 +172,61 @@ fun ChatScreen(
             errorText = exception.message ?: "دریافت گفتگوها ناموفق بود."
         } finally {
             loading = false
+        }
+    }
+
+    suspend fun searchPeople(query: String) {
+        val term = query.trim().removePrefix("@")
+        if (term.length < 2) {
+            searchResults.clear()
+            return
+        }
+        searchingPeople = true
+        try {
+            val safeTerm = term.replace("%", "\\%").replace("_", "\\_")
+            val found = supabase.postgrest["profiles"].select {
+                filter {
+                    neq("id", userId)
+                    or {
+                        ilike("username", "%$safeTerm%")
+                        ilike("display_name", "%$safeTerm%")
+                    }
+                }
+                limit(12)
+            }.decodeList<ProfileRow>()
+            searchResults.clear()
+            searchResults.addAll(found)
+        } catch (exception: Exception) {
+            errorText = exception.message ?: "جست‌وجوی کاربران ناموفق بود."
+        } finally {
+            searchingPeople = false
+        }
+    }
+
+    suspend fun startDirectConversation(profile: ProfileRow) {
+        creatingConversationFor = profile.id
+        errorText = null
+        try {
+            val conversationId = supabase.postgrest.rpc(
+                "create_direct_conversation",
+                mapOf("p_other_user_id" to profile.id)
+            ).decodeAs<String>()
+            loadConversations()
+            activeConversation = conversations.firstOrNull { it.id == conversationId }
+                ?: ChatConversation(
+                    id = conversationId,
+                    title = profile.displayName.ifBlank { profile.username?.let { "@$it" } ?: "گفتگوی خصوصی" },
+                    kind = "direct",
+                    lastMessageAt = null,
+                    peerReadAt = null
+                )
+            showNewConversation = false
+            searchQuery = ""
+            searchResults.clear()
+        } catch (exception: Exception) {
+            errorText = exception.message ?: "ساخت گفتگوی خصوصی ناموفق بود."
+        } finally {
+            creatingConversationFor = null
         }
     }
 
@@ -293,6 +355,11 @@ fun ChatScreen(
                     )
                 }
             }
+            if (activeConversation == null) {
+                IconButton(onClick = { showNewConversation = !showNewConversation }) {
+                    Icon(Icons.Outlined.Add, contentDescription = "گفتگوی جدید")
+                }
+            }
             IconButton(
                 onClick = {
                     scope.launch {
@@ -306,6 +373,64 @@ fun ChatScreen(
             ) {
                 if (refreshing) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
                 else Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
+            }
+        }
+
+        if (showNewConversation && activeConversation == null) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("جست‌وجوی نام یا نام کاربری") },
+                    placeholder = { Text("حداقل دو نویسه وارد کن…") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        scope.launch { searchPeople(searchQuery) }
+                    })
+                )
+                Button(
+                    onClick = { scope.launch { searchPeople(searchQuery) } },
+                    enabled = searchQuery.trim().length >= 2 && !searchingPeople
+                ) {
+                    if (searchingPeople) CircularProgressIndicator(modifier = Modifier.height(16.dp), strokeWidth = 2.dp)
+                    else Text("جست‌وجوی کاربران")
+                }
+                searchResults.forEach { profile ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            if (creatingConversationFor == null) {
+                                scope.launch { startDirectConversation(profile) }
+                            }
+                        },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(profile.displayName, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    profile.username?.let { "@$it" } ?: "کاربر کاوه",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (creatingConversationFor == profile.id) {
+                                CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("شروع گفتگو", color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+                if (!searchingPeople && searchQuery.trim().length >= 2 && searchResults.isEmpty()) {
+                    Text("کاربری با این مشخصات پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
 
