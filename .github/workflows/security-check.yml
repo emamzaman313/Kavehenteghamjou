@@ -58,6 +58,11 @@ jobs:
         with:
           node-version: "22.16.0"
 
+      - name: Upgrade npm to a resolver version compatible with the lockfile graph
+        run: |
+          npm install --global npm@11.21.2
+          npm --version
+
       - name: Generate lockfile if missing
         run: |
           if [ ! -f package-lock.json ]; then
