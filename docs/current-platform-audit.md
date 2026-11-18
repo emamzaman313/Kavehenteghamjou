@@ -111,3 +111,46 @@ Web production domain: `https://kaveh-avenger.vercel.app`
 ## 7. معیار پذیرش
 
 هیچ قابلیت تا زمانی که UI، backend، database/storage، authorization، loading/error/retry و تست مثبت/منفی مرتبط را نداشته باشد «تکمیل‌شده» اعلام نمی‌شود. داده‌های موجود حفظ می‌شوند؛ Migration مخرب یا بازنویسی کامل بدون ضرورت فنی انجام نخواهد شد.
+
+
+## الحاقیه ممیزی زنده — ۱۹ نوامبر ۲۰۲۶
+
+این الحاقیه با خواندن دوباره شاخه `main`، Supabase Production، GitHub Actions و Deployment دامنه اصلی تهیه شد. اعداد این بخش بر داده زنده متکی‌اند و در صورت اختلاف، بر متن قدیمی‌تر همین سند اولویت دارند.
+
+### شواهد زنده
+- آخرین Commit شاخه `main`: `79e2794d1f3ddfa5738678eddd1ea63a9a2164b3` با پیام اصلاح API اندروید.
+- Supabase: `ACTIVE_HEALTHY`، PostgreSQL 17.12، منطقه `ap-northeast-1`.
+- جدول‌های پایه `public`: تعداد ۳۰؛ RLS روشن روی هر ۳۰ جدول.
+- Policyهای `public`: تعداد ۷۴؛ حداقل یک Policy برای هر ۳۰ جدول.
+- Migrationهای ثبت‌شده در Ledger زنده: ۱۵؛ آخرین نسخه `20261118195723`.
+- داده‌های زنده هنگام ممیزی: ۵ کاربر Auth، ۵ پروفایل، ۲ پست و ۰ پیام. این داده‌ها واقعی‌اند و باید حفظ شوند.
+- Storage: `user-files` خصوصی و `post-media` عمومی؛ هر دو سقف ۵۰٬۰۰۰٬۰۰۰ بایت دارند و هیچ‌کدام MIME allowlist تنظیم‌شده ندارند.
+- چهار Migration پایه اول هنوز SQL متناظر قابل استقرار در Git ندارند؛ فایل آرشیوی `initial_schema_draft_NOT_FOR_DEPLOY.sql` جایگزین امن آن‌ها نیست. Reset یا replay آن ممنوع است.
+- Security Advisor: هشدار `auth_leaked_password_protection` همچنان فعال است؛ محافظت رمزهای افشاشده خاموش است. [راهنمای اصلاح](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+- Performance Advisor: ۳۱ اعلان INFO درباره indexهای استفاده‌نشده و یک WARN درباره دو SELECT policy مجاز در `public.file_assets` (`files_select_own` و `files_select_shared`). هیچ index یا policy صرفاً برای خاموش‌کردن هشدار حذف نشود.
+- Health Advisor: بدون هشدار.
+- آخرین Deployment Production دامنه `kaveh-avenger.vercel.app`: وضعیت `READY`، متصل به Commit وب `f73c8ae3037ef6ae930931115018f01090f08882`؛ خطای alias ندارد.
+- آخرین Android CI و Security checks روی Commit `79e2794d1f3ddfa5738678eddd1ea63a9a2164b3` موفق‌اند. این موفقیت CI به معنی Release امضاشده یا تست روی گوشی واقعی نیست.
+- Web CI روی Commit `9873606573e779d08211c2e0eb9572f7774f5ab4` موفق است؛ Commitهای بعدی فقط اصلاحات Android بوده‌اند.
+
+### ممیزی قابلیت‌ها و موانع
+- ورود ایمیل/OTP و ساخت رمز + تکرار دقیق رمز + ورود بعدی با رمز در کد وب و Android پیاده‌سازی شده است؛ نشست وب با `persistSession` ذخیره می‌شود. تست واقعی چرخه ثبت‌نام/خروج/ورود روی ایمیل کاربر در این ممیزی اجرا نشده است.
+- وب شامل ورود، فید، چت، فایل، اکتشاف، پروفایل، اعلان و تنظیمات است؛ چت وب متن، Realtime، صفحه‌بندی و پیوست دارد.
+- پنل فعلی مدیریت محدود است: نمای کلی، کاربران/پست‌ها و تنظیم کد مهمان؛ RBAC چندنقشی و Audit Log جامع هنوز وجود ندارد.
+- مدل داده گروه/کانال وجود دارد، ولی تجربه کامل مدیریت گروه و کانال هنوز تأیید نشده است.
+- فید ریلز عمودی اختصاصی، pipeline تبدیل ویدئو و پیشنهاد محتوا تکمیل نشده‌اند.
+- اعلان In-App و Realtime موجود است؛ Web Push، Android Push/FCM، ایمیل مدیریتی و زمان‌بندی ارسال تأیید نشده‌اند.
+- مدیریت مرکزی موسیقی/Playlist، Daily Title، Theme/Background editor، Remote Config نسخه‌بندی‌شده و Media Library کامل وجود ندارد.
+- Android هنوز با وب هم‌سطح نیست؛ Explore/Profile و انتشار اجتماعی بومی ناقص‌اند. خروجی CI Debug است؛ Release signing و تست دستگاه واقعی مانده‌اند.
+
+### ترتیب اجرایی مصوب برای ادامه
+1. **تثبیت امنیت و Auth:** فعال‌سازی leaked-password protection از داشبورد مالک، بررسی تنظیمات OTP و تست E2E ثبت‌نام/ورود/خروج/ماندگاری نشست در هر دو کلاینت.
+2. **قابل‌بازتولید کردن Backend:** تهیه export/backup رسمی از schema زنده، استخراج چهار migration پایه مفقود و آزمایش replay روی دیتابیس آزمایشی؛ بدون دست‌زدن به داده Production.
+3. **امنیت Storage:** تعریف MIME allowlist و سیاست‌های فایل مجاز برای هر bucket، با تست فایل مجاز/غیرمجاز و حفظ private بودن `user-files`.
+4. **Admin/RBAC:** طراحی مجوزهای server-side و audit trail، سپس تکمیل پنل مدیریت کاربران و moderation.
+5. **محصول اجتماعی:** تکمیل follow/feed، گروه/کانال، سپس Reels عمودی و اعلان‌ها.
+6. **کنترل مرکزی:** Remote Config، appearance، media/music و daily content با نسخه‌بندی و rollback.
+7. **هم‌سطح‌سازی Android و Release:** تکمیل صفحات اجتماعی، آپلود پایدار، تست دوحسابی و انتشار Release امضاشده توسط کلید مالک.
+
+### دامنه این ممیزی
+در این مرحله فقط خواندن مخزن، وضعیت Deployment، GitHub Actions، Supabase schema، Migration Ledger و Advisors انجام شد. هیچ SQL تغییردهنده، Migration، حذف داده، تغییر Storage policy یا تغییر تنظیمات Auth اجرا نشده است.
