@@ -1,5 +1,5 @@
 'use client';
-import { ArrowDownToLine, ArrowLeft, CheckCheck, File, MessageCircle, Paperclip, Plus, Search, Send } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, Check, File, MessageCircle, Paperclip, Plus, Search, Send } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Conversation, FileAsset, Message, Profile } from '@/lib/types';
@@ -21,6 +21,9 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const [searchUser, setSearchUser] = useState('');
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [showNew, setShowNew] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState('CONNECTING');
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,9 +52,10 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   useEffect(() => { void loadConversations(); }, [loadConversations]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
-    const { data, error } = await supabase.from('messages').select('*').eq('conversation_id', conversationId).is('deleted_at', null).order('created_at', { ascending: true }).limit(100);
+    const { data, error } = await supabase.from('messages').select('*').eq('conversation_id', conversationId).is('deleted_at', null).order('created_at', { ascending: false }).limit(100);
     if (error) notify(`دریافت پیام‌ها ناموفق بود: ${error.message}`, 'error');
-    const rows = (data ?? []) as Message[];
+    const rows = ((data ?? []) as Message[]).reverse();
+    setHasOlderMessages(rows.length === 100);
     setMessages(rows);
     if (rows.length) {
       const { data: links } = await supabase.from('message_attachments').select('message_id,file_asset_id').in('message_id', rows.map((m) => m.id));
@@ -70,10 +74,30 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   useEffect(() => {
     if (!active) { setMessages([]); return; }
     void loadMessages(active);
-    const channel = supabase.channel(`chat:${active}`).on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${active}` }, () => { void loadMessages(active); }).subscribe();
+    const channel = supabase.channel(`chat:${active}`).on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${active}` }, () => { void loadMessages(active); void loadConversations(); }).subscribe((status) => { setRealtimeStatus(status); if (status === 'SUBSCRIBED') { void loadMessages(active); void loadConversations(); } });
     return () => { void supabase.removeChannel(channel); };
   }, [active, supabase, loadMessages]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  const loadOlderMessages = async () => {
+    if (!active || loadingOlder || !hasOlderMessages || messages.length === 0) return;
+    setLoadingOlder(true);
+    const oldest = messages[0];
+    const { data, error } = await supabase.from('messages').select('*')
+      .eq('conversation_id', active).is('deleted_at', null)
+      .lt('created_at', oldest.created_at)
+      .order('created_at', { ascending: false }).limit(100);
+    if (error) notify('بارگذاری پیام‌های قدیمی ناموفق بود: ' + error.message, 'error');
+    else {
+      const older = ((data ?? []) as Message[]).reverse();
+      setMessages((current) => {
+        const existingIds = new Set(current.map((message) => message.id));
+        return [...older.filter((message) => !existingIds.has(message.id)), ...current];
+      });
+      setHasOlderMessages((data ?? []).length === 100);
+    }
+    setLoadingOlder(false);
+  };
 
   const send = async (event: FormEvent) => {
     event.preventDefault(); if (!active || !draft.trim()) return;
@@ -81,7 +105,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     const { error } = await supabase.from('messages').insert({ conversation_id: active, sender_id: userId, body: text, format: 'plain' });
     setSending(false);
     if (error) { setDraft(text); notify(`ارسال پیام ناموفق بود: ${error.message}`, 'error'); }
-    else { void loadMessages(active); }
+    else { void loadMessages(active); void loadConversations(); }
   };
 
   const downloadAttachment = async (file: FileAsset) => {
@@ -147,5 +171,5 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       return <button className={`conversation-row ${active === c.id ? 'selected' : ''}`} key={c.id} onClick={() => setActive(c.id)}><Avatar profile={{ display_name: title ?? 'گفتگو', avatar_url: p?.avatar_url }} size="md"/><span className="conversation-copy"><strong>{title ?? 'گفتگو'}</strong><small>{c.kind === 'direct' ? 'گفتگوی خصوصی' : c.kind === 'group' ? 'گروه' : 'کانال'}</small></span><span className="conversation-time">{c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('fa-IR') : ''}</span></button>;
     })}</div>
   </section>
-  <section className="chat-window">{activeConversation ? <><header className="chat-window-header"><Avatar profile={otherProfile ?? { display_name: activeConversation.title ?? 'گفتگو' }} size="md"/><div><strong>{activeConversation.title ?? otherProfile?.display_name ?? 'گفتگوی خصوصی'}</strong><small>همگام‌سازی زنده با سرور</small></div><span className="live-pill"><i/> زنده</span></header><div className="messages-scroll">{messages.length === 0 ? <EmptyState icon={<MessageCircle/>} title="شروع یک گفتگوی تازه" description="اولین پیام را بنویس و گفتگو را آغاز کن."/> : messages.map((m) => <div key={m.id} className={`message-row ${m.sender_id === userId ? 'outgoing' : 'incoming'}`}><div className="message-bubble"><p>{m.body}</p>{(attachmentsByMessage[m.id] ?? []).map((file) => <button key={file.id} className="attachment-chip" onClick={() => void downloadAttachment(file)}><File size={15}/><span>{file.original_name}</span><ArrowDownToLine size={14}/></button>)}<small>{new Date(m.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}{m.sender_id === userId && <CheckCheck size={13}/>}</small></div></div>)}<div ref={bottomRef}/></div><form className="message-composer" onSubmit={send}><input ref={attachmentInputRef} type="file" className="visually-hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadAttachment(file); e.target.value = ''; }}/><button type="button" className="icon-button" title="پیوست فایل" onClick={() => attachmentInputRef.current?.click()}><Paperclip size={19}/></button><input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="پیامت را بنویس…"/><button className="send-button" disabled={sending || !draft.trim()}><Send size={18}/></button></form></> : <EmptyState icon={<MessageCircle/>} title="یک گفتگو انتخاب کن" description="از فهرست سمت راست وارد گفتگو شو یا یک گفتگوی جدید بساز."/>}</section></div>;
+  <section className="chat-window">{activeConversation ? <><header className="chat-window-header"><Avatar profile={otherProfile ?? { display_name: activeConversation.title ?? 'گفتگو' }} size="md"/><div><strong>{activeConversation.title ?? otherProfile?.display_name ?? 'گفتگوی خصوصی'}</strong><small>{realtimeStatus === 'SUBSCRIBED' ? 'اتصال زنده برقرار است' : realtimeStatus === 'CHANNEL_ERROR' || realtimeStatus === 'TIMED_OUT' ? 'اتصال قطع است؛ تلاش مجدد' : 'در حال اتصال به سرور…'}</small></div><span className="live-pill"><i/> زنده</span></header><div className="messages-scroll">{hasOlderMessages && <button className="load-older-button" onClick={() => void loadOlderMessages()} disabled={loadingOlder}>{loadingOlder ? 'در حال بارگذاری…' : 'نمایش پیام‌های قدیمی‌تر'}</button>}{messages.length === 0 ? <EmptyState icon={<MessageCircle/>} title="شروع یک گفتگوی تازه" description="اولین پیام را بنویس و گفتگو را آغاز کن."/> : messages.map((m) => <div key={m.id} className={`message-row ${m.sender_id === userId ? 'outgoing' : 'incoming'}`}><div className="message-bubble"><p>{m.body}</p>{(attachmentsByMessage[m.id] ?? []).map((file) => <button key={file.id} className="attachment-chip" onClick={() => void downloadAttachment(file)}><File size={15}/><span>{file.original_name}</span><ArrowDownToLine size={14}/></button>)}<small>{new Date(m.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}{m.sender_id === userId && <Check size={13} aria-label="ارسال‌شده"/>}</small></div></div>)}<div ref={bottomRef}/></div><form className="message-composer" onSubmit={send}><input ref={attachmentInputRef} type="file" className="visually-hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadAttachment(file); e.target.value = ''; }}/><button type="button" className="icon-button" title="پیوست فایل" onClick={() => attachmentInputRef.current?.click()}><Paperclip size={19}/></button><input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="پیامت را بنویس…"/><button className="send-button" disabled={sending || !draft.trim()}><Send size={18}/></button></form></> : <EmptyState icon={<MessageCircle/>} title="یک گفتگو انتخاب کن" description="از فهرست سمت راست وارد گفتگو شو یا یک گفتگوی جدید بساز."/>}</section></div>;
 }
