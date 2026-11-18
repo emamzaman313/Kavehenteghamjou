@@ -9,11 +9,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.kaveh.avenger.auth.GoogleAuthRepository
+import com.kaveh.avenger.auth.EmailOtpRepository
 import com.kaveh.avenger.data.SupabaseClientProvider
 import com.kaveh.avenger.ui.screens.AuthenticatedHomeScreen
 import com.kaveh.avenger.ui.screens.ConfigurationRequiredScreen
-import com.kaveh.avenger.ui.screens.GoogleSignInScreen
+import com.kaveh.avenger.ui.screens.EmailOtpScreen
 import com.kaveh.avenger.ui.screens.LoadingScreen
 import com.kaveh.avenger.ui.theme.KavehTheme
 import io.github.jan.supabase.auth.auth
@@ -34,7 +34,7 @@ private fun KavehRoot() {
             ConfigurationRequiredScreen()
         } else {
             val supabase = remember { SupabaseClientProvider.client }
-            val authRepository = remember { GoogleAuthRepository(supabase) }
+            val authRepository = remember { EmailOtpRepository(supabase) }
             var sessionStatus by remember { mutableStateOf<SessionStatus?>(null) }
 
             LaunchedEffect(supabase) {
@@ -48,10 +48,10 @@ private fun KavehRoot() {
                     userId = status.session.user?.id.orEmpty(),
                     onSignOut = { supabase.auth.signOut() }
                 )
-                is SessionStatus.NotAuthenticated -> GoogleSignInScreen(authRepository)
-                is SessionStatus.RefreshFailure -> GoogleSignInScreen(
+                is SessionStatus.NotAuthenticated -> EmailOtpScreen(authRepository)
+                is SessionStatus.RefreshFailure -> EmailOtpScreen(
                     authRepository = authRepository,
-                    initialMessage = "بازیابی نشست انجام نشد. دوباره با حساب گوگل وارد شوید."
+                    initialMessage = "بازیابی نشست انجام نشد. دوباره کد ورود را درخواست کنید."
                 )
             }
         }
