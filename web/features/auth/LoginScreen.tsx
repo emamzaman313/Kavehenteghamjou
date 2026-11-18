@@ -24,7 +24,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const normalizeOtp = (value: string) => value
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
     .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
-    .replace(/\\D/g, '')
+    .replace(/\D/g, '')
     .slice(0, 6);
 
   useEffect(() => {
@@ -94,7 +94,19 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         setError(authErrorMessage(verifyError));
         return;
       }
-      if (!verifyData.session?.access_token || !verifyData.session?.refresh_token) {\n        setError('کد تأیید شد اما نشست ورود از سرویس دریافت نشد. دوباره کد تازه درخواست کنید.');\n        return;\n      }\n      const { error: sessionError } = await supabase.auth.setSession({\n        access_token: verifyData.session.access_token,\n        refresh_token: verifyData.session.refresh_token,\n      });\n      if (sessionError) {\n        setError(authErrorMessage(sessionError));\n        return;\n      }\n      setNotice('کد تأیید شد. در حال ورود به حساب شما…');
+      if (!verifyData.session?.access_token || !verifyData.session?.refresh_token) {
+        setError('کد تأیید شد اما نشست ورود از سرویس دریافت نشد. دوباره کد تازه درخواست کنید.');
+        return;
+      }
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: verifyData.session.access_token,
+        refresh_token: verifyData.session.refresh_token,
+      });
+      if (sessionError) {
+        setError(authErrorMessage(sessionError));
+        return;
+      }
+      setNotice('کد تأیید شد. در حال ورود به حساب شما…');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
@@ -196,7 +208,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
               dir="ltr"
               placeholder="۱۲۳۴۵۶"
               value={emailOtp}
-              onChange={(event) => setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={(event) => setEmailOtp(normalizeOtp(event.target.value))}
               required
               disabled={busy}
               aria-label="کد تأیید ایمیل"
