@@ -21,6 +21,7 @@ The following versions were read from the live Supabase migration ledger. Filena
 | `20261118191056` | `kaveh_access_code_service_policies` | Included |
 | `20261118195400` | `kaveh_post_media_attachments` | Included |
 | `20261118195723` | `kaveh_post_attachment_author_index` | Included |
+| `20261118212549` | `kaveh_admin_audit_log` | Included (`20261118212549_kaveh_admin_audit_log.sql`) |
 
 **Important:** the live migration ledger is authoritative. The first four original SQL bodies have not yet been exported into this repository. An early local SQL draft is archived at `supabase/archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` and is explicitly non-deployable because it predates the final RLS and privilege fixes.
 
@@ -36,3 +37,8 @@ The shared access-code feature stores only a bcrypt hash in `public.site_access_
 The live project now has a dedicated public Storage bucket, `post-media`, for media that users explicitly attach to public posts. Uploads are limited to 50 MB and stored under the authenticated user's UUID prefix. The original private cloud file is not made public: selecting a cloud file copies its bytes into this dedicated public-post bucket, and only that copy is shared. The `public.post_attachments` table has RLS enabled, explicit authenticated-role grants, and policies that require ownership on insert/delete and visibility of the parent post on read.
 
 The shared access-code feature was initially disabled because the default `123456` is unsafe. It is now enabled with a newly generated random six-character code; only its bcrypt hash is stored in the live database. The plaintext invite code is intentionally not committed to Git.
+
+
+## Administrative audit log
+
+Migration `20261118212549_kaveh_admin_audit_log` adds `public.admin_audit_logs` for server-side records of post moderation and deletion. RLS is enabled, and direct table privileges are revoked from `anon` and `authenticated`; the Edge Function uses the service role. The `admin-console` function writes a `started` event before a privileged post action and marks it `succeeded` or `failed` afterward. The audit log intentionally has no client-facing RLS policy; it is not directly readable from browser or Android clients.
