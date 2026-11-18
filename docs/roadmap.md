@@ -82,3 +82,12 @@
 6. دسترسی به گوشی فیزیکی و تأیید نصب، ورود، چت و فایل.
 
 تا بسته‌شدن موارد بالا پروژه «آماده انتشار عمومی» محسوب نمی‌شود.
+
+
+## اصلاح بر اساس ممیزی زنده — ۱۸ نوامبر ۲۰۲۶
+
+- [x] Vercel Production URL با Supabase Project Ref تطبیق داده شد.
+- [x] callback وب برای جلوگیری از exchange تکراری PKCE، بازیابی نشست موجود و مدیریت React Strict Mode اصلاح شد؛ کد پس از موفقیت از URL پاک می‌شود.
+- [x] Web TypeScript و Next.js build موفق؛ Vitest ده تست موفق؛ ESLint صفر خطا/۹ هشدار؛ Production dependency audit صفر finding.
+- [ ] Supabase Auth external.google=false است؛ فعال‌سازی واقعی Provider و Google OAuth credentials در انتظار مالک.
+- [ ] Google OAuth end-to-end، 2-account Chat E2E، Android Release و physical-device acceptance هنوز انجام نشده‌اند.
