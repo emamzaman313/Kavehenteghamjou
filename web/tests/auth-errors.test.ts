@@ -17,13 +17,13 @@ describe('authErrorMessage', () => {
     expect(authErrorMessage(new TypeError('Failed to fetch'))).toContain('اتصال');
   });
 
-  it('gives a specific instruction when a one-time sign-in link is expired', () => {
+  it('explains expired or superseded email codes and links', () => {
     const message = authErrorMessage({
       code: 'otp_expired',
       message: 'token has expired or is invalid',
     });
-    expect(message).toContain('لینک ورود');
-    expect(message).toContain('لینک تازه');
+    expect(message).toContain('کد تأیید');
+    expect(message).toContain('جدیدترین ایمیل');
   });
 
   it('explains the email send rate limit without suggesting an SMTP failure', () => {
@@ -80,7 +80,7 @@ describe('getOAuthCallbackError', () => {
       '?error=access_denied&error_code=otp_expired&error_description=Token+has+expired',
       '',
     );
-    expect(authErrorMessage(error)).toContain('لینک ورود');
+    expect(authErrorMessage(error)).toContain('کد تأیید');
   });
 
   it('returns null when the callback contains no OAuth error', () => {
