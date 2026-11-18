@@ -103,7 +103,8 @@ private data class ChatConversation(
     val id: String,
     val title: String,
     val kind: String,
-    val lastMessageAt: String?
+    val lastMessageAt: String?,
+    val peerReadAt: String?
 )
 
 @Composable
@@ -150,7 +151,8 @@ fun ChatScreen(
                     title = conversation.title ?: profile?.displayName ?: profile?.username?.let { "@$it" }
                         ?: if (conversation.kind == "direct") "گفتگوی خصوصی" else "گفتگو",
                     kind = conversation.kind,
-                    lastMessageAt = conversation.lastMessageAt
+                    lastMessageAt = conversation.lastMessageAt,
+                    peerReadAt = otherMember?.lastReadAt
                 )
             }.sortedByDescending { it.lastMessageAt ?: "" }
 
@@ -213,6 +215,15 @@ fun ChatScreen(
                 loadConversations()
             }
         }
+        val memberChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "conversation_members"
+            filter = "conversation_id=eq.$conversationId"
+        }
+        val memberCollector = launch {
+            memberChanges.collect {
+                loadConversations()
+            }
+        }
         val statusCollector = launch {
             channel.status.collect { status ->
                 realtimeConnected = status == RealtimeChannel.Status.SUBSCRIBED
@@ -235,6 +246,7 @@ fun ChatScreen(
         } finally {
             realtimeConnected = false
             statusCollector.cancel()
+            memberCollector.cancel()
             collector.cancel()
             supabase.realtime.removeChannel(channel)
         }
@@ -366,6 +378,14 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (mine) {
+                                    val read = activeConversation?.peerReadAt?.let { it >= message.createdAt } == true
+                                    Text(
+                                        if (read) "✓✓ خوانده شد" else "✓ ارسال شد",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

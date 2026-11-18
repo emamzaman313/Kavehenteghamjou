@@ -12,6 +12,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Record<string, Profile>>({});
   const [peerByConversation, setPeerByConversation] = useState<Record<string, string>>({});
+  const [peerReadAtByConversation, setPeerReadAtByConversation] = useState<Record<string, string | null>>({});
   const [lastMessageByConversation, setLastMessageByConversation] = useState<Record<string, Message>>({});
   const [unreadByConversation, setUnreadByConversation] = useState<Record<string, number>>({});
   const [active, setActive] = useState<string | null>(null);
@@ -62,14 +63,19 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       return [conversationId, count ?? 0] as const;
     }));
     setUnreadByConversation(Object.fromEntries(unreadPairs));
-    const { data: participants } = await supabase.from('conversation_members').select('conversation_id,user_id').in('conversation_id', ids).neq('user_id', userId);
+    const { data: participants } = await supabase.from('conversation_members').select('conversation_id,user_id,last_read_at').in('conversation_id', ids).neq('user_id', userId);
     const otherIds = new Set<string>();
     const peerMap: Record<string, string> = {};
+    const peerReadMap: Record<string, string | null> = {};
     (participants ?? []).forEach((participant) => {
       otherIds.add(participant.user_id);
-      if (!peerMap[participant.conversation_id]) peerMap[participant.conversation_id] = participant.user_id;
+      if (!peerMap[participant.conversation_id]) {
+        peerMap[participant.conversation_id] = participant.user_id;
+        peerReadMap[participant.conversation_id] = participant.last_read_at;
+      }
     });
     setPeerByConversation(peerMap);
+    setPeerReadAtByConversation(peerReadMap);
     if (otherIds.size) {
       const { data: profiles } = await supabase.from('profiles').select('*').in('id', [...otherIds]);
       const map: Record<string, Profile> = {}; (profiles ?? []).forEach((p) => { map[p.id] = p as Profile; }); setMembers(map);
@@ -109,7 +115,10 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   useEffect(() => {
     if (!active) { setMessages([]); return; }
     void loadMessages(active);
-    const channel = supabase.channel(`chat:${active}`).on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${active}` }, () => { void loadMessages(active); void loadConversations(); }).subscribe((status) => { setRealtimeStatus(status); if (status === 'SUBSCRIBED') { void loadMessages(active); void loadConversations(); } });
+    const channel = supabase.channel(`chat:${active}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${active}` }, () => { void loadMessages(active); void loadConversations(); })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter: `conversation_id=eq.${active}` }, () => { void loadConversations(); })
+      .subscribe((status) => { setRealtimeStatus(status); if (status === 'SUBSCRIBED') { void loadMessages(active); void loadConversations(); } });
     return () => { void supabase.removeChannel(channel); };
   }, [active, supabase, loadMessages, loadConversations]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -206,5 +215,5 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       return <button className={`conversation-row ${active === c.id ? 'selected' : ''}`} key={c.id} onClick={() => setActive(c.id)}><Avatar profile={{ display_name: title ?? 'گفتگو', avatar_url: p?.avatar_url }} size="md"/><span className="conversation-copy"><strong>{title ?? 'گفتگو'}</strong><small>{lastMessageByConversation[c.id]?.body || (c.kind === 'direct' ? 'گفتگوی خصوصی' : c.kind === 'group' ? 'گروه' : 'کانال')}</small></span><span className="conversation-time">{unreadByConversation[c.id] > 0 && <b className="unread-count">{unreadByConversation[c.id] > 99 ? '۹۹+' : unreadByConversation[c.id].toLocaleString('fa-IR')}</b>}{c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('fa-IR') : ''}</span></button>;
     })}</div>
   </section>
-  <section className="chat-window">{activeConversation ? <><header className="chat-window-header"><Avatar profile={otherProfile ?? { display_name: activeConversation.title ?? 'گفتگو' }} size="md"/><div><strong>{activeConversation.title ?? otherProfile?.display_name ?? 'گفتگوی خصوصی'}</strong><small>{realtimeStatus === 'SUBSCRIBED' ? 'اتصال زنده برقرار است' : realtimeStatus === 'CHANNEL_ERROR' || realtimeStatus === 'TIMED_OUT' ? 'اتصال قطع است؛ تلاش مجدد' : 'در حال اتصال به سرور…'}</small></div><span className={`live-pill ${realtimeStatus === 'SUBSCRIBED' ? '' : 'offline'}`}><i/> {realtimeStatus === 'SUBSCRIBED' ? 'زنده' : 'اتصال'}</span></header><div className="messages-scroll">{hasOlderMessages && <button className="load-older-button" onClick={() => void loadOlderMessages()} disabled={loadingOlder}>{loadingOlder ? 'در حال بارگذاری…' : 'نمایش پیام‌های قدیمی‌تر'}</button>}{messages.length === 0 ? <EmptyState icon={<MessageCircle/>} title="شروع یک گفتگوی تازه" description="اولین پیام را بنویس و گفتگو را آغاز کن."/> : messages.map((m) => <div key={m.id} className={`message-row ${m.sender_id === userId ? 'outgoing' : 'incoming'}`}><div className="message-bubble"><p>{m.body}</p>{(attachmentsByMessage[m.id] ?? []).map((file) => <button key={file.id} className="attachment-chip" onClick={() => void downloadAttachment(file)}><File size={15}/><span>{file.original_name}</span><ArrowDownToLine size={14}/></button>)}<small>{new Date(m.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}{m.sender_id === userId && <Check size={13} aria-label="ارسال‌شده"/>}</small></div></div>)}<div ref={bottomRef}/></div><form className="message-composer" onSubmit={send}><input ref={attachmentInputRef} type="file" className="visually-hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadAttachment(file); e.target.value = ''; }}/><button type="button" className="icon-button" title="پیوست فایل" onClick={() => attachmentInputRef.current?.click()}><Paperclip size={19}/></button><input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="پیامت را بنویس…"/><button className="send-button" disabled={sending || !draft.trim()}><Send size={18}/></button></form></> : <EmptyState icon={<MessageCircle/>} title="یک گفتگو انتخاب کن" description="از فهرست سمت راست وارد گفتگو شو یا یک گفتگوی جدید بساز."/>}</section></div>;
+  <section className="chat-window">{activeConversation ? <><header className="chat-window-header"><Avatar profile={otherProfile ?? { display_name: activeConversation.title ?? 'گفتگو' }} size="md"/><div><strong>{activeConversation.title ?? otherProfile?.display_name ?? 'گفتگوی خصوصی'}</strong><small>{realtimeStatus === 'SUBSCRIBED' ? 'اتصال زنده برقرار است' : realtimeStatus === 'CHANNEL_ERROR' || realtimeStatus === 'TIMED_OUT' ? 'اتصال قطع است؛ تلاش مجدد' : 'در حال اتصال به سرور…'}</small></div><span className={`live-pill ${realtimeStatus === 'SUBSCRIBED' ? '' : 'offline'}`}><i/> {realtimeStatus === 'SUBSCRIBED' ? 'زنده' : 'اتصال'}</span></header><div className="messages-scroll">{hasOlderMessages && <button className="load-older-button" onClick={() => void loadOlderMessages()} disabled={loadingOlder}>{loadingOlder ? 'در حال بارگذاری…' : 'نمایش پیام‌های قدیمی‌تر'}</button>}{messages.length === 0 ? <EmptyState icon={<MessageCircle/>} title="شروع یک گفتگوی تازه" description="اولین پیام را بنویس و گفتگو را آغاز کن."/> : messages.map((m) => <div key={m.id} className={`message-row ${m.sender_id === userId ? 'outgoing' : 'incoming'}`}><div className="message-bubble"><p>{m.body}</p>{(attachmentsByMessage[m.id] ?? []).map((file) => <button key={file.id} className="attachment-chip" onClick={() => void downloadAttachment(file)}><File size={15}/><span>{file.original_name}</span><ArrowDownToLine size={14}/></button>)}<small>{new Date(m.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}{m.sender_id === userId && (Date.parse(peerReadAtByConversation[activeConversation.id] ?? '') >= Date.parse(m.created_at) ? <span className="message-read-status" title="خوانده‌شده" aria-label="خوانده‌شده">✓✓</span> : <Check size={13} aria-label="ارسال‌شده" title="ارسال‌شده"/>)}</small></div></div>)}<div ref={bottomRef}/></div><form className="message-composer" onSubmit={send}><input ref={attachmentInputRef} type="file" className="visually-hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadAttachment(file); e.target.value = ''; }}/><button type="button" className="icon-button" title="پیوست فایل" onClick={() => attachmentInputRef.current?.click()}><Paperclip size={19}/></button><input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="پیامت را بنویس…"/><button className="send-button" disabled={sending || !draft.trim()}><Send size={18}/></button></form></> : <EmptyState icon={<MessageCircle/>} title="یک گفتگو انتخاب کن" description="از فهرست سمت راست وارد گفتگو شو یا یک گفتگوی جدید بساز."/>}</section></div>;
 }
