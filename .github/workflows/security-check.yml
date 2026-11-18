@@ -61,7 +61,7 @@ jobs:
       - name: Generate lockfile if missing
         run: |
           if [ ! -f package-lock.json ]; then
-            npm install --package-lock-only --ignore-scripts
+            npm install --ignore-scripts --no-audit --no-fund
           fi
 
       - name: Install locked dependencies
