@@ -10,7 +10,9 @@ export function getSupabase(): SupabaseClient | null {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      // The /auth/callback page performs the PKCE exchange explicitly.
+      // Avoid a second automatic exchange while that page handles the code.
+      detectSessionInUrl: false,
       flowType: 'pkce',
     },
     realtime: { params: { eventsPerSecond: 10 } },
