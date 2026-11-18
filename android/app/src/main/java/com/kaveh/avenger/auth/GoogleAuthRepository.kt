@@ -45,15 +45,4 @@ class GoogleAuthRepository(private val supabase: SupabaseClient) {
             nonce = rawNonce
         }
     }
-
-    private fun createRawNonce(): String {
-        val bytes = ByteArray(32)
-        SecureRandom().nextBytes(bytes)
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-    }
-
-    private fun sha256Hex(value: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
-    }
 }
