@@ -1,13 +1,13 @@
 # وضعیت واقعی پیاده‌سازی و آزمون کاوه انتقامجو
 
-آخرین بازبینی: ۱۸ نوامبر ۲۰۲۶
+آخرین بازبینی تکمیلی: ۱۸ نوامبر ۲۰۲۶ — ممیزی زنده Supabase/Vercel و تست شاخه اصلاح Auth
 
 این گزارش بین «کد موجود»، «Build موفق» و «آزمایش end-to-end با کاربران واقعی» تفاوت می‌گذارد. Build موفق به‌تنهایی اثبات‌کننده کارکرد چندکاربره نیست.
 
 ## GitHub
 
 - مخزن اصلی: https://github.com/emamzaman313/Kavehenteghamjou
-- شاخه فعال: `main`
+- شاخه مرجع: main؛ HEAD هنگام آغاز ممیزی 60f46da6cad606430e8b306ce971423aa5caea27. شاخه اصلاح وب fix/web-google-auth-flow-2026-11-18 از همین HEAD منشعب شد.
 - آخرین Commit کد: `a3983ef065511b9c260352e3d14aa8b8e05ac68d` — پیش‌نمایش آخرین پیام و شمارنده خوانده‌نشده در فهرست چت Android.
 - شاخه قدیمی `feature/phase-1-foundation` در مخزن جدید وجود ندارد.
 - ZIP انتقالی فاقد پوشه `.git` بود و Commitهای قدیمی اعلام‌شده از API مخزن جدید قابل بازیابی نبودند؛ بنابراین تاریخچه Git قدیمی به این مخزن منتقل‌شده محسوب نمی‌شود.
@@ -124,7 +124,7 @@ Remote migration ledger ده نسخه دارد:
 
 فایل لوگوی اصلی در فایل‌های قابل دسترسی پیدا نشد؛ هیچ لوگوی ساختگی جایگزین آن نشده است. PWA کامل و قابل نصب نیز اعلام نمی‌شود.
 
-## کارهای بعدی با اولویت
+## ممیزی تکمیلی و شواهد ۱۸ نوامبر ۲۰۲۶\n\n- Supabase project slwzjufipavuwcbwoyro با وضعیت ACTIVE_HEALTHY در هر دو اتصال مدیریتی موجود بود. SQL صرفاً Read-only تعداد ۲۶ جدول عمومی، ۲۶ RLS فعال، ۶۸ Policy، صفر Auth user، صفر profile، صفر message و صفر file asset را نشان داد. Bucket user-files private و سقف آن دقیقاً ۵۰٬۰۰۰٬۰۰۰ بایت بود. هیچ Migration یا داده‌ای تغییر نکرد.\n- Auth settings زنده external.google=false بود؛ این نتیجه گزارش قبلی «از راه دور قابل تأیید نبود» را به‌روزرسانی می‌کند. فعال‌سازی آن نیازمند Supabase Dashboard مالک و Web OAuth Client credentials در Google Cloud است.\n- Vercel Production deployment فعلی در زمان ممیزی READY بود، اما روی Commit 77dc96d4b4d9c02aa5962001fdf0f4777193fa22 قرار داشت؛ این Commit از HEAD شاخه main که 60f46da6cad606430e8b306ce971423aa5caea27 بود قدیمی‌تر است. سایت و مسیر callback HTTP 200 برمی‌گرداندند؛ این مورد OAuth واقعی را اثبات نمی‌کند.\n- Web روی شاخه fix/web-google-auth-flow-2026-11-18 و Commit تست‌شده f77dc0032974e4e4f33033b7c3b322bd05e13cb9: npm ci موفق، TypeScript موفق، ESLint صفر خطا/۹ هشدار، Vitest دو فایل/۸ تست موفق و Next.js production build موفق. این تست‌ها Google sign-in واقعی را اجرا نکردند چون Provider خاموش است.\n- اصلاح Web شامل پیام فارسی خطای Provider غیرفعال، مدیریت خطاهای OAuth/network، تبادل صریح PKCE در callback، جلوگیری از تبادل خودکار هم‌زمان، بازیابی Session موجود و پاک‌سازی کد از نوار نشانی پس از موفقیت است.\n- npm audit روی graph توسعه ۱۶ High/۰ Critical گزارش کرد. picomatch نسخه 4.0.7 و advisory <=4.0.7 در npm registry فعلی بود؛ نسخه 4.0.8 وجود نداشت. npm فقط downgrade عمده Vitest به 3.1.4 را به‌عنوان fix پیشنهاد کرد؛ هیچ downgrade یا workaround اجباری اعمال نشد.\n- Android Release workflow و آزمون دوحسابی هنوز اجرا نشده‌اند؛ این محیط JDK/Android SDK و keystore مالک را در اختیار نداشت. هیچ APK/AAB Release و هیچ تست روی دستگاه فیزیکی تولید یا ادعا نشده است.\n\n## کارهای بعدی با اولویت
 
 1. ایجاد یا انتخاب keystore دائمی Release و ثبت چهار Secret: `ANDROID_KEYSTORE_BASE64`، `ANDROID_KEYSTORE_PASSWORD`، `ANDROID_KEY_ALIAS`، `ANDROID_KEY_PASSWORD`.
 2. ساخت Web OAuth Client در Google Cloud، تنظیم Supabase Google Provider، ثبت `GOOGLE_WEB_CLIENT_ID` به‌عنوان GitHub Repository Variable و ثبت SHA-1 گواهی Release در Android OAuth Client.
