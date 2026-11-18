@@ -1,32 +1,69 @@
 'use client';
 
-import { ArrowLeft, File, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, File, Mail, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { BrandMark } from '@/components/ui';
 import { authErrorMessage } from '@/lib/auth-errors';
 
+type LoginStep = 'email' | 'code';
+
 export default function LoginScreen({ supabase, configured }: { supabase: SupabaseClient | null; configured: boolean }) {
+  const [step, setStep] = useState<LoginStep>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const signIn = async () => {
+  const [notice, setNotice] = useState('');
+
+  const sendCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!supabase || busy) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return;
     setBusy(true);
     setError('');
+    setNotice('');
     try {
-      const { error: authError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: { access_type: 'offline', prompt: 'select_account' },
-        },
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: { shouldCreateUser: true },
       });
-      if (authError) setError(authErrorMessage(authError));
+      if (authError) {
+        setError(authErrorMessage(authError));
+        return;
+      }
+      setEmail(normalizedEmail);
+      setStep('code');
+      setNotice('کد ۶ رقمی به ایمیل شما ارسال شد. صندوق ورودی و پوشه هرزنامه را بررسی کنید.');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
-      // A successful OAuth call has already initiated navigation; failures must
-      // always release the control so the user can retry.
+      setBusy(false);
+    }
+  };
+
+  const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || busy || code.length !== 6) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const { error: authError } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: code,
+        type: 'email',
+      });
+      if (authError) {
+        setError(authErrorMessage(authError));
+        return;
+      }
+      // KavehApp listens to onAuthStateChange and opens the signed-in app.
+    } catch (cause) {
+      setError(authErrorMessage(cause));
+    } finally {
       setBusy(false);
     }
   };
@@ -41,16 +78,34 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       <div className="auth-features"><span><MessageCircle size={15}/> گفتگوهای زنده</span><span><File size={15}/> فضای فایل خصوصی</span><span><Sparkles size={15}/> هویت اجتماعی</span></div>
       {!configured && <div className="notice notice-error">تنظیمات اتصال Supabase در محیط وب کامل نیست. مدیر فنی باید متغیرهای عمومی Supabase را در محیط Production بررسی کند.</div>}
       {error && <div className="notice notice-error" role="alert" aria-live="polite">{error}</div>}
-      <button className="google-button" onClick={signIn} disabled={!configured || busy}>
-        {busy ? <span className="spinner small"/> : <GoogleGlyph/>}
-        <span>{busy ? 'در حال انتقال به گوگل…' : error ? 'تلاش دوباره با Google' : 'ورود امن با حساب گوگل'}</span><ArrowLeft size={17}/>
-      </button>
-      <p className="auth-foot"><ShieldCheck size={14}/> حساب مستقل کاوه؛ بدون نیاز به حساب تلگرام</p>
+      {notice && <div className="notice notice-success" role="status" aria-live="polite">{notice}</div>}
+
+      {step === 'email' ? (
+        <form className="auth-form" onSubmit={sendCode}>
+          <label className="auth-label" htmlFor="login-email">آدرس ایمیل</label>
+          <input id="login-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={!configured || busy}/>
+          <button className="google-button" type="submit" disabled={!configured || busy || !email.trim()}>
+            {busy ? <span className="spinner small"/> : <Mail size={18}/>}
+            <span>{busy ? 'در حال ارسال کد…' : 'ارسال کد ورود به ایمیل'}</span><ArrowLeft size={17}/>
+          </button>
+        </form>
+      ) : (
+        <form className="auth-form" onSubmit={verifyCode}>
+          <p className="auth-code-hint">کد ارسال‌شده به <b dir="ltr">{email}</b> را وارد کنید.</p>
+          <label className="auth-label" htmlFor="login-code">کد تأیید ۶ رقمی</label>
+          <input id="login-code" className="auth-input auth-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} dir="ltr" placeholder="۱۲۳۴۵۶" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} required disabled={busy}/>
+          <button className="google-button" type="submit" disabled={busy || code.length !== 6}>
+            {busy ? <span className="spinner small"/> : <ShieldCheck size={18}/>}
+            <span>{busy ? 'در حال بررسی کد…' : 'تأیید کد و ورود به کاوه'}</span><ArrowLeft size={17}/>
+          </button>
+          <div className="auth-secondary-actions">
+            <button type="button" onClick={() => { setStep('email'); setCode(''); setError(''); setNotice(''); }} disabled={busy}>تغییر ایمیل</button>
+            <button type="button" onClick={(event) => void sendCode(event as unknown as FormEvent<HTMLFormElement>)} disabled={busy}>ارسال دوباره کد</button>
+          </div>
+        </form>
+      )}
+      <p className="auth-foot"><ShieldCheck size={14}/> ورود امن با کد یک‌بارمصرف ایمیل؛ بدون نیاز به حساب گوگل</p>
     </section>
     <span className="auth-version">KAVEH AVENGER · WEB</span>
   </main>;
-}
-
-function GoogleGlyph() {
-  return <svg width="19" height="19" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.9 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#4A90E2" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.7 1 7.8 3.1l5.8-5.8C34.1 6 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg>;
 }
