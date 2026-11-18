@@ -58,6 +58,9 @@ jobs:
           gradle wrapper --gradle-version 9.5.0 --distribution-type bin
           chmod +x gradlew
 
+      - name: Inspect lifecycle runtime Compose dependency path
+        run: ./gradlew --no-daemon :android:app:dependencyInsight --dependency lifecycle-runtime-compose --configuration debugRuntimeClasspath
+
       - name: Run Android unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
