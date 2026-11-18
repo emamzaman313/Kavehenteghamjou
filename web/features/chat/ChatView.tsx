@@ -12,6 +12,8 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Record<string, Profile>>({});
   const [peerByConversation, setPeerByConversation] = useState<Record<string, string>>({});
+  const [lastMessageByConversation, setLastMessageByConversation] = useState<Record<string, Message>>({});
+  const [unreadByConversation, setUnreadByConversation] = useState<Record<string, boolean>>({});
   const [active, setActive] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [attachmentsByMessage, setAttachmentsByMessage] = useState<Record<string, FileAsset[]>>({});
@@ -29,12 +31,30 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
 
   const loadConversations = useCallback(async () => {
     setLoading(true);
-    const { data: memberRows, error } = await supabase.from('conversation_members').select('conversation_id').eq('user_id', userId);
+    const { data: memberRows, error } = await supabase.from('conversation_members').select('conversation_id,last_read_at').eq('user_id', userId);
     if (error) { notify(`گرفتن گفتگوها ناموفق بود: ${error.message}`, 'error'); setLoading(false); return; }
     const ids = (memberRows ?? []).map((r) => r.conversation_id);
-    if (!ids.length) { setConversations([]); setMembers({}); setPeerByConversation({}); setLoading(false); return; }
+    if (!ids.length) { setConversations([]); setMembers({}); setPeerByConversation({}); setLastMessageByConversation({}); setUnreadByConversation({}); setLoading(false); return; }
     const { data } = await supabase.from('conversations').select('*').in('id', ids).order('last_message_at', { ascending: false, nullsFirst: false });
     const rows = (data ?? []) as Conversation[]; setConversations(rows);
+    const ownReadAt = new Map<string, string | null>((memberRows ?? []).map((row) => [row.conversation_id, row.last_read_at]));
+    const { data: recentRows, error: recentError } = await supabase.from('messages')
+      .select('id,conversation_id,sender_id,body,format,reply_to,edited_at,deleted_at,created_at')
+      .in('conversation_id', ids).is('deleted_at', null)
+      .order('created_at', { ascending: false }).limit(1000);
+    if (recentError) notify('بارگذاری پیش‌نمایش گفتگوها ناموفق بود: ' + recentError.message, 'error');
+    const latest: Record<string, Message> = {};
+    const unread: Record<string, boolean> = {};
+    (recentRows ?? []).forEach((item) => {
+      const message = item as Message;
+      if (!latest[message.conversation_id]) latest[message.conversation_id] = message;
+    });
+    Object.entries(latest).forEach(([conversationId, message]) => {
+      const cursor = ownReadAt.get(conversationId);
+      unread[conversationId] = message.sender_id !== userId && (!cursor || Date.parse(message.created_at) > Date.parse(cursor));
+    });
+    setLastMessageByConversation(latest);
+    setUnreadByConversation(unread);
     const { data: participants } = await supabase.from('conversation_members').select('conversation_id,user_id').in('conversation_id', ids).neq('user_id', userId);
     const otherIds = new Set<string>();
     const peerMap: Record<string, string> = {};
@@ -168,7 +188,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     <div className="chat-list-scroll">{loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : conversations.length === 0 ? <EmptyState icon={<MessageCircle/>} title="گفتگویی نداری" description="از دکمهٔ + یک گفتگو با کاربر دیگری شروع کن."/> : conversations.map((c) => {
       const p = members[peerByConversation[c.id] ?? ''];
       const title = c.title || (c.kind === 'direct' ? p?.display_name : c.kind === 'group' ? 'گروه کاوه' : 'کانال کاوه');
-      return <button className={`conversation-row ${active === c.id ? 'selected' : ''}`} key={c.id} onClick={() => setActive(c.id)}><Avatar profile={{ display_name: title ?? 'گفتگو', avatar_url: p?.avatar_url }} size="md"/><span className="conversation-copy"><strong>{title ?? 'گفتگو'}</strong><small>{c.kind === 'direct' ? 'گفتگوی خصوصی' : c.kind === 'group' ? 'گروه' : 'کانال'}</small></span><span className="conversation-time">{c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('fa-IR') : ''}</span></button>;
+      return <button className={`conversation-row ${active === c.id ? 'selected' : ''}`} key={c.id} onClick={() => setActive(c.id)}><Avatar profile={{ display_name: title ?? 'گفتگو', avatar_url: p?.avatar_url }} size="md"/><span className="conversation-copy"><strong>{title ?? 'گفتگو'}</strong><small>{lastMessageByConversation[c.id]?.body || (c.kind === 'direct' ? 'گفتگوی خصوصی' : c.kind === 'group' ? 'گروه' : 'کانال')}</small></span><span className="conversation-time">{unreadByConversation[c.id] && <i className="unread-dot" title="پیام خوانده‌نشده"/>}{c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('fa-IR') : ''}</span></button>;
     })}</div>
   </section>
   <section className="chat-window">{activeConversation ? <><header className="chat-window-header"><Avatar profile={otherProfile ?? { display_name: activeConversation.title ?? 'گفتگو' }} size="md"/><div><strong>{activeConversation.title ?? otherProfile?.display_name ?? 'گفتگوی خصوصی'}</strong><small>{realtimeStatus === 'SUBSCRIBED' ? 'اتصال زنده برقرار است' : realtimeStatus === 'CHANNEL_ERROR' || realtimeStatus === 'TIMED_OUT' ? 'اتصال قطع است؛ تلاش مجدد' : 'در حال اتصال به سرور…'}</small></div><span className="live-pill"><i/> زنده</span></header><div className="messages-scroll">{hasOlderMessages && <button className="load-older-button" onClick={() => void loadOlderMessages()} disabled={loadingOlder}>{loadingOlder ? 'در حال بارگذاری…' : 'نمایش پیام‌های قدیمی‌تر'}</button>}{messages.length === 0 ? <EmptyState icon={<MessageCircle/>} title="شروع یک گفتگوی تازه" description="اولین پیام را بنویس و گفتگو را آغاز کن."/> : messages.map((m) => <div key={m.id} className={`message-row ${m.sender_id === userId ? 'outgoing' : 'incoming'}`}><div className="message-bubble"><p>{m.body}</p>{(attachmentsByMessage[m.id] ?? []).map((file) => <button key={file.id} className="attachment-chip" onClick={() => void downloadAttachment(file)}><File size={15}/><span>{file.original_name}</span><ArrowDownToLine size={14}/></button>)}<small>{new Date(m.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}{m.sender_id === userId && <Check size={13} aria-label="ارسال‌شده"/>}</small></div></div>)}<div ref={bottomRef}/></div><form className="message-composer" onSubmit={send}><input ref={attachmentInputRef} type="file" className="visually-hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadAttachment(file); e.target.value = ''; }}/><button type="button" className="icon-button" title="پیوست فایل" onClick={() => attachmentInputRef.current?.click()}><Paperclip size={19}/></button><input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="پیامت را بنویس…"/><button className="send-button" disabled={sending || !draft.trim()}><Send size={18}/></button></form></> : <EmptyState icon={<MessageCircle/>} title="یک گفتگو انتخاب کن" description="از فهرست سمت راست وارد گفتگو شو یا یک گفتگوی جدید بساز."/>}</section></div>;
