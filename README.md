@@ -6,7 +6,7 @@
 
 - Android: Kotlin، Jetpack Compose و Material 3؛ حداقل SDK برابر 26 و Target/Compile SDK برابر 36.
 - Web: Next.js، React و TypeScript.
-- Identity: Google Credential Manager در Android و OAuth با PKCE در وب.
+- Identity: Google Credential Manager در Android؛ در وب ورود ایمیلی با لینک یک‌بارمصرف PKCE و ورود مهمان با کد دسترسی مشترک.
 - Backend: یک پروژه مشترک Supabase شامل Auth، PostgreSQL، RLS، Realtime و Storage خصوصی.
 - محدودیت هر فایل: دقیقاً `50,000,000` بایت.
 
@@ -14,13 +14,13 @@
 
 - مخزن رسمی: https://github.com/emamzaman313/Kavehenteghamjou
 - شاخه مجاز: `main`
-- آخرین Commit کد بررسی‌شده: `d204f71253c129770dc69436a4373ffd7e46c05c`
+- آخرین Commit کد بررسی‌شده: `12a51d754bb45ddf7197e2b7d8d271bc001180de`
 - ساختار: `android/`، `web/`، `supabase/`، `docs/` و `.github/workflows/`.
 
 ## وضعیت واقعی فعلی
 
 ### Backend
-پروژه Supabase با Ref برابر `slwzjufipavuwcbwoyro` فعال است. آخرین ممیزی read-only شامل ۲۶ جدول عمومی با RLS فعال، ۶۸ Policy، ده Migration ثبت‌شده در Remote Ledger و bucket خصوصی `user-files` با سقف ۵۰٬۰۰۰٬۰۰۰ بایت بود. تعداد `auth.users` و `profiles` در زمان ممیزی صفر بود. هیچ Migration یا تغییر داده‌ای در این مأموریت روی Production اجرا نشد.
+پروژه Supabase با Ref برابر `slwzjufipavuwcbwoyro` فعال است. پروژه فعال است و اکنون ۲۹ جدول عمومی دارد که هر ۲۹ مورد RLS فعال دارند؛ ۷۱ Policy عمومی و ۱۳ Migration در Remote Ledger ثبت شده است. در بررسی فعلی ۳ کاربر Auth و ۳ پروفایل وجود دارد. Bucket `user-files` خصوصی و سقف هر فایل ۵۰٬۰۰۰٬۰۰۰ بایت است. سه Migration مربوط به ورود با کد دسترسی نیز به Production اعمال شده‌اند.
 
 ### Web
 نسخه وب در `web/` دارای صفحه ورود، فید، گفتگو، فایل‌ها، اکتشاف، پروفایل، اعلان‌ها و تنظیمات است. Deployment فعلی Production: https://kaveh-avenger.vercel.app اتصال Supabase از کلید Publishable و نشست کاربر استفاده می‌کند. ورود OAuth/PKCE در سورس وجود دارد و مدیریت خطای Provider/شبکه و callback به‌روزرسانی و تست شده است؛ اما Google Provider در Supabase و OAuth Client واقعی هنوز باید توسط مالک سرویس تأیید/تنظیم شود. Web CI در Commit مربوط به تغییرات وب موفق شده است: TypeScript، ESLint، ۱۰ تست و Next.js production build. ۹ هشدار lint در کدهای موجود باقی است.
