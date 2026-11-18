@@ -1,5 +1,5 @@
 'use client';
-import { Activity, CircleHelp, Copy, Heart, MessageCircle, Send, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { Activity, CircleHelp, Copy, Flag, Heart, MessageCircle, Send, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Post, Profile } from '@/lib/types';
@@ -20,6 +20,10 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
   const [commentsFor, setCommentsFor] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [commentRows, setCommentRows] = useState<Record<string, { id: string; body: string; author_id: string; created_at: string }[]>>({});
+  const [reportingPost, setReportingPost] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState('محتوای نامناسب');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +78,38 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     const { error } = await supabase.from('comments').insert({ post_id: postId, author_id: userId, body: commentText.trim() });
     if (error) notify(error.message, 'error'); else { setCommentText(''); const { data } = await supabase.from('comments').select('id,body,author_id,created_at').eq('post_id', postId).order('created_at').limit(30); setCommentRows((old) => ({ ...old, [postId]: data ?? [] })); }
   };
+  const submitPostReport = async (postId: string) => {
+    if (reportSubmitting) return;
+    const details = reportDetails.trim();
+    if (details.length > 500) return notify('توضیحات گزارش نباید بیشتر از ۵۰۰ حرف باشد.', 'error');
+    setReportSubmitting(true);
+    const { data: existing, error: lookupError } = await supabase.from('reports')
+      .select('id').eq('reporter_id', userId).eq('target_type', 'post').eq('target_id', postId)
+      .in('status', ['open', 'reviewing']).limit(1).maybeSingle();
+    if (lookupError) {
+      setReportSubmitting(false);
+      return notify('بررسی گزارش‌های قبلی ناموفق بود.', 'error');
+    }
+    if (existing) {
+      setReportSubmitting(false);
+      setReportingPost(null);
+      return notify('برای این پست یک گزارش باز از طرف شما وجود دارد.', 'error');
+    }
+    const { error } = await supabase.from('reports').insert({
+      reporter_id: userId,
+      target_type: 'post',
+      target_id: postId,
+      reason: reportReason,
+      details: details || null,
+      status: 'open',
+    });
+    setReportSubmitting(false);
+    if (error) return notify('ارسال گزارش ناموفق بود. دوباره تلاش کنید.', 'error');
+    setReportingPost(null);
+    setReportDetails('');
+    notify('گزارش شما برای بررسی مدیران ارسال شد.');
+  };
+
   const copyPostLink = async (postId: string) => {
     try {
       if (!navigator.clipboard) throw new Error('مرورگر اجازهٔ کپی در کلیپ‌بورد را نمی‌دهد.');
@@ -86,6 +122,12 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     <SectionHeader eyebrow="جریان محتوا" title="سلام، خوش اومدی" description="آنچه در جامعهٔ کاوه می‌گذرد، همین‌جاست." action={<button className="button button-quiet" onClick={onGoChats}><MessageCircle size={17}/> گفتگوها</button>}/>
     <PostComposer supabase={supabase} userId={userId} notify={notify} onPublished={() => void load()}/>\n    
     <div className="feed-toolbar"><div><strong>تازه‌ترین‌ها</strong><span>محتوای عمومی جامعه</span></div><button className="icon-button" onClick={() => void load()} title="تازه‌سازی"><Activity size={18}/></button></div>
-    {loading ? <div className="skeleton-list">{[1,2,3].map((n) => <div className="skeleton-card" key={n}/>)}</div> : posts.length === 0 ? <EmptyState icon={<Sparkles/>} title="هنوز پستی منتشر نشده" description="اولین پست را تو منتشر کن و فید را زنده کن."/> : posts.map((post) => <article className="post-card" key={post.id}><div className="post-author"><Avatar profile={authors[post.author_id]} size="md"/><div><strong>{authors[post.author_id]?.display_name ?? 'کاربر کاوه'}</strong><small>{authors[post.author_id]?.username ? `@${authors[post.author_id].username} · ` : ''}{formatDate(post.published_at ?? post.created_at)}</small></div></div>{post.body && <p className="post-body">{post.body}</p>}{attachments[post.id]?.length ? <div className="post-media-grid">{attachments[post.id].map((item) => { const { data } = supabase.storage.from(item.bucket_id).getPublicUrl(item.object_path); const url = data.publicUrl; return item.mime_type?.startsWith('image/') ? <a className="post-media-link" href={url} target="_blank" rel="noreferrer" key={item.id}><img className="post-media-image" src={url} alt={item.original_name} loading="lazy"/></a> : item.mime_type?.startsWith('video/') ? <video className="post-media-video" key={item.id} controls playsInline preload="metadata" src={url}/> : item.mime_type?.startsWith('audio/') ? <audio className="post-media-audio" key={item.id} controls preload="metadata" src={url}/> : <a className="post-file-attachment" href={url} download={item.original_name} target="_blank" rel="noreferrer" key={item.id}><span>{item.original_name}</span></a>; })}</div> : null}<div className="post-meta"><span><Activity size={14}/> انتشار عمومی</span><span>{counts[post.id] ?? 0} واکنش</span></div><div className="post-actions"><button className={liked.has(post.id) ? 'is-liked' : ''} onClick={() => void toggleLike(post.id)}><Heart size={18} fill={liked.has(post.id) ? 'currentColor' : 'none'}/> پسندیدن</button><button onClick={() => void loadComments(post.id)}><MessageCircle size={18}/> دیدگاه‌ها</button><button onClick={() => void copyPostLink(post.id)}><Copy size={18}/> کپی پیوند</button></div>{commentsFor === post.id && <div className="comments-box">{(commentRows[post.id] ?? []).map((comment) => <div className="comment-row" key={comment.id}><Avatar profile={authors[comment.author_id]} size="sm"/><p>{comment.body}</p></div>)}<div className="comment-compose"><input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="دیدگاهت را بنویس…" onKeyDown={(e) => { if (e.key === 'Enter') void addComment(post.id); }}/><button className="icon-button" onClick={() => void addComment(post.id)} title="ارسال دیدگاه"><Send size={17}/></button></div></div>}</article>)}
+    {loading ? <div className="skeleton-list">{[1,2,3].map((n) => <div className="skeleton-card" key={n}/>)}</div> : posts.length === 0 ? <EmptyState icon={<Sparkles/>} title="هنوز پستی منتشر نشده" description="اولین پست را تو منتشر کن و فید را زنده کن."/> : posts.map((post) => <article className="post-card" key={post.id}><div className="post-author"><Avatar profile={authors[post.author_id]} size="md"/><div><strong>{authors[post.author_id]?.display_name ?? 'کاربر کاوه'}</strong><small>{authors[post.author_id]?.username ? `@${authors[post.author_id].username} · ` : ''}{formatDate(post.published_at ?? post.created_at)}</small></div></div>{post.body && <p className="post-body">{post.body}</p>}{attachments[post.id]?.length ? <div className="post-media-grid">{attachments[post.id].map((item) => { const { data } = supabase.storage.from(item.bucket_id).getPublicUrl(item.object_path); const url = data.publicUrl; return item.mime_type?.startsWith('image/') ? <a className="post-media-link" href={url} target="_blank" rel="noreferrer" key={item.id}><img className="post-media-image" src={url} alt={item.original_name} loading="lazy"/></a> : item.mime_type?.startsWith('video/') ? <video className="post-media-video" key={item.id} controls playsInline preload="metadata" src={url}/> : item.mime_type?.startsWith('audio/') ? <audio className="post-media-audio" key={item.id} controls preload="metadata" src={url}/> : <a className="post-file-attachment" href={url} download={item.original_name} target="_blank" rel="noreferrer" key={item.id}><span>{item.original_name}</span></a>; })}</div> : null}<div className="post-meta"><span><Activity size={14}/> انتشار عمومی</span><span>{counts[post.id] ?? 0} واکنش</span></div><div className="post-actions"><button className={liked.has(post.id) ? 'is-liked' : ''} onClick={() => void toggleLike(post.id)}><Heart size={18} fill={liked.has(post.id) ? 'currentColor' : 'none'}/> پسندیدن</button><button onClick={() => void loadComments(post.id)}><MessageCircle size={18}/> دیدگاه‌ها</button><button onClick={() => void copyPostLink(post.id)}><Copy size={18}/> کپی پیوند</button><button onClick={() => { setReportingPost(reportingPost === post.id ? null : post.id); setReportDetails(''); }}><Flag size={18}/> گزارش</button></div>{reportingPost === post.id && <div className="post-report-form">
+  <strong>گزارش این پست</strong>
+  <label>دلیل گزارش<select value={reportReason} onChange={(event) => setReportReason(event.target.value)} disabled={reportSubmitting}><option>محتوای نامناسب</option><option>هرزنامه یا تبلیغات مزاحم</option><option>آزار و اذیت یا تهدید</option><option>اطلاعات گمراه‌کننده</option><option>نقض حقوق دیگران</option><option>سایر موارد</option></select></label>
+  <label>توضیحات تکمیلی (اختیاری)<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={500} rows={3} placeholder="اگر لازم است جزئیات بیشتری بنویسید…" disabled={reportSubmitting}/></label>
+  <div><button className="button button-quiet" type="button" onClick={() => setReportingPost(null)} disabled={reportSubmitting}>انصراف</button><button className="button button-primary" type="button" onClick={() => void submitPostReport(post.id)} disabled={reportSubmitting}><Flag size={15}/>{reportSubmitting ? 'در حال ارسال…' : 'ارسال گزارش'}</button></div>
+</div>}
+{commentsFor === post.id && <div className="comments-box">{(commentRows[post.id] ?? []).map((comment) => <div className="comment-row" key={comment.id}><Avatar profile={authors[comment.author_id]} size="sm"/><p>{comment.body}</p></div>)}<div className="comment-compose"><input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="دیدگاهت را بنویس…" onKeyDown={(e) => { if (e.key === 'Enter') void addComment(post.id); }}/><button className="icon-button" onClick={() => void addComment(post.id)} title="ارسال دیدگاه"><Send size={17}/></button></div></div>}</article>)}
   </div><aside className="feed-aside"><div className="welcome-card"><div className="welcome-icon"><Zap size={21}/></div><span className="eyebrow">به کاوه خوش آمدی</span><h3>فضای تو،<br/>قوانین تو.</h3><p>گفتگو کن، محتوای ارزشمند بساز و فایل‌هایت را در فضای خصوصی نگه دار.</p><div className="welcome-stats"><span><strong>۵۰ MB</strong><small>سقف هر فایل</small></span><span><strong>خصوصی</strong><small>فضای ذخیره‌سازی</small></span></div></div><div className="side-info-card"><div className="side-info-title"><ShieldCheck size={17}/><strong>امنیت حساب</strong></div><p>دسترسی به پیام‌ها و فایل‌ها بر اساس نشست و سیاست‌های دیتابیس کنترل می‌شود.</p><span className="status-line"><i/> نشست احرازشده</span></div><div className="side-info-card"><div className="side-info-title"><CircleHelp size={17}/><strong>راهنمای سریع</strong></div><p>برای شروع گفتگو، از بخش اکتشاف یک کاربر را پیدا کن. فایل‌ها از بخش فایل‌های من قابل بارگذاری‌اند.</p></div></aside></div>;
 }
