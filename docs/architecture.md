@@ -60,3 +60,10 @@ Supabase JS از `flowType: 'pkce'`، `persistSession` و `autoRefreshToken` ا�
 ## محدودیت‌های شناخته‌شده
 
 تعداد کاربران Auth/Profiles در ممیزی read-only اخیر صفر بود؛ بنابراین جریان دوحسابی واقعی و اشتراک فایل بین دو حساب هنوز اثبات نشده است. Android Explore/Profile و انتشار اجتماعی Placeholder/ناقص‌اند. Push، گروه/کانال، استوری و تماس به‌عنوان قابلیت آماده معرفی نمی‌شوند.
+
+
+## تکمیل جریان PKCE و ممیزی زنده — ۱۸ نوامبر ۲۰۲۶
+
+در شاخه fix/web-pkce-single-exchange-2026-11-18-v2، detectSessionInUrl=false تنظیم شده تا callback صفحه تنها مسئول exchangeCodeForSession باشد. callback ابتدا getSession را بررسی می‌کند؛ نشست موجود را حفظ می‌کند؛ در نبود آن authorization code را یک بار مبادله می‌کند. Promise مشترک اثر React Strict Mode را پوشش می‌دهد و code پس از موفقیت از URL پاک می‌شود.
+
+Supabase Auth در پروژه زنده مقدار external.google=false گزارش کرد. پس ورود واقعی Google هنوز مسدود است و نیازمند فعال‌سازی Provider و OAuth credentials توسط مالک است. Build وب و ۱۰ تست واحد موفق‌اند، اما OAuth E2E، Android Release و تست فیزیکی انجام نشده‌اند.
