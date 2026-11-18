@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader } from '@/components/ui';
+import { isValidAccessCode, normalizeAccessCode } from '@/lib/access-code';
 
 export default function AdminAccessCodePanel({ supabase, notify }: { supabase: SupabaseClient; notify: Notify }) {
   const [enabled, setEnabled] = useState(true);
@@ -34,7 +35,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const save = async () => {
     if (saving || loadError) return;
     const normalizedCode = newCode.trim().toUpperCase();
-    if (normalizedCode && !/^[A-Z0-9]{6}$/.test(normalizedCode)) {
+    if (normalizedCode && !isValidAccessCode(normalizedCode)) {
       notify('کد جدید باید دقیقاً ۶ حرف یا عدد انگلیسی باشد.', 'error');
       return;
     }
@@ -96,7 +97,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
               dir="ltr"
               placeholder="برای حفظ کد فعلی خالی بگذارید"
               value={newCode}
-              onChange={(event) => setNewCode(event.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase())}
+              onChange={(event) => setNewCode(normalizeAccessCode(event.target.value))}
               disabled={saving}
             />
             <p className="admin-security-note">کد اولیه 123456 است. برای امنیت بیشتر آن را به کدی غیرقابل حدس تغییر دهید. کد در پایگاه داده به‌صورت هش ذخیره می‌شود و پس از ذخیره قابل مشاهده نیست.</p>
