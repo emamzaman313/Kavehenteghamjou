@@ -14,7 +14,7 @@
 
 - مخزن رسمی: https://github.com/emamzaman313/Kavehenteghamjou
 - شاخه مجاز: `main`
-- آخرین Commit کد بررسی‌شده: `e3e040d1b02ac01f9d9518908f763cda43bb4c0a`
+- آخرین Commit کد بررسی‌شده: `61684899711c286f809503271d360624ff14fb58`
 - ساختار: `android/`، `web/`، `supabase/`، `docs/` و `.github/workflows/`.
 
 ## وضعیت واقعی فعلی
