@@ -45,10 +45,9 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
-import io.github.jan.supabase.realtime.createChannel
-import io.github.jan.supabase.realtime.join
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.removeChannel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
@@ -195,7 +194,7 @@ fun ChatScreen(
         val conversationId = activeConversation?.id ?: return@LaunchedEffect
         loadMessages(conversationId)
 
-        val channel = supabase.realtime.createChannel("android-chat-$conversationId")
+        val channel = supabase.channel("android-chat-$conversationId")
         val changes = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
             table = "messages"
             filter = "conversation_id=eq.$conversationId"
@@ -208,8 +207,7 @@ fun ChatScreen(
         }
 
         try {
-            supabase.realtime.connect()
-            channel.join(blockUntilJoined = true)
+            channel.subscribe(blockUntilSubscribed = true)
             realtimeConnected = true
             awaitCancellation()
         } catch (cancelled: CancellationException) {
