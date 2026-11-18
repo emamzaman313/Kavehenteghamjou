@@ -244,3 +244,15 @@ Web production domain: `https://kaveh-avenger.vercel.app`
 - مجوزهای service_role برای درج/به‌روزرسانی/حذف از `site_access_admins` با SQL فقط‌خواندنی تأیید شد؛ جدول همچنان برای دسترسی مستقیم کلاینت محافظت شده است.
 - Web CI برای Commit کد رابط `4fd824ba259e7c558f8f7d6dd732e51b114da44b` موفق شد: TypeScript، ESLint، Unit tests و Next.js production build. Security checks برای Commit مستندات نهایی `b6145e2178964a11f6dc880ba7dc10e1d291cb69` نیز موفق است.
 - وب‌سایت Production با Commit `b6145e2178964a11f6dc880ba7dc10e1d291cb69` در Vercel با وضعیت `READY` منتشر شد و دامنه اصلی `https://kaveh-avenger.vercel.app` به آن Alias شد.
+
+
+## الحاقیه سامانه گزارش تخلف — ۱۹ نوامبر ۲۰۲۶
+
+- Migration زنده `20261118214403_kaveh_admin_report_review` امکان ثبت رویدادهای بررسی گزارش و نوع هدف `report` را به Audit اضافه کرد.
+- Edge Function `admin-console` نسخه ۱۱ فعال است؛ فهرست ۱۰۰ گزارش اخیر را برای owner/admin/moderator ارائه می‌دهد و وضعیت را به open/reviewing/resolved/rejected مدیریت می‌کند.
+- کاربران احرازشده اکنون از روی هر پست می‌توانند گزارش ارسال کنند؛ دلیل و توضیح اختیاری ثبت می‌شود.
+- پس از تعیین تکلیف نهایی گزارش، برای گزارش‌دهنده اعلان درون‌برنامه‌ای ارسال می‌شود؛ تمام تغییر وضعیت‌ها در Audit ثبت می‌شوند.
+- Migration `20261118214550_kaveh_report_submission_hardening` طول دلیل را ۳ تا ۱۲۰ حرف، توضیح را حداکثر ۵۰۰ حرف و تعداد گزارش‌های فعال هر کاربر برای هر هدف را به یک مورد محدود کرد.
+- ساختار constraints و indexهای جدید با SQL فقط‌خواندنی تأیید شد.
+- در زمان بررسی، جدول گزارش‌ها خالی بود؛ بنابراین هنوز تست E2E ارسال و بررسی گزارش با دو حساب واقعی انجام نشده است.
+- Web CI و Security checks برای آخرین تغییر رابط گزارش در Commit `1afff7979e2b3ac998731c3fa987205ce95ffaec` موفق شدند؛ انتشار Vercel این مرحله پس از ثبت مستندات باید تأیید شود.
