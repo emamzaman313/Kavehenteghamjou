@@ -379,3 +379,36 @@ fun SocialFeedScreen(
         }
     }
 }
+
+
+@Composable
+fun PublishHubScreen(
+    supabase: SupabaseClient,
+    userId: String,
+    onPublished: () -> Unit
+) {
+    var fileMode by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { fileMode = false }) {
+                Text(if (fileMode) "انتشار پست" else "✦ انتشار پست")
+            }
+            TextButton(onClick = { fileMode = true }) {
+                Text(if (fileMode) "✦ اشتراک فایل" else "اشتراک فایل")
+            }
+        }
+        if (fileMode) {
+            FileUploadScreen(userId = userId)
+        } else {
+            SocialFeedScreen(
+                supabase = supabase,
+                userId = userId,
+                composerOnly = true,
+                onPublished = onPublished
+            )
+        }
+    }
+}
