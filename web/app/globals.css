@@ -413,3 +413,15 @@ a { color:inherit; }
   .admin-role-management .button { flex:1; justify-content:center; }
   .admin-role-select { flex:1; }
 }
+
+
+.admin-report-row { display:grid; gap:8px; padding:13px 0; border-top:1px solid var(--line); min-width:0; }
+.admin-report-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.admin-report-heading b { font-size:11px; }
+.admin-report-row>small { color:var(--muted); font-size:9px; overflow-wrap:anywhere; }
+.admin-report-details { margin:0; padding:9px 11px; border-radius:10px; background:var(--surface-soft); color:var(--text); font-size:10px; line-height:1.8; overflow-wrap:anywhere; }
+.admin-report-status { flex:none; padding:4px 8px; border-radius:999px; background:var(--surface-soft); color:var(--muted); font-size:9px; }
+.admin-report-status.status-resolved { color:var(--success); }
+.admin-report-status.status-rejected { color:var(--danger); }
+.admin-report-actions { display:flex; flex-wrap:wrap; gap:7px; }
+.admin-report-actions .button { min-height:33px; font-size:10px; }
