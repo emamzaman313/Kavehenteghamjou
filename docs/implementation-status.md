@@ -42,11 +42,11 @@
 ## Build و آزمون — GitHub Actions
 
 - Web CI در Run شماره `44315394232` روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` موفق شد: نصب وابستگی‌های قفل‌شده، TypeScript، ESLint، Vitest، Next.js Production Build و Upload Artifact همگی موفق‌اند.
-- Android CI در Run شماره `44316617068` روی commit `8278aaf748a2c96d8576a0529de088c5fe24a209` موفق شد: JDK 21، Android SDK 36، Gradle 9.5.0، Unit Tests، Assemble Debug APK، Bundle Debug AAB و Upload Artifact همگی موفق‌اند.
-- Security checks در Run شماره `44316617112` موفق شد. در اجرای جدیدتر، Secret scanning نیز موفق بوده؛ Dependency audit هنوز در حال اجراست.
-- APK و AAB واقعی از Artifact شماره `14432552632` استخراج و صحت ZIP/نوع فایل بررسی شد. SHA-256 فایل APK: `f5f9bc57e7504031db32623d1ee497465753682527d116728f7a133b40816bc1`.
+- Android CI جدیدتر در Run شماره `44317068603` روی commit `b40007478fb6e405d9421bbba74d38e31fde7b01` موفق شد: JDK 21، Android SDK 36، Gradle 9.5.0، Unit Tests، Assemble Debug APK، Bundle Debug AAB و Upload Artifact همگی موفق‌اند.
+- Security checks در Run شماره `44317161759` روی commit `735c6d2e58dfc228931be2065197acc8f898a1ed` موفق شد؛ Gitleaks و Dependency audit هر دو موفق‌اند. اجرای commit مستندسازی بعدی نیز در حال بررسی است.
+- APK و AAB واقعی از Artifact شماره `14433695793` استخراج و صحت ZIP/نوع فایل بررسی شد. SHA-256 فایل APK: `0662a6fc5b9e912f627b60dad41299b17312d0e74446633b7fdbdb7f82c100f7`.
 - Web build از Artifact شماره `14432456595` استخراج و ZIP آن بدون خطا بررسی شد.
-- اجرای جدیدتر Android روی commit `b40007478fb6e405d9421bbba74d38e31fde7b01` پس از موفقیت Unit Tests، در زمان ثبت این گزارش در مرحله Assemble بود؛ این اجرا جایگزین موفقیت Build قبلی اعلام نشده است.
+- هشدار واقعی CI: متغیر Repository با نام `GOOGLE_WEB_CLIENT_ID` تنظیم نشده است؛ بنابراین Google Sign-in در APK ساخته‌شده پیکربندی نشده و ورود Google در این خروجی قابل تأیید نیست. این مقدار باید از Web OAuth Client ID معتبر Google Cloud در GitHub Actions → Variables اضافه شود؛ Client Secret نباید در APK یا GitHub Variables قرار گیرد.
 - تست واقعی OAuth با Provider فعال، Realtime بین دو حساب مستقل، RLS با JWTهای مستقل، upload/download end-to-end در دو کلاینت و تست روی دستگاه فیزیکی هنوز انجام نشده‌اند.
 
 ## اندروید
@@ -67,7 +67,7 @@
 - مخزن اصلی فعال: `https://github.com/emamzaman313/Kavehenteghamjou`؛ شاخه `main`.
 - آخرین commit مشاهده‌شده هنگام این گزارش: `735c6d2e58dfc228931be2065197acc8f898a1ed`.
 - Commitهای جدید شامل صفحه‌بندی چت Android، پیوست و دانلود امن، بارگذاری پیوست‌های پیام‌های قدیمی، اصلاح decode پاسخ PostgREST و مستندسازی وضعیت Realtime هستند.
-- Web Production deployment در Vercel با وضعیت READY روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` وجود دارد: `https://kaveh-avenger.vercel.app`. هنوز تأیید نشده که deployment روی آخرین commit فعلی main قرار دارد.
+- Web Production deployment قبلی در Vercel با وضعیت READY روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` وجود دارد: `https://kaveh-avenger.vercel.app`. Deployment جدید روی commit `a2680356f316dbbf588c35c20d626ef5498601f6` ایجاد شده و در زمان ثبت این گزارش هنوز BUILDING است.
 - تلاش برای اتصال مجدد GitHub integration از طریق Vercel با خطای نیاز به نصب GitHub Integration مواجه شد؛ ایجاد پروژه جدید انجام نشد و پروژه موجود حذف یا جایگزین نشد.
 - CI و Artifactها:
   - Web: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44315394232`
