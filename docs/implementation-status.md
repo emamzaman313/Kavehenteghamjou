@@ -14,7 +14,9 @@
 - Realtime publication شامل `conversation_members`, `messages`, `notifications`, `posts` است.
 - RPC `public.create_direct_conversation(p_other_user_id uuid)` موجود و SECURITY INVOKER است؛ منطق داخلی در schema خصوصی است.
 - Security Advisor: `lints=[]`.
-- Performance Advisor: چند unused-index INFO و یک WARN به‌علت دو SELECT policy مجازکننده در `file_assets` (مالک و فایل اشتراکی). این هشدار مستند شده و بدون تست دسترسی دوکاربره دستکاری نشد.
+- Health Advisor: بدون finding.
+- دسترسی مستقیم table/column برای نقش `anon`: صفر.
+- Performance Advisor: ۳۳ unused-index INFO و یک WARN به‌علت دو SELECT policy مجازکننده در `file_assets` (مالک و فایل اشتراکی). هیچ policy یا index بدون بررسی حذف نشد.
 
 ## وضعیت Migrationها
 
@@ -44,15 +46,15 @@
 - Web CI در Run شماره `44315394232` روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` موفق شد: نصب وابستگی‌های قفل‌شده، TypeScript، ESLint، Vitest، Next.js Production Build و Upload Artifact همگی موفق‌اند.
 - Android CI جدیدتر در Run شماره `44317068603` روی commit `b40007478fb6e405d9421bbba74d38e31fde7b01` موفق شد: JDK 21، Android SDK 36، Gradle 9.5.0، Unit Tests، Assemble Debug APK، Bundle Debug AAB و Upload Artifact همگی موفق‌اند.
 - Security checks در Run شماره `44317161759` روی commit `735c6d2e58dfc228931be2065197acc8f898a1ed` موفق شد؛ Gitleaks و Dependency audit هر دو موفق‌اند. اجرای commit مستندسازی بعدی در حال اجراست.
-- APK و AAB واقعی از Artifact شماره `14433695793` استخراج و صحت ZIP/نوع فایل بررسی شد. SHA-256 فایل APK: `0662a6fc5b9e912f627b60dad41299b17312d0e74446633b7fdbdb7f82c100f7`.
+- APK و AAB واقعی از Artifact شماره `14433695793` استخراج و صحت هر دو آرشیو با `unzip -t` تأیید شد. اندازه APK برابر 25,546,890 بایت و AAB برابر 21,944,314 بایت است. SHA-256 APK: `0662a6fc5b9e912f627b60dad41299b17312d0e74446633b7fdbdb7f82c100f7`؛ SHA-256 AAB: `a262c4d9c25c6dd66790df8a67e739a335416f2e915d8b542d43681003f0c838`.
 - Web build از Artifact شماره `14432456595` استخراج و ZIP آن بدون خطا بررسی شد.
 - هشدار واقعی CI: متغیر Repository با نام `GOOGLE_WEB_CLIENT_ID` تنظیم نشده است؛ بنابراین Google Sign-in در APK ساخته‌شده پیکربندی نشده و ورود Google در این خروجی قابل تأیید نیست. این مقدار باید از Web OAuth Client ID معتبر Google Cloud در GitHub Actions → Variables اضافه شود؛ Client Secret نباید در APK یا GitHub Variables قرار گیرد.
 - تست واقعی OAuth با Provider فعال، Realtime بین دو حساب مستقل، RLS با JWTهای مستقل، upload/download end-to-end در دو کلاینت و تست روی دستگاه فیزیکی هنوز انجام نشده‌اند.
 
 ## اندروید
 
-- نسخه Kotlin/Jetpack Compose حفظ شده و چت به Supabase متصل است: فهرست گفتگوها، تاریخچه پیام، ارسال پیام، Realtime، read cursor و صفحه‌بندی پیام‌های قدیمی.
-- پیوست فایل خصوصی و دریافت امن از Storage به مسیر چت اضافه شده است؛ decode پاسخ insert نیز با آرایه PostgREST سازگار شده است.
+- نسخه Kotlin/Jetpack Compose حفظ شده و چت به Supabase متصل است: جست‌وجوی مخاطب و شروع گفتگوی خصوصی با RPC، ارسال/دریافت پیام، Realtime، read cursor و صفحه‌بندی پیام‌های قدیمی.
+- پیوست فایل خصوصی با سقف ۵۰٬۰۰۰٬۰۰۰ بایت، SHA-256، metadata و دانلود احراز هویت‌شده از Storage اضافه شده است؛ پیوست‌های پیام‌های قدیمی نیز در صفحه‌بندی بازیابی می‌شوند.
 - Unit Tests و ساخت Debug APK/AAB در CI موفق شده‌اند. فایل APK خروجی CI قابل نصب به‌عنوان Debug build است؛ روی دستگاه فیزیکی هنوز تست نشده است.
 - Gradle Wrapper رسمی در Workflow تولید و در شاخه main ذخیره شده است. نسخه‌های Build تأییدشده: JDK 21، Gradle 9.5.0، Android SDK 36.
 - آپلود فعلی Android هنوز فایل را در حافظه ByteArray نگه می‌دارد؛ برای فایل‌های بزرگ، streaming/resumable و progress بایت‌به‌بایت باقی است.
@@ -65,12 +67,12 @@
 ## GitHub و استقرار
 
 - مخزن اصلی فعال: `https://github.com/emamzaman313/Kavehenteghamjou`؛ شاخه `main`.
-- آخرین commit مشاهده‌شده هنگام این گزارش: `f599bb22386906099a0127fd6f88a2c6a98e54d2`.
+- آخرین commit مشاهده‌شده هنگام این گزارش: `9a8b33d02405529b98aef69e7f38d7e700d98752`.
 - Commitهای جدید شامل صفحه‌بندی چت Android، پیوست و دانلود امن، بارگذاری پیوست‌های پیام‌های قدیمی، اصلاح decode پاسخ PostgREST و مستندسازی وضعیت Realtime هستند.
-- Web Production deployment قبلی در Vercel با وضعیت READY روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` وجود دارد: `https://kaveh-avenger.vercel.app`. Deployment جدید روی commit `a2680356f316dbbf588c35c20d626ef5498601f6` ایجاد شده و وضعیت آن باید پس از تکمیل build دوباره تأیید شود.
+- Web Production deployment روی commit `3e957a99264e12eec162ad94bee65f8bfc5bf428` با وضعیت READY و alias اصلی `https://kaveh-avenger.vercel.app` تأیید شده است. Deployment جدید از commit مستندسازی `a2680356f316dbbf588c35c20d626ef5498601f6` با شناسه `dpl_AdZiceKfkwN81B5k22shrYfeD4Ho` در حال BUILDING است؛ تا READY شدن آن، deployment قبلی همچنان نسخه تأییدشده است.
 - تلاش برای اتصال مجدد GitHub integration از طریق Vercel با خطای نیاز به نصب GitHub Integration مواجه شد؛ ایجاد پروژه جدید انجام نشد و پروژه موجود حذف یا جایگزین نشد.
 - CI و Artifactها:
   - Web: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44315394232`
   - Android: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44316617068`
-  - Security: `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44316617112`
+  - Security (آخرین اجرای در حال انجام): `https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44317782721`
 - گزارش آزمون جزئی در `docs/test-report-stage-2.md` ثبت شده است.
