@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: web-ci-${{ github.ref }}
@@ -36,10 +36,25 @@ jobs:
         with:
           node-version: "22.16.0"
 
+      - name: Upgrade npm to a resolver version compatible with the lockfile graph
+        run: |
+          npm install --global npm@11.21.2
+          npm --version
+
       - name: Generate lockfile when repository has no lockfile yet
         run: |
           if [ ! -f package-lock.json ]; then
             npm install --ignore-scripts --no-audit --no-fund
+          fi
+
+      - name: Commit generated npm lockfile
+        run: |
+          if [ -f package-lock.json ] && [ -n "$(git -C .. status --short -- web/package-lock.json)" ]; then
+            git -C .. config user.name "github-actions[bot]"
+            git -C .. config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C .. add web/package-lock.json
+            git -C .. commit -m "chore(web): add npm package lock"
+            git -C .. push
           fi
 
       - name: Install locked dependencies
