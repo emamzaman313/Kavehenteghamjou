@@ -54,7 +54,7 @@ private fun KavehRoot() {
                     if (provider == "email" && !isGuest && !passwordReady) {
                         EmailOtpScreen(
                             authRepository = authRepository,
-                            initialEmail = user.email.orEmpty(),
+                            initialEmail = user?.email.orEmpty(),
                             passwordSetupRequired = true
                         )
                     } else {
