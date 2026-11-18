@@ -103,7 +103,13 @@ export default function KavehApp() {
   }, [supabase, session?.user.id]);
 
   if (!authReady) return <div className="boot-screen"><BrandMark/><span className="spinner"/><p>کاوه در حال آماده‌سازی است…</p></div>;
-  if (!session) return <LoginScreen supabase={supabase} configured={configured}/>;
+  const needsEmailPasswordSetup = Boolean(
+    session?.user.email &&
+    session.user.app_metadata?.provider === 'email' &&
+    session.user.user_metadata?.access_method !== 'shared_code' &&
+    session.user.user_metadata?.account_password_ready !== true
+  );
+  if (!session || needsEmailPasswordSetup) return <LoginScreen supabase={supabase} configured={configured}/>;
   if (!supabase) return null;
 
   return <div className={`app-frame ${dark ? 'theme-dark' : 'theme-light'}`}>
