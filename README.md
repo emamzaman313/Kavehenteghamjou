@@ -41,3 +41,8 @@
 ## بازبینی مرحله دوم
 
 وضعیت واقعی دیتابیس و اختلاف Migrationهای Remote با فایل‌های محلی در `supabase/remote-state-snapshot.md` ثبت شده است. فایل Snapshot صرفاً مستند است و نباید اجرا شود. تست syntax فایل‌های TS/TSX انجام شده، اما به‌دلیل نبود دسترسی npm registry، dependency install و production build هنوز انجام نشده است.
+
+
+## تکمیل ممیزی زنده — ۱۸ نوامبر ۲۰۲۶
+
+Supabase Project Ref و URL Production در Vercel با هم تطبیق داده شدند. Auth settings زنده external.google=false است؛ بنابراین Google Sign-in تا فعال‌سازی Provider در Supabase قابل استفاده نیست. روی شاخه اصلاح PKCE، TypeScript، Build، ۱۰ تست Vitest و Production dependency audit موفق شدند؛ ESLint صفر خطا و ۹ هشدار دارد. در کل dependency graph توسعه ۱۶ هشدار High باقی است. Android Release امضاشده و آزمون روی گوشی فیزیکی هنوز انجام نشده‌اند.
