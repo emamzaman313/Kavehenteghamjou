@@ -307,7 +307,7 @@ fun ProfileScreen(supabase: SupabaseClient, userId: String) {
         try {
             supabase.postgrest.from("profiles").update({
                 set("display_name", name)
-                set("username", handle.ifBlank { null })
+                set("username", handle.takeIf { it.isNotBlank() })
                 set("bio", about)
                 set("profile_visibility", visibility)
             }) {
@@ -355,7 +355,7 @@ fun ProfileScreen(supabase: SupabaseClient, userId: String) {
                 )
                 OutlinedTextField(
                     value = username,
-                    onValueChange = { value -> username = value.filter { it.isLetterOrDigit() || it == '_' }.take(30) },
+                    onValueChange = { value -> username = value.filter { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '_' }.take(30) },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("نام کاربری") },
                     placeholder = { Text("kaveh_user") },
