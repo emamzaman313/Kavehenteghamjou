@@ -25,6 +25,8 @@ The following versions were read from the live Supabase migration ledger. Filena
 | `20261118212800` | `kaveh_admin_rbac_roles` | Included (`20261118212800_kaveh_admin_rbac_roles.sql`) |
 | `20261118213526` | `kaveh_user_moderation_audit` | Included (`20261118213526_kaveh_user_moderation_audit.sql`) |
 | `20261118214059` | `kaveh_admin_role_management` | Included (`20261118214059_kaveh_admin_role_management.sql`) |
+| `20261118214403` | `kaveh_admin_report_review` | Included (`20261118214403_kaveh_admin_report_review.sql`) |
+| `20261118214550` | `kaveh_report_submission_hardening` | Included (`20261118214550_kaveh_report_submission_hardening.sql`) |
 
 **Important:** the live migration ledger is authoritative. The first four original SQL bodies have not yet been exported into this repository. An early local SQL draft is archived at `supabase/archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` and is explicitly non-deployable because it predates the final RLS and privilege fixes.
 
@@ -62,3 +64,10 @@ A ban prevents new sign-ins and refreshes while active. An already-issued access
 ## Owner-managed administrator roles
 
 Migration `20261118214059_kaveh_admin_role_management` extends the audit action constraint for `set_admin_role` and `remove_admin_role`. Only an existing `owner` can assign `admin`, `moderator`, or `support` roles to existing Auth users or revoke those roles. The `owner` role itself cannot be assigned, changed, or removed through this endpoint, and the acting owner cannot change their own role. All role changes are audited and send an in-app notification to the affected user. The web panel exposes these controls only when the server confirms `can_manage_admins=true`.
+
+
+## User-submitted reports and moderation queue
+
+Migration `20261118214403_kaveh_admin_report_review` expands privileged audit events for report review and permits `target_type='report'`. The `admin-console` Edge Function lists the 100 latest reports for owner/admin/moderator and allows transitions to `reviewing`, `resolved`, or `rejected`. Final decisions create an in-app notification for the reporter and every status change is audited.
+
+Migration `20261118214550_kaveh_report_submission_hardening` enforces report reason length (3–120 characters), optional details length (maximum 500), and one active report per reporter/target pair. The feed UI lets authenticated users report posts; RLS continues to restrict direct report reads to the reporter and inserts to rows whose `reporter_id` matches `auth.uid()`. Administrative reads and updates are performed only by the service-role Edge Function.
