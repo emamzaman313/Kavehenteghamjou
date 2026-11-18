@@ -432,6 +432,33 @@ fun ChatScreen(
 
     LaunchedEffect(userId) {
         loadConversations()
+        // Keep the inbox and unread counters current for conversations that
+        // are not currently open, without subscribing to a single chat only.
+        val listChannel = supabase.channel("android-chat-list-$userId")
+        val messageChanges = listChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "messages"
+        }
+        val memberChanges = listChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "conversation_members"
+        }
+        val messageCollector = launch {
+            messageChanges.collect { loadConversations() }
+        }
+        val memberCollector = launch {
+            memberChanges.collect { loadConversations() }
+        }
+        try {
+            listChannel.subscribe(blockUntilSubscribed = true)
+            awaitCancellation()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (exception: Exception) {
+            errorText = exception.message ?: "به‌روزرسانی فهرست گفتگوها ناموفق بود."
+        } finally {
+            messageCollector.cancel()
+            memberCollector.cancel()
+            supabase.realtime.removeChannel(listChannel)
+        }
     }
 
     LaunchedEffect(activeConversation?.id) {

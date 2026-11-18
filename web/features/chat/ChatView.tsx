@@ -84,6 +84,16 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   }, [supabase, userId, notify]);
   useEffect(() => { void loadConversations(); }, [loadConversations]);
 
+  // Keep the inbox preview and unread counts fresh even when a different
+  // conversation receives a message while it is not the active chat.
+  useEffect(() => {
+    const channel = supabase.channel(`chat-list:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => { void loadConversations(); })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members' }, () => { void loadConversations(); })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [supabase, userId, loadConversations]);
+
   const loadMessages = useCallback(async (conversationId: string) => {
     const { data, error } = await supabase.from('messages').select('*').eq('conversation_id', conversationId).is('deleted_at', null).order('created_at', { ascending: false }).limit(100);
     if (error) notify(`دریافت پیام‌ها ناموفق بود: ${error.message}`, 'error');
