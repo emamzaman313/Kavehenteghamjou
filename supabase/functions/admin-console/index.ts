@@ -115,8 +115,20 @@ Deno.serve(async (request: Request) => {
     if (body.action === "warn_user") {
       const audit = await beginAudit("warn_user", body.userId, { reason }, "user");
       if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+      const { error: notificationError } = await admin.from("notifications").insert({
+        recipient_id: body.userId,
+        actor_id: authData.user.id,
+        kind: "admin_warning",
+        entity_type: "moderation",
+        entity_id: audit.id,
+        payload: { message: `اخطار مدیریتی: ${reason}`, moderation_action: "warning" },
+      });
+      if (notificationError) {
+        await finishAudit(audit.id, "failed");
+        return respond({ ok: false, reason: "warning_delivery_failed" }, 500, origin);
+      }
       const auditRecorded = await finishAudit(audit.id, "succeeded");
-      return respond({ ok: true, auditRecorded }, 200, origin);
+      return respond({ ok: true, auditRecorded, notificationSent: true }, 200, origin);
     }
 
     if (body.action === "ban_user") {
@@ -130,8 +142,16 @@ Deno.serve(async (request: Request) => {
         await finishAudit(audit.id, "failed");
         return respond({ ok: false, reason: "ban_failed" }, 500, origin);
       }
+      const { error: notificationError } = await admin.from("notifications").insert({
+        recipient_id: body.userId,
+        actor_id: authData.user.id,
+        kind: "admin_ban",
+        entity_type: "moderation",
+        entity_id: audit.id,
+        payload: { message: `دسترسی ورود به حساب شما به دلیل زیر محدود شد: ${reason}`, moderation_action: "ban", banned_until: updatedUser.user.banned_until ?? null },
+      });
       const auditRecorded = await finishAudit(audit.id, "succeeded");
-      return respond({ ok: true, auditRecorded, banned_until: updatedUser.user.banned_until ?? null }, 200, origin);
+      return respond({ ok: true, auditRecorded, notificationSent: !notificationError, banned_until: updatedUser.user.banned_until ?? null }, 200, origin);
     }
 
     const audit = await beginAudit("unban_user", body.userId, { reason }, "user");
@@ -141,8 +161,16 @@ Deno.serve(async (request: Request) => {
       await finishAudit(audit.id, "failed");
       return respond({ ok: false, reason: "unban_failed" }, 500, origin);
     }
+    const { error: notificationError } = await admin.from("notifications").insert({
+      recipient_id: body.userId,
+      actor_id: authData.user.id,
+      kind: "admin_unban",
+      entity_type: "moderation",
+      entity_id: audit.id,
+      payload: { message: `محدودیت ورود حساب شما برداشته شد. دلیل ثبت‌شده: ${reason}`, moderation_action: "unban" },
+    });
     const auditRecorded = await finishAudit(audit.id, "succeeded");
-    return respond({ ok: true, auditRecorded, banned_until: updatedUser.user.banned_until ?? null }, 200, origin);
+    return respond({ ok: true, auditRecorded, notificationSent: !notificationError, banned_until: updatedUser.user.banned_until ?? null }, 200, origin);
   }
 
   if (body.action === "overview") {
