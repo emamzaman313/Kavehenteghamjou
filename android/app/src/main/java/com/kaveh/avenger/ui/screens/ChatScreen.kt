@@ -342,6 +342,21 @@ fun ChatScreen(
             val existingIds = messages.map { it.id }.toSet()
             val uniqueOlder = older.filterNot { it.id in existingIds }
             messages.addAll(0, uniqueOlder)
+            if (uniqueOlder.isNotEmpty()) {
+                val attachmentRows = supabase.postgrest["message_attachments"].select {
+                    filter { isIn("message_id", uniqueOlder.map { it.id }) }
+                }.decodeList<MessageAttachmentRow>()
+                val fileIds = attachmentRows.map { it.fileAssetId }.distinct()
+                if (fileIds.isNotEmpty()) {
+                    val fileRows = supabase.postgrest["file_assets"].select {
+                        filter { isIn("id", fileIds) }
+                    }.decodeList<FileAssetRow>()
+                    val filesById = fileRows.associateBy { it.id }
+                    attachmentRows.groupBy { it.messageId }.forEach { (messageId, rows) ->
+                        attachmentsByMessage[messageId] = rows.mapNotNull { filesById[it.fileAssetId] }
+                    }
+                }
+            }
             hasOlderMessages = older.size == 100
         } catch (exception: Exception) {
             errorText = exception.message ?: "بارگذاری پیام‌های قدیمی ناموفق بود."
@@ -607,7 +622,7 @@ fun ChatScreen(
                     color = MaterialTheme.colorScheme.surface
                 ) {
                     Text(
-                        "هنوز گفتگویی وجود ندارد. پس از شروع یک گفتگوی خصوصی در نسخه وب، اینجا نیز نمایش داده می‌شود.",
+                        "هنوز گفتگویی وجود ندارد. برای شروع، دکمه + را بزن و مخاطب را جست‌وجو کن.",
                         modifier = Modifier.padding(18.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
