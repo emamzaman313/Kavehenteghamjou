@@ -1,35 +1,37 @@
 # وضعیت واقعی پیاده‌سازی و آزمون کاوه انتقامجو
 
-آخرین بازبینی: ۱۸ نوامبر ۲۰۲۶
+آخرین بازبینی: ۱۸ نوامبر ۲۰۲۶ (UTC)
+آخرین Commit کد بررسی‌شده در `main`: `d204f71253c129770dc69436a4373ffd7e46c05c`
 
-این گزارش بین «کد موجود»، «Build موفق» و «آزمایش end-to-end با کاربران واقعی» تفاوت می‌گذارد. Build موفق به‌تنهایی اثبات‌کننده کارکرد چندکاربره نیست.
+این سند بین کد، تست خودکار، Build، تست End-to-End و آماده‌بودن Release تفاوت می‌گذارد. موفقیت Build اثبات ورود OAuth واقعی، تست دستگاه یا رفتار دوحسابی نیست.
 
-## GitHub
+## مخزن و Commitهای این مأموریت
 
-- مخزن اصلی: https://github.com/emamzaman313/Kavehenteghamjou
-- شاخه فعال: `main`
-- آخرین Commit کد: `a3983ef065511b9c260352e3d14aa8b8e05ac68d` — پیش‌نمایش آخرین پیام و شمارنده خوانده‌نشده در فهرست چت Android.
-- شاخه قدیمی `feature/phase-1-foundation` در مخزن جدید وجود ندارد.
-- ZIP انتقالی فاقد پوشه `.git` بود و Commitهای قدیمی اعلام‌شده از API مخزن جدید قابل بازیابی نبودند؛ بنابراین تاریخچه Git قدیمی به این مخزن منتقل‌شده محسوب نمی‌شود.
-- سورس Android، Web، Supabase، Migrationهای قابل دسترس، Workflowها و مستندات در مخزن ثبت شده‌اند.
-- Gradle Wrapper رسمی در مخزن موجود است.
+- مخزن رسمی: https://github.com/emamzaman313/Kavehenteghamjou
+- شاخه: `main`
+- Commit اولیه هنگام شروع ممیزی: `60f46da6cad606430e8b306ce971423aa5caea27`
+- Commit آخر کد: `d204f71253c129770dc69436a4373ffd7e46c05c`
+- تغییرات Web: `34e8719`، `071b81f`، `bd98678`، `489fb96` و تست‌های `a9e9e23`.
+- تغییرات Android auth: `bd08a219`، `19a99c7` و `d204f712`.
 
-## Supabase زنده
+## Supabase زنده — فقط Read-only
 
-- پروژه: `kaveh-avenger` — Project ref: `slwzjufipavuwcbwoyro`
+- پروژه: `kaveh-avenger`
+- Project Ref: `slwzjufipavuwcbwoyro`
+- URL: `https://slwzjufipavuwcbwoyro.supabase.co`
 - وضعیت: `ACTIVE_HEALTHY`، region: `ap-northeast-1`، PostgreSQL 17.12.
-- ۲۶ جدول عمومی؛ هر ۲۶ جدول دارای RLS فعال.
-- ۶۸ Policy عمومی؛ دسترسی مستقیم table/column برای نقش `anon`: صفر.
-- تعداد Auth users، profiles، posts، messages، file assets و Storage objects در آخرین بازبینی: صفر.
-- Bucket `user-files` خصوصی و سقف واقعی آن دقیقاً `50,000,000` بایت است.
+- جدول‌های public: ۲۶؛ RLS فعال: ۲۶ از ۲۶.
+- Policyهای public: ۶۸.
+- تعداد `auth.users`: صفر؛ `public.profiles`: صفر؛ posts/messages/file_assets/storage objects در ممیزی قبلی نیز صفر.
+- Bucket `user-files` خصوصی؛ حداکثر اندازه: `50,000,000` بایت.
 - Realtime publication شامل `conversation_members`، `messages`، `notifications` و `posts` است.
-- RPC `public.create_direct_conversation(p_other_user_id uuid)` موجود است؛ wrapper از نوع SECURITY INVOKER است و منطق privileged در schema خصوصی قرار دارد.
-- Security Advisor و Health Advisor بدون finding بودند.
-- Performance Advisor: ۳۳ پیام INFO برای ایندکس‌های استفاده‌نشده و یک هشدار چند SELECT policy روی `file_assets`. هیچ Policy یا Index بدون تحلیل و تست حذف نشده است.
+- RPC `public.create_direct_conversation(p_other_user_id uuid)` موجود و wrapper آن SECURITY INVOKER است.
+- Security Advisor: بدون finding؛ Performance Advisor: ۳۳ مورد INFO ایندکس‌های استفاده‌نشده و یک هشدار چند SELECT policy روی `file_assets`.
+- هیچ داده، Policy، جدول یا Migration در این مأموریت تغییر نکرد.
 
-## Migrationها
+## Remote Migration Ledger
 
-Remote migration ledger ده نسخه دارد:
+ده Migration موجود در Remote Ledger:
 
 1. `20261118082218` — `kaveh_foundation_schema`
 2. `20261118082313` — `kaveh_message_edit_permissions`
@@ -42,96 +44,99 @@ Remote migration ledger ده نسخه دارد:
 9. `20261118124842` — `kaveh_conversation_last_message_at_trigger`
 10. `20261118131339` — `kaveh_realtime_conversation_read_receipts`
 
-چهار Migration ابتدایی هنوز فایل اجرایی اصلی‌شان در مخزن بازیابی نشده‌اند. شش Migration بعدی در `supabase/migrations/` وجود دارند. فایل `archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` یک draft قدیمی و غیرقابل اجراست؛ آن را روی پروژه زنده اجرا نکنید. `remote-state-snapshot.md` Snapshot مستنداتی است، نه Migration یا Backup قابل replay.
+چهار Migration اول در تاریخچه محلی به‌طور کامل بازیابی نشده‌اند. شش فایل بعدی در `supabase/migrations/` وجود دارند. `archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` هرگز اجرا نشود. `remote-state-snapshot.md` سند توصیفی است، نه backup/migration قابل اجرا.
 
-در آخرین بازبینی read-only هیچ DDL یا داده‌ای تغییر داده نشد و Migrationهای ثبت‌شده دوباره اجرا نشدند.
+## Web
 
-## سیستم چت
+### پیاده‌سازی و تست خودکار
 
-### Web — در سورس
+- OAuth + PKCE و session persistence در Supabase JS.
+- Login UI اکنون با try/catch/finally خطای returned/throw شده را مدیریت می‌کند؛ Provider disabled، شبکه و لغو ورود پیام امن فارسی دارند.
+- callback مسیر `/auth/callback` خطاهای query/hash را می‌خواند، authorization code را exchange می‌کند و در خطا امکان بازگشت/تلاش دوباره دارد.
+- تست‌های جدید: `web/tests/auth-errors.test.ts`، شامل Provider disabled، network، منع افشای payload و callback error.
+- Web CI run: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44325901682
+- Commit تست‌شده: `a9e9e23e8f2a71c04d8da1884eab26c70238c3a9`.
+- نتیجه: TypeScript موفق، ESLint صفر error و ۹ warning، ۱۰ تست از ۱۰ تست موفق، Next.js production build موفق.
+- صفحه‌های خانه، گفتگو، فایل، اکتشاف، پروفایل، اعلان و تنظیمات در سورس به Supabase متصل هستند؛ با صفر بودن userها، صحت E2E آن‌ها ثابت نشده است.
 
-- ساخت گفتگوی خصوصی با RPC موجود، فهرست گفتگوها و تاریخچه پیام.
-- ارسال/دریافت پیام و Supabase Realtime.
-- Read cursor و وضعیت خوانده‌شدن از `conversation_members.last_read_at`.
-- پیش‌نمایش آخرین پیام و unread count در فهرست گفتگوها.
-- Subscription جداگانه برای پیام‌ها و تغییرات اعضا تا inbox هنگام دریافت پیام در گفتگوی غیرفعال تازه شود.
-- صفحه‌بندی پیام‌های قدیمی و بارگذاری پیوست‌های همان پیام‌ها.
-- Storage خصوصی، metadata و دانلود امن.
+### Google Provider
 
-### Android — در سورس و Build موفق
+خطای کاربر `400 validation_failed / Unsupported provider: provider is not enabled` در لایه Auth رخ می‌دهد. این Commit پیام خطا را واضح می‌کند؛ آن را از بین نمی‌برد. مقدار Vercel Production برای `NEXT_PUBLIC_SUPABASE_URL` دقیقاً با URL پروژه Supabase برابر بود. Provider setting از ابزار متصل قابل مشاهده/تغییر نبود؛ باید در Supabase Dashboard، Google Provider و Web Client ID/Secret تأیید شوند.
 
-- جست‌وجوی مخاطب با نام/نام کاربری و شروع گفتگوی خصوصی با RPC.
-- ارسال/دریافت پیام و Realtime؛ Subscription جداگانه برای تازه‌سازی inbox حتی وقتی گفتگوی دیگری باز است.
-- پیش‌نمایش آخرین پیام و unread count؛ شمارنده Android تا ۱۰۰ پیام را می‌شمارد و برای مقدار ۱۰۰ یا بیشتر `99+` نشان می‌دهد.
-- Read cursor و صفحه‌بندی پیام‌های قدیمی.
-- پیوست فایل خصوصی، سقف ۵۰٬۰۰۰٬۰۰۰ بایت، SHA-256، ثبت metadata، دانلود احراز هویت‌شده و بازیابی پیوست‌های پیام‌های قدیمی.
-- آپلود/دانلود در رابط کاربری نشانگر فعالیت دارد؛ درصد پیشرفت بایت‌به‌بایت و Resumable Upload هنوز وجود ندارد.
+## Android
 
-### مواردی که هنوز کامل یا آزمایش نشده‌اند
+### پیاده‌سازی و تست
 
-- تبادل end-to-end بین دو حساب مستقل Web و Android.
-- تست RLS و Storage با JWT دو کاربر مستقل.
-- Google OAuth و session restore با Provider واقعی.
-- Delivered واقعی، typing، online presence، Reply، edit/delete از رابط هر دو نسخه و جست‌وجوی کامل پیام‌ها.
-- پیش‌نمایش تصویر/ویدئو، retry پایدار، upload resumable و progress بایت‌به‌بایت.
-- Push notifications، گروه/کانال، استوری، تماس صوتی/تصویری و پنل مدیریت.
+- Google Credential Manager، ID Token، raw nonce و hash آن در سورس موجود است.
+- Mapper پیام خطای Provider disabled، لغو و شبکه اضافه شده و ۴ تست Kotlin دارد.
+- تست nonce نیز دو تست دارد؛ Android Unit Test کل suite در CI موفق شد.
+- ChatScreen کد فهرست گفتگو، جست‌وجوی مخاطب، گفتگوی خصوصی، ارسال متن، Realtime، read cursor، صفحه‌بندی پیام قدیمی و پیوست دارد.
+- کد آپلود فایل خصوصی، metadata، SHA-256 و دانلود پیوست موجود است.
+- Explore/Profile در Android همچنان Placeholder است؛ تب Publish فعلاً به FileUploadScreen متصل است.
+- FileUploadRepository محتوا را به‌صورت ByteArray در حافظه Buffer می‌کند؛ WorkManager، streaming، resumable، cancel/retry و progress بایت‌به‌بایت تکمیل نشده‌اند.
 
-در آخرین بازبینی Supabase صفر کاربر Auth و صفر پروفایل داشت؛ بنابراین سناریوی دوکاربره واقعی هنوز اجرا نشده است.
+### Android CI و Artifact
 
-## CI و Build
+- Android CI: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44326092783
+- Commit: `d204f71253c129770dc69436a4373ffd7e46c05c`
+- JDK 21، Gradle 9.5.0 و SDK 36.
+- Unit tests موفق؛ `assembleDebug` و `bundleDebug` موفق؛ Artifact upload موفق.
+- Artifact ID: `14437042579`; ZIP SHA-256: `a8001601fb583268db63bded3a6f720708ae43d2f94e8d9d80173c76e29068f5`.
+- APK Debug: 25,546,890 بایت؛ SHA-256: `6706d41a34700ffba5f577cd88123545b7321c88eb0ef3c4502561980949c7ad`.
+- AAB Debug: 21,953,039 بایت؛ SHA-256: `d1572472bc758141b00eeaba9da7297db268b3810c5a03212fa8f4197fca3089`.
+- ZIP و هر دو فایل از نظر ساختار آرشیو سالم‌اند. خروجی‌ها Debug هستند؛ این بررسی معادل Release signing یا نصب روی گوشی فیزیکی نیست.
+- لاگ همین CI نشان می‌دهد `GOOGLE_WEB_CLIENT_ID` خالی است؛ برنامه به‌دلیل نبود Client ID ورود Google فعال ندارد.
 
-### Web
-- Web CI موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44320577871
-- Commit بررسی‌شده: `f9989232a076646e3528a99329d94902ff938d37`؛ شامل اسکریپت E2E و فرمان تست آن.
-- npm ci، TypeScript، ESLint، Vitest و Next.js Production Build موفق شدند.
-- Vitest: ۴ تست موفق؛ ESLint: صفر خطا و ۹ هشدار.
-- آخرین Vercel Production deployment: `dpl_A7bRxNEdXPfzdmk7iPo2F9sceKJg`، وضعیت READY، Commit: `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
-- دامنه اصلی https://kaveh-avenger.vercel.app و مسیر `/auth/callback` هر دو HTTP 200؛ manifest نیز HTTP 200 است.
+## Security CI
 
-### Android
-- Android CI موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44320228293
-- Commit بررسی‌شده: `4847386942727c373d4bf841240e40e3339c0f54`.
-- JDK 21، Gradle 9.5.0، Android SDK 36، دو Unit Test مربوط به nonce، `assembleDebug` و `bundleDebug` موفق.
-- Artifact واقعی: `14434103107`.
-- APK Debug: 25,546,890 بایت؛ SHA-256: `8e747548addafcff155a7ceeb8b53330b4d139b6c73258ed2659a29b2a847fdc`.
-- AAB Debug: 21,951,740 بایت؛ SHA-256: `d0a447e17322da5d898d15b748e665e4c6baacdcd02a8f45abb6a3ede90c2735`.
-- ZIP artifact سالم بود و APK به‌عنوان Android package شناسایی شد. این خروجی‌ها Debug هستند؛ Release signing انجام نشده و روی دستگاه فیزیکی تست نشده‌اند.
+- Run: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44326093245
+- Commit: `d204f71253c129770dc69436a4373ffd7e46c05c`
+- Secret scanning: موفق.
+- Web dependency audit: موفق.
+- Pull request dependency review: به‌دلیل اجرا نشدن روی Pull Request، skipped.
+- هشدار قبلی ۱۶ مورد High در dependency graph توسعه مربوط به زنجیره `picomatch` همچنان باید ریشه‌یابی شود؛ audit production موفق بودن آن را حذف نمی‌کند. Downgrade اجباری یا پنهان‌سازی هشدار انجام نشده است.
 
-### Security
-- آخرین Security checks موفق: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44321023690
-- Commit بررسی‌شده: `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
-- Gitleaks و audit وابستگی‌های production موفق‌اند؛ audit وابستگی‌های production هیچ آسیب‌پذیری گزارش نکرد.
-- در کل dependency graph توسعه ۱۶ هشدار High از زنجیره وابستگی `picomatch` گزارش شد؛ advisory فعلی هنوز نسخه اصلاح‌شده معرفی نکرده است. این هشدار را پنهان یا با downgrade اجباری حل‌شده اعلام نکنید.
-- هیچ secret واقعی در مخزن شناسایی نشد.
+## Vercel
 
-## Workflowهای پذیرش و انتشار افزوده‌شده
+- Project: `kaveh-avenger`; دامنه اصلی: https://kaveh-avenger.vercel.app
+- Vercel Production env `NEXT_PUBLIC_SUPABASE_URL` با `https://slwzjufipavuwcbwoyro.supabase.co` برابر بود؛ Publishable Key نیز تنظیم شده بود.
+- Deployment قبلی READY: `dpl_A7bRxNEdXPfzdmk7iPo2F9sceKJg`، Commit `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
+- Deployment جدید برای Commit `d204f712` با شناسه `dpl_5Z2f6VFMSYbcF5kfM9M9yaZiUZ9R` ایجاد شد. وضعیت در آخرین مشاهده: BUILDING؛ تا READY و بررسی alias، انتشار جدید قطعی نیست.
 
-- `.github/workflows/android-release.yml`: ساخت Release APK/AAB با keystore رمزگذاری‌شده در GitHub Secrets، بررسی امضا و SHA-256. این Workflow هنوز اجرا نشده؛ چهار Secret امضای Release و Repository Variable مربوط به Google Client ID لازم است.
-- `docs/android-release-signing.md`: راهنمای ساخت/نگهداری keystore و ثبت secrets.
-- `.github/workflows/chat-e2e.yml` و `web/scripts/e2e-chat.mjs`: آزمون دوحسابی واقعی ورود، RPC گفتگوی خصوصی، پیام، Realtime، read cursor، آپلود/دانلود فایل و رد دسترسی anonymous.
-- `docs/chat-e2e-setup.md`: راهنمای ساخت دو حساب آزمایشی و ثبت چهار GitHub Secrets. آزمون E2E هنوز اجرا نشده؛ حساب‌های Auth در Supabase صفر هستند.
-- این اسکریپت داده‌های آزمایشی را حذف نمی‌کند؛ باید فقط با دو حساب اختصاصی تست اجرا شود.
+## Google OAuth و Release gateها
 
-## Google OAuth
+- GitHub Repository Variable `GOOGLE_WEB_CLIENT_ID` در اجرای Android CI خالی بود.
+- Supabase Google Provider/Client Secret باید در Dashboard مالک تنظیم و پس از ذخیره با ورود واقعی آزمایش شود.
+- Callback Google Cloud: `https://slwzjufipavuwcbwoyro.supabase.co/auth/v1/callback`.
+- Redirect وب: `https://kaveh-avenger.vercel.app/auth/callback`.
+- چهار GitHub Secret امضا: `ANDROID_KEYSTORE_BASE64`، `ANDROID_KEYSTORE_PASSWORD`، `ANDROID_KEY_ALIAS` و `ANDROID_KEY_PASSWORD`.
+- چهار Secret حساب E2E: `KAVEH_E2E_USER_A_EMAIL`، `KAVEH_E2E_USER_A_PASSWORD`، `KAVEH_E2E_USER_B_EMAIL`، `KAVEH_E2E_USER_B_PASSWORD`.
+- نه Release signing، نه test واقعی Google OAuth، نه Chat E2E دوحسابی و نه تست دستگاه فیزیکی انجام نشده‌اند.
 
-- Repository Variable با نام دقیق `GOOGLE_WEB_CLIENT_ID` در GitHub Actions هنوز تنظیم نشده است؛ لاگ Android CI این مقدار را خالی نشان داد.
-- بنابراین Google Sign-in در APK ساخته‌شده پیکربندی نشده است؛ وجود کد Google Credential Manager به معنی آماده بودن ورود نیست.
-- وضعیت Google Provider در Supabase Dashboard هنوز از راه دور قابل تأیید نبود؛ باید Web Client ID و Web Client Secret در Provider ثبت شوند.
-- راهنمای `docs/google-auth-setup.md` اکنون URIهای دقیق را ثبت می‌کند: Google authorized redirect URI برابر `https://slwzjufipavuwcbwoyro.supabase.co/auth/v1/callback` و Supabase Redirect URL برابر `https://kaveh-avenger.vercel.app/auth/callback`.
-- Web Client Secret فقط باید در Supabase Dashboard بماند؛ آن را در چت، GitHub Variables یا APK قرار ندهید.
+## وضعیت هر قابلیت
 
-## برند
+| قابلیت | وضعیت |
+|---|---|
+| Backend schema/RLS/Storage | تست ممیزی read-only موفق |
+| Web OAuth error/callback handling | تست خودکار موفق؛ Provider واقعی تأیید نشده |
+| Web production build | CI موفق |
+| Android nonce/error handling | Unit Test موفق |
+| Android Debug APK/AAB | Build CI موفق |
+| Android Release | پیاده‌سازی workflow موجود؛ secrets و امضای واقعی باقی |
+| Android Explore/Profile/Publish social | ناقص/Placeholder |
+| Android large-file transfer | کد اولیه؛ stream/resumable و تست حجیم باقی |
+| دوحسابی Web/Android و RLS | E2E اجرا نشده |
+| Google OAuth واقعی | آماده تست نیست؛ Client ID/Provider config باقی |
+| گوشی فیزیکی | آزمایش نشده |
 
-فایل لوگوی اصلی در فایل‌های قابل دسترسی پیدا نشد؛ هیچ لوگوی ساختگی جایگزین آن نشده است. PWA کامل و قابل نصب نیز اعلام نمی‌شود.
+## گام‌های بعدی ضروری
 
-## کارهای بعدی با اولویت
+1. تنظیم Google Cloud Web و Android OAuth clients، فعال کردن Provider در Supabase، ثبت Google Web Client ID به‌عنوان GitHub Repository Variable و افزودن Web Client Secret فقط در Supabase.
+2. تأمین/انتخاب keystore دائمی مالک و ثبت چهار GitHub Release Secrets؛ سپس اجرای Android Release Workflow.
+3. ساخت دو حساب اختصاصی تست و افزودن چهار GitHub E2E Secrets؛ سپس اجرای Chat E2E.
+4. تست نصب Release روی گوشی واقعی، ورود Google، حفظ Session، Realtime و فایل.
+5. پیاده‌سازی Explore/Profile/Publish اجتماعی بومی، سپس streaming upload و WorkManager.
+6. تکمیل typing/presence/reply/edit/delete/search و Push.
+7. آزمون محدودیت‌های فایل و RLS با حساب مجاز و غیرمجاز.
 
-1. ایجاد یا انتخاب keystore دائمی Release و ثبت چهار Secret: `ANDROID_KEYSTORE_BASE64`، `ANDROID_KEYSTORE_PASSWORD`، `ANDROID_KEY_ALIAS`، `ANDROID_KEY_PASSWORD`.
-2. ساخت Web OAuth Client در Google Cloud، تنظیم Supabase Google Provider، ثبت `GOOGLE_WEB_CLIENT_ID` به‌عنوان GitHub Repository Variable و ثبت SHA-1 گواهی Release در Android OAuth Client.
-3. ساخت دو حساب اختصاصی آزمایش با ایمیل تأییدشده و ثبت Secrets: `KAVEH_E2E_USER_A_EMAIL`، `KAVEH_E2E_USER_A_PASSWORD`، `KAVEH_E2E_USER_B_EMAIL`، `KAVEH_E2E_USER_B_PASSWORD`؛ سپس اجرای Workflow با نام Chat E2E.
-4. اجرای Android Release Workflow، بررسی APK/AAB امضاشده و آزمایش روی دستگاه فیزیکی.
-5. آزمون واقعی Google OAuth و session restore در Web و Android؛ آزمون دسترسی فایل برای عضو گفتگو و کاربر غیرعضو.
-6. تکمیل Delivered/typing/online، Reply/edit/delete، جست‌وجوی پیام، پیش‌نمایش رسانه، retry و resumable upload.
-7. بازیابی تاریخچه قدیمی Git فقط در صورت دسترسی به clone اصلی یا Git bundle دارای `.git`.
-
-هیچ داده‌ای در Supabase حذف یا تغییر داده نشده و Migration جدیدی روی پروژه زنده اجرا نشده است.
+هیچ داده‌ای از Supabase حذف نشده، هیچ migration اجراشده‌ای دوباره اجرا نشده و هیچ secret در مخزن قرار داده نشده است.

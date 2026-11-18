@@ -1,39 +1,53 @@
 # نسخه وب کاوه انتقامجو
 
-## ساختار
+## معماری و اتصال
 
-`web/` یک Next.js App Router مستقل با TypeScript و React است. لایه داده از Supabase JS استفاده می‌کند و مستقیماً به همان پروژه `slwzjufipavuwcbwoyro` متصل می‌شود؛ دیتابیس جداگانه‌ای برای وب وجود ندارد.
+`web/` یک Next.js App Router مستقل با TypeScript و React است. مرورگر با Supabase JS و Publishable Key به همان Project Ref مشترک Android یعنی `slwzjufipavuwcbwoyro` متصل می‌شود؛ دیتابیس دوم برای وب وجود ندارد.
 
-## اتصال و امنیت
+در Vercel Production مقدار `NEXT_PUBLIC_SUPABASE_URL` به `https://slwzjufipavuwcbwoyro.supabase.co` تطبیق داده شد. کلید عمومی Publishable نیز برای Production/Preview پیکربندی شده؛ هیچ Service Role Key نباید در مرورگر باشد.
 
-- کلید عمومی Publishable در `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` استفاده می‌شود.
-- هیچ Service Role یا Secret Key در Browser قرار نمی‌گیرد.
-- ورود Google از OAuth + PKCE و callback مسیر `/auth/callback` استفاده می‌کند.
-- تمام Queryها با نشست Authenticated اجرا می‌شوند و RLS دیتابیس کنترل نهایی دسترسی است.
-- Storage bucket `user-files` خصوصی و سقف آن ۵۰٬۰۰۰٬۰۰۰ بایت است.
-- دانلود از مسیر `createSignedUrl` با اعتبار ۹۰ ثانیه انجام می‌شود.
-- SHA-256 با خواندن Stream فایل و chunkهای کوچک محاسبه می‌شود، نه `arrayBuffer()` کل فایل.
+## ورود
 
-## صفحات و قابلیت‌های متصل
+- `signInWithOAuth({ provider: 'google' })` با PKCE و redirect به `/auth/callback`.
+- Supabase client از `persistSession`، `autoRefreshToken` و `flowType: 'pkce'` استفاده می‌کند.
+- خطاهای Provider غیرفعال، لغو و شبکه اکنون پیام فارسی قابل‌اقدام دارند و خطاهای query/hash callback نمایش داده می‌شوند.
+- درخواست ورود با `try/catch/finally` پیاده‌سازی شده تا شکست شبکه کنترل را در حالت busy قفل نکند.
+- شش تست در `web/tests/auth-errors.test.ts` پارامترهای خطا، پیام امن و callback را پوشش می‌دهد.
+- خطای واقعی قبلی `Unsupported provider: provider is not enabled` در لایه Supabase/Auth رخ می‌دهد؛ تغییر UI آن را پنهان نمی‌کند و Provider باید در Supabase Dashboard واقعاً فعال شود. در این مأموریت وضعیت Provider از پنل قابل‌خواندن/تغییر نبود و ورود Google واقعی تأیید نشده است.
 
-| بخش | قابلیت فعلی |
+## صفحات و قابلیت‌های موجود در سورس
+
+| بخش | کد فعلی |
 |---|---|
-| ورود | Google OAuth redirect / PKCE؛ نیازمند تنظیم Provider در داشبورد |
-| خانه | خواندن فید عمومی، انتشار متن، واکنش و دیدگاه |
-| گفتگو | ایجاد گفتگوی مستقیم، تاریخچه، ارسال پیام، Realtime |
-| فایل‌ها | چندانتخابی، Drag & Drop، کنترل حجم، آپلود و دانلود امن |
-| اکتشاف | جست‌وجوی پروفایل و دنبال‌کردن |
-| پروفایل | ویرایش نام، نام کاربری و بیو؛ نمایش رتبه و نشان از DB |
-| اعلان‌ها | خواندن، Realtime count و علامت‌گذاری خوانده‌شده |
+| خانه | فید، refresh، انتشار متن، reaction و comment |
+| گفتگو | گفتگوی مستقیم، پیام، Realtime، history، read cursor و پیوست |
+| فایل‌ها | انتخاب چند فایل، سقف ۵۰٬۰۰۰٬۰۰۰ بایت، آپلود و دانلود امن |
+| اکتشاف | جست‌وجوی کاربران و follow/unfollow |
+| پروفایل | نمایش و ویرایش فیلدهای مجاز |
+| اعلان‌ها | فهرست، unread count، Realtime و mark-read |
 | تنظیمات | تم، زبان ترجیحی و خروج |
 
-## راه‌اندازی
+این جدول وضعیت کد/UI را نشان می‌دهد؛ با توجه به صفر بودن کاربران Auth در ممیزی آخر، تعامل واقعی دوحسابی و مجوزهای RLS هنوز E2E نشده‌اند.
 
-مراحل و OAuth setup در `web/README.md` قرار دارد. متغیرهای نمونه در `.env.example` هستند.
+## Build و CI
 
-## محدودیت‌های فعلی
+Workflow مربوط به Web در Commit کد وب `a9e9e23e8f2a71c04d8da1884eab26c70238c3a9` موفق است:
+- `npm ci` و TypeScript موفق.
+- ESLint بدون error و با ۹ warning موجود در کامپوننت‌های دیگر.
+- Vitest: ۱۰ تست از ۱۰ تست موفق.
+- Next.js production build موفق.
 
-- هنوز build production به دلیل عدم دسترسی محیط توسعه به npm registry اجرا نشده است؛ `package-lock.json` نیز تا زمان نصب موفق تولید نشده است.
-- PWA کامل نیست: manifest اولیه وجود دارد، اما Service Worker و آیکون رسمی برند در workspace فعلی در دسترس نیست.
-- آپلود فعلی استاندارد Supabase Storage است؛ انتقال resumable/multipart و پیشرفت بایت‌به‌بایت باقی مانده است.
-- UI گروه/کانال، استوری، تماس، Push، و پنل مدیریت واقعی باقی مانده‌اند.
+Run: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44325901682
+
+## انتشار
+
+یک Production Deployment از Vercel برای SHA `d204f71253c129770dc69436a4373ffd7e46c05c` با شناسه `dpl_5Z2f6VFMSYbcF5kfM9M9yaZiUZ9R` ایجاد شد. وضعیت نهایی آن باید در پنل/اجرای Vercel بررسی شود؛ ساخت این deployment به‌تنهایی تست Google OAuth نیست.
+
+دامنه اصلی پروژه: https://kaveh-avenger.vercel.app
+
+## محدودیت‌ها
+
+- Google Provider/Client credentials و تست end-to-end ورود واقعی باقی است.
+- تست دوحسابی چت، RLS و اشتراک فایل هنوز اجرا نشده؛ برای آن دو حساب اختصاصی لازم است.
+- Android و Web upload progress و resumable transfer یکسان و تکمیل‌شده ندارند.
+- PWA کامل، Service Worker، برند/آیکون رسمی، FCM، گروه/کانال، استوری، تماس و پنل مدیریت واقعی در محدوده نسخه فعلی آماده نیستند.

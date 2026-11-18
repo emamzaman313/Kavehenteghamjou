@@ -1,44 +1,62 @@
 # معماری فنی کاوه انتقامجو
 
-## تصمیم معماری
+## اصول
 
-محصول مستقل است؛ اتصال به حساب تلگرام، MTProto یا سرویس‌های تلگرام ندارد. سورس Telegram Android فقط مرجع بررسی مهندسی است و هیچ کد Telegram در این مخزن کپی نشده است. کلاینت جدید با Kotlin و Jetpack Compose ساخته می‌شود؛ سرویس‌های فعلی backend بر Supabase تکیه دارند.
+کاوه انتقامجو یک محصول مستقل است؛ به حساب تلگرام، MTProto یا سرورهای تلگرام وابستگی ندارد. Web و Android باید با یک Supabase Project و شناسه یکسان کاربر تعامل کنند. همه تصمیم‌های مجوز سمت سرور و RLS هستند؛ کلاینت فقط Publishable Key دارد.
 
 ## اجزای سیستم
 
-| لایه | فناوری/سرویس | وضعیت |
+| لایه | فناوری | وضعیت جاری |
 |---|---|---|
-| Android UI | Kotlin، Jetpack Compose، Material 3 | پوستهٔ ناوبری پنج‌بخشی و صفحهٔ ورود نوشته شده؛ Build اجرا نشده |
-| Google Identity | Android Credential Manager + Google ID Token | کد دریافت توکن و nonce نوشته شده؛ OAuth واقعی هنوز پیکربندی/تست نشده |
-| Auth | Supabase Auth | پروژه موجود؛ Provider گوگل به OAuth credentials واقعی نیاز دارد |
-| Database | PostgreSQL 17 | ۲۶ جدول محصول ساخته شده |
-| Authorization | PostgreSQL RLS + محدودیت مجوز ستون‌ها | RLS برای تمام ۲۶ جدول فعال؛ advisor امنیت بدون lint |
-| Messaging | `conversations`, `conversation_members`, `messages` | مدل و RPC چت مستقیم آماده؛ UI/ارسال و دریافت واقعی هنوز انجام نشده |
-| Social | posts, comments, reactions, follows, stories | schema آماده؛ فید/تعاملات در اپ هنوز متصل نیست |
-| Storage | Supabase private Storage `user-files` | آپلود مستقیم در کد اپ اضافه شده؛ هنوز Build/آزمون واقعی نشده |
-| Realtime | Supabase Realtime | publication برای messages/posts/notifications تنظیم شده؛ مصرف کلاینتی تست نشده |
-| Push | Firebase Cloud Messaging | برنامه‌ریزی‌شده، پیاده‌سازی نشده |
-| Calls | WebRTC + signaling/SFU | مرحلهٔ آینده، پیاده‌سازی نشده |
+| Android UI | Kotlin، Jetpack Compose، Material 3 | پوسته پنج‌بخشی و صفحات ورود/چت/فایل در سورس؛ Explore/Profile هنوز Placeholder |
+| Web UI | Next.js App Router، React، TypeScript | صفحات خانه، چت، فایل، اکتشاف، پروفایل، اعلان و تنظیمات در سورس |
+| Android Identity | Credential Manager، Google ID Token، nonce | جریان کدنویسی شده؛ Client ID در CI خالی و Google OAuth واقعی تست نشده |
+| Web Identity | Supabase JS، OAuth، PKCE | پیاده‌سازی و تست واحد خطاها؛ Provider واقعی نیازمند تنظیم مالک |
+| Auth | Supabase Auth | پروژه مشترک فعال؛ تعداد کاربران در ممیزی اخیر صفر |
+| Database | PostgreSQL 17 | ۲۶ جدول عمومی؛ ۲۶/۲۶ دارای RLS |
+| Authorization | PostgreSQL RLS و محدودیت مجوزها | ۶۸ Policy در ممیزی اخیر؛ Security Advisor بدون finding |
+| Messaging | conversations، conversation_members، messages | چت مستقیم، پیام، Realtime، صفحه‌بندی و Read cursor در کد Web/Android |
+| Social | posts، comments، reactions، follows، notifications | Web screens به DB متصل‌اند؛ اجرای چندکاربره هنوز E2E نشده؛ Android بخش‌های اجتماعی ناقص |
+| Storage | Supabase Private Storage، bucket `user-files` | سقف واقعی ۵۰٬۰۰۰٬۰۰۰ بایت؛ Android upload/download اولیه دارد |
+| Push | Firebase Cloud Messaging | پیاده‌سازی نشده |
+| Calls | WebRTC و signaling/SFU | پیاده‌سازی نشده |
 
-## جریان ورود
+## هویت و نشست
 
-۱. اپ وضعیت Supabase session را بررسی می‌کند. ۲. در نبود نشست، کاربر فقط صفحهٔ ورود Google را می‌بیند. ۳. Credential Manager توکن Google را با nonce هش‌شده دریافت می‌کند. ۴. نسخهٔ خام nonce همراه ID Token به Supabase Auth داده می‌شود. ۵. Trigger دیتابیس در ایجاد auth user، `profiles`, `user_settings` و `user_rank_state` را می‌سازد.
+### Android
+جریان طراحی‌شده: Credential Manager → Google ID Token → Supabase Auth. مقدار nonce خام با SecureRandom تولید می‌شود؛ hash آن به Credential Manager داده می‌شود و مقدار خام طبق قرارداد SDK همراه ID Token به Supabase می‌رود. Session توسط Supabase Kotlin SDK مدیریت می‌شود. کد خطای Google در UI اکنون پیام‌های امن برای Provider غیرفعال، لغو و قطع شبکه نشان می‌دهد.
 
-OAuth هنوز به Web Client ID/Android OAuth Client ID، SHA-1 و Google Provider configuration در Supabase نیاز دارد. هیچ secret در Android قرار نمی‌گیرد.
+### Web
+Supabase JS از `flowType: 'pkce'`، `persistSession` و `autoRefreshToken` استفاده می‌کند. مسیر `/auth/callback` authorization code را به session تبدیل می‌کند. شکست Provider، پارامترهای خطای query/hash و خطای شبکه پیام قابل‌فهم دارند. این تغییرات تست شده‌اند، اما ورود واقعی Google تا فعال‌سازی/تأیید Provider، Client ID و Client Secret در پنل Supabase قابل ادعا نیست.
 
-## فایل‌ها
+## چت و Realtime
 
-- هر فایل در bucket خصوصی `user-files` ذخیره می‌شود.
-- حداکثر اندازه در Storage و ستون metadata برابر ۵۰٬۰۰۰٬۰۰۰ بایت است.
-- پسوند/MIME allowlist وجود ندارد؛ همهٔ انواع فایل از انتخابگر سیستم قابل انتخاب‌اند.
-- نام اصلی Unicode در `file_assets.original_name` نگهداری می‌شود؛ مسیر object با UUID تولید می‌شود.
-- کد فعلی فایل را در حافظهٔ دستگاه buffer می‌کند و با upload معمولی می‌فرستد؛ برای production باید WorkManager، stream/resumable transfer، cancel/retry و پاک‌سازی object یتیم اضافه شود.
-- policy خواندن Storage و metadata برای مالک، اعضای گفتگو و بینندگان مجاز پست/استوری تنظیم شده؛ signed URL کوتاه‌عمر باید در کلاینت متصل شود.
+- ساخت گفتگوی مستقیم با RPC موجود `create_direct_conversation` و کنترل عضویت سمت سرور.
+- ارسال/خواندن پیام و subscription روی `messages` و `conversation_members`.
+- صفحه‌بندی پیام‌های قدیمی، پیش‌نمایش آخرین پیام، شمارنده unread و read cursor.
+- نشان «ارسال شد» صرفاً به معنی موفقیت درج پیام از سمت کلاینت است؛ Delivered واقعی نیست.
+- typing indicator، حضور Online معتبر، Reply، edit/delete کامل، جست‌وجوی پیام، idempotency key و retry پایدار هنوز تکمیل نشده‌اند.
 
-## امنیت و مرز اعتماد
+## فایل و رسانه
 
-- تمام جداول محصول در public دارای RLS هستند.
-- رتبه/امتیاز و نشان‌ها برای نوشتن از کلاینت مجوز ندارند.
-- RPC عمومی `create_direct_conversation` فقط wrapper با SECURITY INVOKER است؛ کار حساس در تابع SECURITY DEFINER داخل schema غیرقابل‌نمایش `private` انجام می‌شود و `auth.uid()` را اعتبارسنجی می‌کند.
-- service-role، Google Client Secret و signing key هرگز در APK قرار نمی‌گیرند.
-- رمزنگاری E2EE ادعا نشده است؛ TLS و سیاست‌های Supabase کافی برای ادعای E2EE نیستند.
+- bucket خصوصی `user-files`؛ سقف سمت سرور و metadata برابر ۵۰٬۰۰۰٬۰۰۰ بایت.
+- metadata در `file_assets` و SHA-256 ثبت می‌شود.
+- Android کد فعلی محتوای فایل را به‌صورت کامل در حافظه Buffer می‌کند و آپلود Storage معمولی انجام می‌دهد؛ این روش برای فایل‌های بزرگ ایده‌آل نیست.
+- WorkManager، stream-based upload/download، resumable multipart، لغو عملیات و پیشرفت واقعی بایت‌به‌بایت برای Android باقی مانده است.
+- هر فایل باید با سیاست دسترسی RLS و Storage فقط برای مالک و اعضای مجاز قابل دریافت باشد.
+
+## پایگاه داده و مهاجرت
+
+پروژه زنده Ref برابر `slwzjufipavuwcbwoyro` دارد. ده Migration در Remote Ledger ثبت شده‌اند. چهار Migration نخست در تاریخچه محلی بازیابی نشده‌اند؛ Snapshot مستنداتی جایگزین backup یا migration نیست. هر تغییر ساختاری جدید باید migration مستقل، قابل بازبینی و با تست RLS داشته باشد. هیچ migration اجراشده‌ای را دوباره اجرا نکنید.
+
+## امنیت
+
+- RLS برای همه جدول‌های public فعال است.
+- امتیاز، rank و badge نباید از کلاینت قابل ارتقا باشند.
+- RPC عمومی ساخت گفتگوی مستقیم wrapper از نوع SECURITY INVOKER است؛ منطق حساس در schema خصوصی و با بررسی auth.uid اجرا می‌شود.
+- Service Role Key، Google Client Secret و keystore خصوصی در کلاینت یا مخزن قرار نمی‌گیرند.
+- E2EE ادعا نشده است؛ برای آن پروتکل استاندارد ممیزی‌شده و مدیریت کلید لازم است.
+
+## محدودیت‌های شناخته‌شده
+
+تعداد کاربران Auth/Profiles در ممیزی read-only اخیر صفر بود؛ بنابراین جریان دوحسابی واقعی و اشتراک فایل بین دو حساب هنوز اثبات نشده است. Android Explore/Profile و انتشار اجتماعی Placeholder/ناقص‌اند. Push، گروه/کانال، استوری و تماس به‌عنوان قابلیت آماده معرفی نمی‌شوند.

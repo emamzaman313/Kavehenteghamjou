@@ -1,43 +1,61 @@
 # کاوه انتقامجو | Kaveh Avenger
 
-اپلیکیشن مستقل اندرویدی برای پیام‌رسانی، اشتراک‌گذاری فایل و شبکه اجتماعی.
-
-> این محصول هیچ وابستگی‌ای به حساب تلگرام، MTProto یا سرورهای تلگرام ندارد. سورس رسمی Telegram Android صرفاً مرجع مهندسی است و هیچ کد Telegram در این مخزن کپی نشده است.
+محصول مستقل وب و اندروید برای ارتباط، گفت‌وگو، اشتراک‌گذاری فایل و تعامل اجتماعی. این محصول به حساب تلگرام، MTProto یا سرورهای تلگرام وابسته نیست.
 
 ## فناوری‌ها
 
-- Android: Kotlin + Jetpack Compose + Material 3
-- Identity: Google Credential Manager → Supabase Auth
-- Backend: Supabase PostgreSQL + RLS + Realtime + private Storage
-- Minimum SDK: 26
-- Per-file server limit: `50,000,000` bytes
+- Android: Kotlin، Jetpack Compose و Material 3؛ حداقل SDK برابر 26 و Target/Compile SDK برابر 36.
+- Web: Next.js، React و TypeScript.
+- Identity: Google Credential Manager در Android و OAuth با PKCE در وب.
+- Backend: یک پروژه مشترک Supabase شامل Auth، PostgreSQL، RLS، Realtime و Storage خصوصی.
+- محدودیت هر فایل: دقیقاً `50,000,000` بایت.
 
-## ساختار
+## مخزن
 
-- `android/app/` — اپلیکیشن Android
-- `supabase/` — توصیف backend و ledger مهاجرت‌های اعمال‌شده
-- `docs/` — ممیزی Telegram، معماری، وضعیت، تست و نقشه راه
+- مخزن رسمی: https://github.com/emamzaman313/Kavehenteghamjou
+- شاخه مجاز: `main`
+- آخرین Commit کد بررسی‌شده: `d204f71253c129770dc69436a4373ffd7e46c05c`
+- ساختار: `android/`، `web/`، `supabase/`، `docs/` و `.github/workflows/`.
 
-## وضعیت فعلی
+## وضعیت واقعی فعلی
 
-زیرساخت Supabase واقعی فعال است: ۲۶ جدول، ۶۸ RLS policy، Storage خصوصی با سقف ۵۰٬۰۰۰٬۰۰۰ بایت، Realtime پایه و RPC ایجاد گفتگوی مستقیم. اپ Android دارای کد ورود Google native، پوستهٔ پنج‌تب و کد انتخاب/آپلود فایل است؛ هنوز Build/دستگاه تست نشده و قابلیت‌های کامل پیام‌رسان/شبکه اجتماعی آمادهٔ انتشار نیستند.
+### Backend
+پروژه Supabase با Ref برابر `slwzjufipavuwcbwoyro` فعال است. آخرین ممیزی read-only شامل ۲۶ جدول عمومی با RLS فعال، ۶۸ Policy، ده Migration ثبت‌شده در Remote Ledger و bucket خصوصی `user-files` با سقف ۵۰٬۰۰۰٬۰۰۰ بایت بود. تعداد `auth.users` و `profiles` در زمان ممیزی صفر بود. هیچ Migration یا تغییر داده‌ای در این مأموریت روی Production اجرا نشد.
 
-گزارش‌ها: `docs/telegram-source-audit.md`, `docs/feature-inventory.md`, `docs/architecture.md`, `docs/implementation-status.md`, `docs/roadmap.md`, `docs/google-auth-setup.md`.
+### Web
+نسخه وب در `web/` دارای صفحه ورود، فید، گفتگو، فایل‌ها، اکتشاف، پروفایل، اعلان‌ها و تنظیمات است. اتصال Supabase از کلید Publishable و نشست کاربر استفاده می‌کند. ورود OAuth/PKCE در سورس وجود دارد و مدیریت خطای Provider/شبکه و callback به‌روزرسانی و تست شده است؛ اما Google Provider در Supabase و OAuth Client واقعی هنوز باید توسط مالک سرویس تأیید/تنظیم شود. Web CI در Commit مربوط به تغییرات وب موفق شده است: TypeScript، ESLint، ۱۰ تست و Next.js production build. ۹ هشدار lint در کدهای موجود باقی است.
+
+### Android
+پوسته پنج‌بخشی و کد بومی ورود Google Credential Manager، nonce، پیام‌رسانی، Realtime و آپلود فایل وجود دارد. مدیریت پیام‌های خطای ورود Google به‌روزرسانی شده و تست شده است. Android CI روی Commit فعلی موفق شده و Debug APK/AAB ساخته است. با این حال:
+- متغیر GitHub به نام `GOOGLE_WEB_CLIENT_ID` در اجرای CI خالی بوده؛ ورود Google در APK ساخته‌شده فعال نیست.
+- اکتشاف و پروفایل هنوز Placeholder هستند؛ تب انتشار فعلاً صفحه آپلود فایل را باز می‌کند.
+- آپلود Android فایل را در حافظه Buffer می‌کند؛ WorkManager، stream/resumable upload و پیشرفت بایت‌به‌بایت تکمیل نشده‌اند.
+- APK/AAB فعلی Debug هستند، Release signing انجام نشده و روی گوشی واقعی آزمایش نشده‌اند.
+
+### لینک‌های آزمون
+- Web CI: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44325901682
+- Android CI: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44326092783
+- Security checks: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44326093245
+- مستندات وضعیت تفصیلی: [docs/implementation-status.md](docs/implementation-status.md)
 
 ## راه‌اندازی محلی
 
-۱. Android Studio و JDK 17 نصب کنید؛ Android SDK 36 را فراهم کنید. ۲. فایل `local.properties.example` را به `local.properties` کپی کنید. ۳. Supabase Publishable Key و Google Web Client ID را وارد کنید. ۴. Provider Google را مطابق `docs/google-auth-setup.md` در Google Cloud و Supabase تنظیم کنید. ۵. Sync و Build بگیرید.
+### Web
+در پوشه `web/` فایل `.env.example` را به `.env.local` کپی کنید و URL واقعی Supabase و Publishable Key را از پنل مالک وارد کنید. سپس:
+```bash
+cd web
+npm ci
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
 
-از Service Role Key، Google Client Secret یا Keystore در برنامهٔ Android استفاده نکنید. `local.properties` در `.gitignore` است.
+### Android
+Android Studio، JDK 21 و Android SDK 36 لازم است. `local.properties.example` را به `local.properties` کپی کنید و مقادیر Supabase URL، Publishable Key و Google Web Client ID را در محیط محلی امن وارد کنید. Service Role Key، Google Client Secret و keystore خصوصی نباید در برنامه یا مخزن قرار گیرند.
 
-## هویت بصری
+## انتشار
 
-نام «کاوه انتقامجو» حفظ شده است. آیکون یا لوگوی جایگزین ساخته نشده؛ تصویر اصلی‌ای که در گفت‌وگوی قبلی ارائه شده در فایل‌های قابل‌دسترسی workspace فعلی موجود نبود، بنابراین دارایی برند جایگزین نشده است.
+خروجی CI فعلی Android از نوع Debug است. انتشار Release نیازمند keystore دائمی مالک و چهار GitHub Secret مستندشده در [docs/android-release-signing.md](docs/android-release-signing.md) است. تست دوحسابی واقعی نیازمند دو حساب اختصاصی Supabase و Secrets مستندشده در [docs/chat-e2e-setup.md](docs/chat-e2e-setup.md) است.
 
-## نسخه وب
-
-نسخه وب مستقل در `web/` ساخته شده و از همان Supabase پروژه اندروید استفاده می‌کند. راهنمای نصب و OAuth در `web/README.md` و وضعیت اتصال قابلیت‌ها در `docs/web-app.md` قرار دارد. برای اجرا، `web/.env.example` را به `.env.local` کپی و Publishable Key را تنظیم کنید؛ هیچ Service Role Key نباید در مرورگر قرار بگیرد.
-
-## بازبینی مرحله دوم
-
-وضعیت واقعی دیتابیس و اختلاف Migrationهای Remote با فایل‌های محلی در `supabase/remote-state-snapshot.md` ثبت شده است. فایل Snapshot صرفاً مستند است و نباید اجرا شود. تست syntax فایل‌های TS/TSX انجام شده، اما به‌دلیل نبود دسترسی npm registry، dependency install و production build هنوز انجام نشده است.
+هیچ قابلیت آزمایش‌نشده‌ای به‌عنوان آماده انتشار معرفی نمی‌شود. برای جزئیات محدودیت‌ها، گام‌های باقی‌مانده و شواهد زنده به `docs/implementation-status.md` و `docs/roadmap.md` مراجعه کنید.
