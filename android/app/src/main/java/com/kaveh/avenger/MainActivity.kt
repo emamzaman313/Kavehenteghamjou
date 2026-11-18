@@ -16,6 +16,7 @@ import com.kaveh.avenger.ui.screens.ConfigurationRequiredScreen
 import com.kaveh.avenger.ui.screens.GoogleSignInScreen
 import com.kaveh.avenger.ui.screens.LoadingScreen
 import com.kaveh.avenger.ui.theme.KavehTheme
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.collect
 
