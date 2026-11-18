@@ -16,6 +16,7 @@ import DiscoverView from '@/features/discover/DiscoverView';
 import ProfileView from '@/features/profile/ProfileView';
 import NotificationsView from '@/features/notifications/NotificationsView';
 import SettingsView from '@/features/settings/SettingsView';
+import AdminAccessCodePanel from '@/features/admin/AdminAccessCodePanel';
 
 type Toast = { id: number; text: string; tone?: ToastTone };
 type Tab = 'home' | 'chats' | 'files' | 'discover' | 'profile' | 'notifications' | 'settings' | 'admin';
@@ -44,6 +45,7 @@ export default function KavehApp() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [unread, setUnread] = useState(0);
   const [search, setSearch] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -59,6 +61,20 @@ export default function KavehApp() {
   }, [supabase]);
 
   const notify = useCallback((text: string, tone: Toast['tone'] = 'success') => toastMessage(setToasts, text, tone), []);
+
+  useEffect(() => {
+    if (!supabase || !session?.user.id) {
+      setIsAdmin(false);
+      return;
+    }
+    let active = true;
+    void supabase.functions.invoke('access-code-login', { body: { action: 'admin_get' } })
+      .then(({ data, error }) => {
+        if (active) setIsAdmin(!error && data?.ok === true && data?.isAdmin === true);
+      })
+      .catch(() => { if (active) setIsAdmin(false); });
+    return () => { active = false; };
+  }, [supabase, session?.user.id]);
 
   useEffect(() => {
     const callbackError = getOAuthCallbackError(window.location.search, window.location.hash);
@@ -102,6 +118,7 @@ export default function KavehApp() {
       <nav className="side-nav">
         <button className={`nav-item ${tab === 'notifications' ? 'active' : ''}`} onClick={() => setTab('notifications')}><Bell size={19}/><span>اعلان‌ها</span>{unread > 0 && <b className="nav-count">{unread}</b>}</button>
         <button className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}><Settings size={19}/><span>تنظیمات</span></button>
+        {isAdmin && <button className={`nav-item ${tab === 'admin' ? 'active' : ''}`} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت سایت</span></button>}
       </nav>
       <div className="sidebar-bottom">
         <div className="mini-profile"><Avatar profile={profile} size="md"/><div className="mini-profile-text"><strong>{profile?.display_name || session.user.user_metadata?.full_name || 'کاربر کاوه'}</strong><small>{profile?.username ? `@${profile.username}` : session.user.email}</small></div><button className="icon-button" title="خروج" onClick={() => void supabase.auth.signOut()}><LogOut size={17}/></button></div>
@@ -122,9 +139,10 @@ export default function KavehApp() {
         {tab === 'profile' && <ProfileView supabase={supabase} userId={session.user.id} profile={profile} onSaved={loadProfile} notify={notify}/>}
         {tab === 'notifications' && <NotificationsView supabase={supabase} userId={session.user.id} notify={notify} onUnreadChange={setUnread}/>}
         {tab === 'settings' && <SettingsView supabase={supabase} userId={session.user.id} dark={dark} onTheme={setDark} notify={notify} onSignOut={() => void supabase.auth.signOut()}/>}
-        {tab === 'admin' && <section className="panel-card"><div className="section-heading"><ShieldCheck/><h3>پنل مدیریت</h3></div><div className="notice notice-warn">در طرح‌وارهٔ فعلی، جدول نقش‌های مدیریتی و سیاست‌های مجازکنندهٔ عملیات مدیریت تعریف نشده است. برای جلوگیری از ارتقای جعلی دسترسی، ابزار مدیریتی در این نسخه فعال نمی‌شود.</div></section>}
+        {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify}/>}
+        {tab === 'admin' && !isAdmin && <section className="panel-card"><div className="notice notice-error">دسترسی مدیریت برای این حساب فعال نیست.</div></section>}
       </div>
-      <nav className="mobile-nav">{navItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}</nav>
+      <nav className="mobile-nav">{navItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}{isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت</span></button>}</nav>
     </main>
     <div className="toast-stack" aria-live="polite">{toasts.map((item) => <div key={item.id} className={`toast ${item.tone === 'error' ? 'toast-error' : ''}`}><span>{item.tone === 'error' ? <X size={16}/> : <Check size={16}/>}</span>{item.text}</div>)}</div>
   </div>;
