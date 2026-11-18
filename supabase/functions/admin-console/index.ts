@@ -37,11 +37,16 @@ Deno.serve(async (request: Request) => {
     body = parsed as Record<string, unknown>;
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
-  async function beginAudit(action: "moderate_post" | "delete_post", targetId: string, details: Record<string, unknown> = {}) {
+  async function beginAudit(
+    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user",
+    targetId: string,
+    details: Record<string, unknown> = {},
+    targetType: "post" | "user" = "post",
+  ) {
     const { data, error } = await admin.from("admin_audit_logs").insert({
       actor_id: authData.user.id,
       action,
-      target_type: "post",
+      target_type: targetType,
       target_id: targetId,
       status: "started",
       details,
@@ -66,6 +71,78 @@ Deno.serve(async (request: Request) => {
       .limit(100);
     if (error) return respond({ ok: false, reason: "audit_query_failed" }, 500, origin);
     return respond({ ok: true, events: data ?? [] }, 200, origin);
+  }
+
+  if (body.action === "users_list") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const [authUsersResult, profilesResult, adminsResult] = await Promise.all([
+      admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+      admin.from("profiles").select("id,display_name,username,created_at").limit(1000),
+      admin.from("site_access_admins").select("user_id,role"),
+    ]);
+    if (authUsersResult.error || profilesResult.error || adminsResult.error) return respond({ ok: false, reason: "users_query_failed" }, 500, origin);
+    const profileById = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile]));
+    const adminRoleById = new Map((adminsResult.data ?? []).map((entry) => [entry.user_id, entry.role]));
+    const users = (authUsersResult.data.users ?? []).map((user) => {
+      const profile = profileById.get(user.id);
+      return {
+        id: user.id,
+        email: user.email ?? null,
+        is_anonymous: user.is_anonymous === true,
+        display_name: profile?.display_name ?? (user.email ? user.email.split("@")[0] : "کاربر مهمان"),
+        username: profile?.username ?? null,
+        created_at: user.created_at,
+        last_sign_in_at: user.last_sign_in_at ?? null,
+        banned_until: user.banned_until ?? null,
+        admin_role: adminRoleById.get(user.id) ?? null,
+      };
+    }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+    return respond({ ok: true, users }, 200, origin);
+  }
+
+  if (["warn_user", "ban_user", "unban_user"].includes(String(body.action))) {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    if (!validId(body.userId)) return respond({ ok: false, reason: "invalid_user_id" }, 400, origin);
+    if (body.userId === authData.user.id) return respond({ ok: false, reason: "cannot_moderate_self" }, 400, origin);
+    const { data: protectedAdmin } = await admin.from("site_access_admins")
+      .select("user_id").eq("user_id", body.userId).maybeSingle();
+    if (protectedAdmin) return respond({ ok: false, reason: "cannot_moderate_admin" }, 403, origin);
+    const { data: targetResult, error: targetError } = await admin.auth.admin.getUserById(body.userId);
+    if (targetError || !targetResult.user) return respond({ ok: false, reason: "user_not_found" }, 404, origin);
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (reason.length < 3 || reason.length > 500) return respond({ ok: false, reason: "invalid_reason" }, 400, origin);
+
+    if (body.action === "warn_user") {
+      const audit = await beginAudit("warn_user", body.userId, { reason }, "user");
+      if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+      const auditRecorded = await finishAudit(audit.id, "succeeded");
+      return respond({ ok: true, auditRecorded }, 200, origin);
+    }
+
+    if (body.action === "ban_user") {
+      const duration = String(body.duration ?? "24h");
+      const allowedDurations = new Set(["1h", "24h", "168h", "720h", "876000h"]);
+      if (!allowedDurations.has(duration)) return respond({ ok: false, reason: "invalid_ban_duration" }, 400, origin);
+      const audit = await beginAudit("ban_user", body.userId, { reason, duration }, "user");
+      if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+      const { data: updatedUser, error } = await admin.auth.admin.updateUserById(body.userId, { ban_duration: duration });
+      if (error || !updatedUser.user) {
+        await finishAudit(audit.id, "failed");
+        return respond({ ok: false, reason: "ban_failed" }, 500, origin);
+      }
+      const auditRecorded = await finishAudit(audit.id, "succeeded");
+      return respond({ ok: true, auditRecorded, banned_until: updatedUser.user.banned_until ?? null }, 200, origin);
+    }
+
+    const audit = await beginAudit("unban_user", body.userId, { reason }, "user");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const { data: updatedUser, error } = await admin.auth.admin.updateUserById(body.userId, { ban_duration: "none" });
+    if (error || !updatedUser.user) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "unban_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, auditRecorded, banned_until: updatedUser.user.banned_until ?? null }, 200, origin);
   }
 
   if (body.action === "overview") {
