@@ -1,6 +1,6 @@
 'use client';
 
-import { KeyRound, Save, ShieldCheck } from 'lucide-react';
+import { Activity, Eye, EyeOff, Film, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
@@ -13,6 +13,10 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'access'>('overview');
+  const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number }; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -61,11 +65,33 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   return (
     <div className="page-stack">
       <SectionHeader
-        eyebrow="مدیریت سایت"
-        title="ورود با کد دسترسی"
-        description="فعال یا غیرفعال‌کردن ورود مهمان و تغییر کد مشترک سایت."
+        eyebrow="مرکز فرماندهی"
+        title="پنل مدیریت کاوه"
+        description="نمای کلی جامعه، مدیریت محتوا و کنترل دسترسی مهمان‌ها."
+        action={<button className="button button-quiet" type="button" onClick={() => void refreshOverview()}><Activity size={16}/> تازه‌سازی</button>}
       />
-      <section className="settings-card admin-access-card">
+      <section className="admin-dashboard">
+        <div className="admin-stat-grid">
+          <div className="admin-stat"><Users/><span>کاربران</span><strong>{overview?.stats.users ?? '—'}</strong></div>
+          <div className="admin-stat"><LayoutDashboard/><span>پست‌ها</span><strong>{overview?.stats.posts ?? '—'}</strong></div>
+          <div className="admin-stat"><MessageCircle/><span>دیدگاه‌ها</span><strong>{overview?.stats.comments ?? '—'}</strong></div>
+          <div className="admin-stat"><Film/><span>رسانه‌ها</span><strong>{overview?.stats.media ?? '—'}</strong></div>
+        </div>
+        <div className="admin-tabs">
+          <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>
+          <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}><Users size={15}/> کاربران</button>
+          <button className={adminTab === 'posts' ? 'active' : ''} onClick={() => setAdminTab('posts')}><LayoutDashboard size={15}/> مدیریت پست‌ها</button>
+          <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
+        </div>
+        {overviewLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت اطلاعات پنل…</span></div> : null}
+        {adminTab === 'overview' && !overviewLoading && <div className="admin-overview-grid">
+          <div className="admin-console-card"><strong>آخرین فعالیت‌ها</strong>{(overview?.posts ?? []).slice(0,5).map((post) => <div className="admin-activity-row" key={post.id}><span className="admin-activity-dot"/><div><b>{post.body || 'پست رسانه‌ای'}</b><small>{post.visibility === 'public' ? 'عمومی' : 'محدود'} · {new Date(post.created_at).toLocaleDateString('fa-IR')}</small></div></div>)}{!overview?.posts.length && <p>هنوز فعالیتی ثبت نشده است.</p>}</div>
+          <div className="admin-console-card"><strong>آخرین اعضا</strong>{(overview?.users ?? []).slice(0,5).map((user) => <div className="admin-user-row" key={user.id}><span className="admin-user-avatar">{(user.display_name || 'ک').slice(0,1)}</span><div><b>{user.display_name || 'کاربر کاوه'}</b><small>{user.username ? '@' + user.username : 'نام کاربری ثبت نشده'}</small></div></div>)}</div>
+        </div>}
+        {adminTab === 'users' && !overviewLoading && <div className="admin-console-card"><strong>فهرست کاربران ({overview?.users.length ?? 0})</strong>{(overview?.users ?? []).map((user) => <div className="admin-user-row" key={user.id}><span className="admin-user-avatar">{(user.display_name || 'ک').slice(0,1)}</span><div><b>{user.display_name || 'کاربر کاوه'}</b><small>{user.username ? '@' + user.username : 'نام کاربری ثبت نشده'} · {new Date(user.created_at).toLocaleDateString('fa-IR')}</small></div></div>)}</div>}
+        {adminTab === 'posts' && !overviewLoading && <div className="admin-console-card"><strong>مدیریت محتوا ({overview?.posts.length ?? 0} پست اخیر)</strong>{(overview?.posts ?? []).map((post) => <div className="admin-post-row" key={post.id}><div><b>{post.body || 'پست رسانه‌ای'}</b><small>{post.visibility === 'public' ? 'قابل مشاهده برای عموم' : 'محدود / مخفی'} · {new Date(post.created_at).toLocaleDateString('fa-IR')}</small></div><div className="admin-post-actions"><button className="icon-button" title={post.visibility === 'public' ? 'مخفی‌کردن' : 'عمومی‌کردن'} onClick={() => void moderatePost(post.id, post.visibility === 'public' ? 'private' : 'public')}>{post.visibility === 'public' ? <EyeOff size={16}/> : <Eye size={16}/>}</button><button className="icon-button admin-delete" title={deleteCandidate === post.id ? 'برای تأیید دوباره بزن' : 'حذف پست'} onClick={() => void deletePost(post.id)}><Trash2 size={16}/></button></div></div>)}</div>}
+      </section>
+      {adminTab === 'access' && <section className="settings-card admin-access-card">
         <div className="side-info-title"><ShieldCheck size={19}/><strong>تنظیمات دسترسی مهمان</strong></div>
         {loadError && <div className="notice notice-error" role="alert">{loadError}</div>}
         {loading ? (
@@ -109,7 +135,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
             </div>
           </>
         ) : null}
-      </section>
+      </section>}
     </div>
   );
 }
