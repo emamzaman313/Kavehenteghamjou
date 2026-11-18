@@ -403,3 +403,13 @@ a { color:inherit; }
   .admin-user-actions .button { flex:1; justify-content:center; }
   .admin-ban-duration { flex:1; }
 }
+
+
+.admin-role-management { display:flex; align-items:center; flex-wrap:wrap; gap:7px; padding-inline-start:44px; }
+.admin-role-select { width:auto; min-width:118px; min-height:34px; padding:6px 9px; font-size:10px; }
+.admin-role-management .button { min-height:34px; font-size:10px; }
+@media(max-width:560px) {
+  .admin-role-management { padding-inline-start:0; }
+  .admin-role-management .button { flex:1; justify-content:center; }
+  .admin-role-select { flex:1; }
+}
