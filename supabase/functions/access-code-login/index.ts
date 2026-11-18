@@ -22,14 +22,30 @@ const allowedOrigins = new Set([
   "http://127.0.0.1:3000",
 ]);
 
+function isAllowedOrigin(origin: string): boolean {
+  if (origin === "null" || allowedOrigins.has(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "https:"
+      && parsed.hostname.endsWith(".vercel.app")
+      && (parsed.hostname === "kaveh-avenger.vercel.app"
+        || parsed.hostname.startsWith("kaveh-avenger-"));
+  } catch {
+    return false;
+  }
+}
+
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigin = origin && allowedOrigins.has(origin)
-    ? origin
-    : "https://kaveh-avenger.vercel.app";
+  const allowedOrigin = !origin
+    ? "https://kaveh-avenger.vercel.app"
+    : origin === "null" || isAllowedOrigin(origin)
+      ? origin
+      : "https://kaveh-avenger.vercel.app";
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }
@@ -160,7 +176,7 @@ async function createGuestSession() {
 
 Deno.serve(async (request: Request) => {
   const origin = request.headers.get("Origin");
-  if (origin && !allowedOrigins.has(origin)) {
+  if (origin && !isAllowedOrigin(origin)) {
     return jsonResponse({ ok: false, reason: "origin_not_allowed" }, 403, origin);
   }
 
