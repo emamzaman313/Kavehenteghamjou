@@ -146,7 +146,9 @@ private data class ChatConversation(
     val title: String,
     val kind: String,
     val lastMessageAt: String?,
-    val peerReadAt: String?
+    val peerReadAt: String?,
+    val lastMessagePreview: String? = null,
+    val unreadCount: Int = 0
 )
 
 @Composable
@@ -200,13 +202,34 @@ fun ChatScreen(
                     }.decodeList<ProfileRow>().firstOrNull()
                 }
 
+                val lastMessage = supabase.postgrest["messages"].select {
+                    filter {
+                        eq("conversation_id", conversation.id)
+                        exact("deleted_at", null)
+                    }
+                    order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                    limit(1)
+                }.decodeList<MessageRow>().firstOrNull()
+                val unreadCount = supabase.postgrest["messages"].select {
+                    filter {
+                        eq("conversation_id", conversation.id)
+                        neq("sender_id", userId)
+                        exact("deleted_at", null)
+                        membership.lastReadAt?.let { gt("created_at", it) }
+                    }
+                    order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                    limit(100)
+                }.decodeList<MessageRow>().size
+
                 ChatConversation(
                     id = conversation.id,
                     title = conversation.title ?: profile?.displayName ?: profile?.username?.let { "@$it" }
                         ?: if (conversation.kind == "direct") "گفتگوی خصوصی" else "گفتگو",
                     kind = conversation.kind,
                     lastMessageAt = conversation.lastMessageAt,
-                    peerReadAt = otherMember?.lastReadAt
+                    peerReadAt = otherMember?.lastReadAt,
+                    lastMessagePreview = lastMessage?.body?.take(90),
+                    unreadCount = unreadCount
                 )
             }.sortedByDescending { it.lastMessageAt ?: "" }
 
@@ -665,13 +688,38 @@ fun ChatScreen(
                             },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(conversation.title, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    if (conversation.kind == "direct") "گفتگوی خصوصی" else conversation.kind,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Text(conversation.title, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        conversation.lastMessagePreview
+                                            ?: if (conversation.kind == "direct") "گفتگوی خصوصی" else conversation.kind,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                                if (conversation.unreadCount > 0) {
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.primary
+                                    ) {
+                                        Text(
+                                            if (conversation.unreadCount >= 100) "99+" else conversation.unreadCount.toString(),
+                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
