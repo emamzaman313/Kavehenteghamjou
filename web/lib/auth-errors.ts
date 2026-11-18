@@ -41,7 +41,7 @@ export function authErrorMessage(error: unknown): string {
     markers.includes('provider is not enabled') ||
     markers.includes('unsupported provider') ||
     markers.includes('provider_disabled') ||
-    markers.includes('validation_failed') && markers.includes('google')
+    (markers.includes('validation_failed') && markers.includes('google'))
   ) {
     return 'ورود با گوگل در تنظیمات احراز هویت فعال نیست یا اطلاعات OAuth آن کامل نیست. مدیر سرویس باید Google Provider و Client ID/Secret را در Supabase بررسی کند؛ سپس دوباره تلاش کنید.';
   }
@@ -68,7 +68,7 @@ export function authErrorMessage(error: unknown): string {
     return 'فرایند ورود لغو شد. برای ادامه دوباره تلاش کنید.';
   }
 
-  return 'ورود با گوگل تکمیل نشد. دوباره تلاش کنید؛ اگر مشکل ادامه داشت، تنظیمات ورود گوگل در سرویس احراز هویت باید بررسی شود.';
+  return 'ورود با ایمیل تکمیل نشد. آدرس ایمیل و اتصال اینترنت را بررسی کنید و دوباره تلاش کنید. اگر مشکل ادامه داشت، تنظیمات ارسال ایمیل و احراز هویت Supabase باید بررسی شود.';
 }
 
 /** Read provider errors returned in either the query string or URL fragment. */
