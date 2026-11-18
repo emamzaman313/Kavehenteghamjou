@@ -23,6 +23,7 @@ The following versions were read from the live Supabase migration ledger. Filena
 | `20261118195723` | `kaveh_post_attachment_author_index` | Included |
 | `20261118212549` | `kaveh_admin_audit_log` | Included (`20261118212549_kaveh_admin_audit_log.sql`) |
 | `20261118212800` | `kaveh_admin_rbac_roles` | Included (`20261118212800_kaveh_admin_rbac_roles.sql`) |
+| `20261118213526` | `kaveh_user_moderation_audit` | Included (`20261118213526_kaveh_user_moderation_audit.sql`) |
 
 **Important:** the live migration ledger is authoritative. The first four original SQL bodies have not yet been exported into this repository. An early local SQL draft is archived at `supabase/archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` and is explicitly non-deployable because it predates the final RLS and privilege fixes.
 
@@ -48,3 +49,10 @@ Migration `20261118212549_kaveh_admin_audit_log` adds `public.admin_audit_logs` 
 ## Administrative roles
 
 Migration `20261118212800_kaveh_admin_rbac_roles` adds the `role` column to the existing server-only `site_access_admins` allowlist. Supported roles are `owner`, `admin`, `moderator`, and `support`. The single pre-existing trusted admin was promoted to `owner`; newly inserted admins default to `admin`. The `admin-console` Edge Function enforces role-specific moderation permissions and exposes the latest 100 audit events only to `owner`/`admin`; the web admin panel displays this history. `access-code-login` restricts guest access-code settings to `owner` and `admin`. Role changes are not exposed to client-side direct table access.
+
+
+## User moderation
+
+Migration `20261118213526_kaveh_user_moderation_audit` extends the existing audit constraints to allow `warn_user`, `ban_user`, and `unban_user` events with `target_type='user'`. Existing post audit rows are preserved. The `admin-console` Edge Function lists Auth users server-side for owner/admin only, protects all accounts in `site_access_admins` and the acting administrator from moderation, and uses Auth Admin `updateUserById` with a bounded set of ban durations. Warnings and ban/unban events are written to the in-app `notifications` table and recorded in `admin_audit_logs`.
+
+A ban prevents new sign-ins and refreshes while active. An already-issued access JWT can remain usable until its expiry; this is not an instant global session revocation mechanism. The web admin panel shows this caveat before moderation actions.
