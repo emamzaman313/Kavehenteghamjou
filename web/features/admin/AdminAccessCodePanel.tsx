@@ -13,7 +13,9 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'access'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'audit' | 'access'>('overview');
+  const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number }; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
@@ -29,7 +31,21 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
     setOverview(data);
   }, [supabase, notify]);
 
+  const refreshAudit = useCallback(async () => {
+    setAuditLoading(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'audit_logs' } });
+    setAuditLoading(false);
+    if (error || data?.ok !== true) {
+      notify('دریافت گزارش عملیات مدیریتی ناموفق بود.', 'error');
+      return;
+    }
+    setAuditRows(data.events ?? []);
+  }, [supabase, notify]);
+
   useEffect(() => { void refreshOverview(); }, [refreshOverview]);
+  useEffect(() => {
+    if (adminTab === 'audit') void refreshAudit();
+  }, [adminTab, refreshAudit]);
 
   const moderatePost = async (postId: string, visibility: 'public' | 'private') => {
     const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'moderate_post', postId, visibility } });
@@ -110,6 +126,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>
           <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}><Users size={15}/> کاربران</button>
           <button className={adminTab === 'posts' ? 'active' : ''} onClick={() => setAdminTab('posts')}><LayoutDashboard size={15}/> مدیریت پست‌ها</button>
+          <button className={adminTab === 'audit' ? 'active' : ''} onClick={() => setAdminTab('audit')}><ShieldCheck size={15}/> گزارش مدیریت</button>
           <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
         </div>
         {overviewLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت اطلاعات پنل…</span></div> : null}
@@ -119,6 +136,17 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
         </div>}
         {adminTab === 'users' && !overviewLoading && <div className="admin-console-card"><strong>فهرست کاربران ({overview?.users.length ?? 0})</strong>{(overview?.users ?? []).map((user) => <div className="admin-user-row" key={user.id}><span className="admin-user-avatar">{(user.display_name || 'ک').slice(0,1)}</span><div><b>{user.display_name || 'کاربر کاوه'}</b><small>{user.username ? '@' + user.username : 'نام کاربری ثبت نشده'} · {new Date(user.created_at).toLocaleDateString('fa-IR')}</small></div></div>)}</div>}
         {adminTab === 'posts' && !overviewLoading && <div className="admin-console-card"><strong>مدیریت محتوا ({overview?.posts.length ?? 0} پست اخیر)</strong>{(overview?.posts ?? []).map((post) => <div className="admin-post-row" key={post.id}><div><b>{post.body || 'پست رسانه‌ای'}</b><small>{post.visibility === 'public' ? 'قابل مشاهده برای عموم' : 'محدود / مخفی'} · {new Date(post.created_at).toLocaleDateString('fa-IR')}</small></div><div className="admin-post-actions"><button className="icon-button" title={post.visibility === 'public' ? 'مخفی‌کردن' : 'عمومی‌کردن'} onClick={() => void moderatePost(post.id, post.visibility === 'public' ? 'private' : 'public')}>{post.visibility === 'public' ? <EyeOff size={16}/> : <Eye size={16}/>}</button><button className="icon-button admin-delete" title={deleteCandidate === post.id ? 'برای تأیید دوباره بزن' : 'حذف پست'} onClick={() => void deletePost(post.id)}><Trash2 size={16}/></button></div></div>)}</div>}
+        {adminTab === 'audit' && <div className="admin-console-card">
+          <div className="admin-audit-heading"><strong>گزارش عملیات حساس (۱۰۰ مورد اخیر)</strong><button className="button button-quiet" type="button" onClick={() => void refreshAudit()}><Activity size={15}/> تازه‌سازی</button></div>
+          {auditLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت گزارش‌ها…</span></div> : auditRows.length === 0 ? <p>هنوز عملیات مدیریتی ثبت نشده است.</p> : auditRows.map((entry) => <div className="admin-activity-row" key={entry.id}>
+            <span className="admin-activity-dot"/>
+            <div>
+              <b>{entry.action === 'delete_post' ? 'حذف پست' : entry.action === 'moderate_post' ? 'تغییر وضعیت پست' : entry.action}</b>
+              <small>شناسه محتوا: {entry.target_id.slice(0, 8)}… · مدیر: {entry.actor_id?.slice(0, 8) ?? 'نامشخص'} · {entry.status === 'succeeded' ? 'موفق' : entry.status === 'failed' ? 'ناموفق' : 'در حال اجرا'}</small>
+              <small>{entry.details?.visibility ? 'وضعیت مقصد: ' + String(entry.details.visibility) + ' · ' : ''}{new Date(entry.created_at).toLocaleString('fa-IR')}</small>
+            </div>
+          </div>)}
+        </div>}
       </section>
       {adminTab === 'access' && <section className="settings-card admin-access-card">
         <div className="side-info-title"><ShieldCheck size={19}/><strong>تنظیمات دسترسی مهمان</strong></div>
