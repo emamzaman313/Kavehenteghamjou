@@ -109,7 +109,7 @@ fun SocialFeedScreen(
             val loaded = supabase.postgrest["posts"].select {
                 order(column = "published_at", order = Order.DESCENDING)
                 order(column = "created_at", order = Order.DESCENDING)
-                limit(FEED_PAGE_SIZE)
+                limit(FEED_PAGE_SIZE.toLong())
             }.decodeList<FeedPostRow>()
 
             val ids = loaded.map { it.id }
