@@ -47,6 +47,32 @@ export function authErrorMessage(error: unknown): string {
   }
 
   if (
+    markers.includes('otp_expired') ||
+    markers.includes('token has expired or is invalid') ||
+    markers.includes('token is expired') ||
+    markers.includes('invalid token')
+  ) {
+    return 'لینک ورود منقضی شده یا قبلاً استفاده شده است. به سایت برگردید، یک لینک تازه بگیرید و فقط همان لینک جدید را یک‌بار باز کنید.';
+  }
+
+  if (
+    Number(fields.status) === 429 ||
+    markers.includes('over_email_send_rate_limit') ||
+    markers.includes('too many requests')
+  ) {
+    return 'درخواست ارسال لینک زیاد بوده است. چند لحظه صبر کنید و سپس فقط یک بار لینک ورود تازه درخواست کنید.';
+  }
+
+  if (
+    markers.includes('redirect_to') ||
+    markers.includes('redirect url') ||
+    markers.includes('redirect uri') ||
+    markers.includes('requested path is not allowed')
+  ) {
+    return 'نشانی بازگشت ورود در Supabase مجاز نیست. مدیر سرویس باید دامنه https://kaveh-avenger.vercel.app را در Auth → URL Configuration به فهرست Redirect URLs اضافه کند.';
+  }
+
+  if (
     fields.status === 0 ||
     markers.includes('failed to fetch') ||
     markers.includes('networkerror') ||
@@ -68,7 +94,7 @@ export function authErrorMessage(error: unknown): string {
     return 'فرایند ورود لغو شد. برای ادامه دوباره تلاش کنید.';
   }
 
-  return 'ورود با ایمیل تکمیل نشد. آدرس ایمیل و اتصال اینترنت را بررسی کنید و دوباره تلاش کنید. اگر مشکل ادامه داشت، تنظیمات ارسال ایمیل و احراز هویت Supabase باید بررسی شود.';
+  return 'ارسال یا تکمیل لینک ورود ایمیل موفق نشد. صندوق ورودی و اتصال اینترنت را بررسی کنید؛ اگر مشکل ادامه داشت، تنظیمات ارسال ایمیل و نشانی بازگشت ورود در Supabase باید بررسی شود.';
 }
 
 /** Read provider errors returned in either the query string or URL fragment. */
