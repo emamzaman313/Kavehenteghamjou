@@ -11,9 +11,6 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.IDToken
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.util.Base64
 
 /** Native Google Credential Manager flow. ID token is verified by Supabase Auth. */
 class GoogleAuthRepository(private val supabase: SupabaseClient) {
@@ -23,8 +20,8 @@ class GoogleAuthRepository(private val supabase: SupabaseClient) {
             "GOOGLE_WEB_CLIENT_ID is not configured in local.properties."
         }
 
-        val rawNonce = createRawNonce()
-        val hashedNonce = sha256Hex(rawNonce)
+        val rawNonce = GoogleNonce.createRawNonce()
+        val hashedNonce = GoogleNonce.sha256Hex(rawNonce)
         val googleOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
