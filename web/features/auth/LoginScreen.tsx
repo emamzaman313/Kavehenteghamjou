@@ -37,7 +37,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         email: normalizedEmail,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (authError) {
