@@ -1,0 +1,21 @@
+*.iml
+.gradle/
+.idea/
+local.properties
+**/build/
+.DS_Store
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+!.env.example
+
+# Web application
+web/node_modules/
+web/.next/
+web/out/
+web/dist/
+web/.env.local
+web/.env.*.local
+*.tsbuildinfo

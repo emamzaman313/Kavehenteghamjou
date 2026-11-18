@@ -1,0 +1,7 @@
+# Copy to local.properties. Do not commit local.properties.
+# Supabase project URL (public identifier; okay to use in Android client)
+SUPABASE_URL=https://slwzjufipavuwcbwoyro.supabase.co
+# Supabase publishable key only. Never put service_role/secret key here.
+SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+# OAuth Web client ID (not the Android client ID); configure SHA-1 for debug/release separately.
+GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
