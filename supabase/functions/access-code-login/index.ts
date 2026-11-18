@@ -77,10 +77,9 @@ async function hmacHex(secret: string, value: string): Promise<string> {
 }
 
 function requestIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  // Only trust proxy-provided IP headers; do not trust client-supplied X-Forwarded-For.
   return request.headers.get("cf-connecting-ip")
     ?? request.headers.get("x-real-ip")
-    ?? forwarded
     ?? "unknown";
 }
 
