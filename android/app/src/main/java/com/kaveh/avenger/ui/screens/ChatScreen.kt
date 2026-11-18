@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -168,7 +167,7 @@ fun ChatScreen(
         try {
             val loaded = supabase.postgrest["messages"].select {
                 eq("conversation_id", conversationId)
-                isIn("deleted_at", listOf<String?>(null))
+                exact("deleted_at", null)
                 order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                 limit(count = 100)
             }.decodeList<MessageRow>().reversed()
