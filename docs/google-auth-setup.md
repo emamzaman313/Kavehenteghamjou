@@ -68,3 +68,8 @@ GOOGLE_WEB_CLIENT_ID=...apps.googleusercontent.com
 - Google Provider در Supabase Dashboard از اتصال فعلی قابل مشاهده یا تغییر نبود؛ بنابراین فعال‌بودن Provider و وجود Client Secret معتبر هنوز تأیید نشده است.
 - تست واقعی Google OAuth در Web و Android انجام نشده است. تست‌های فعلی فقط رفتار پیام خطا و الگوریتم nonce را پوشش می‌دهند.
 - مرجع CI Android: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44326092783
+
+
+## وضعیت تأییدشده Provider در ممیزی زنده — ۱۸ نوامبر ۲۰۲۶
+
+URL متغیر Production وب با Project Ref تطبیق داشت: https://slwzjufipavuwcbwoyro.supabase.co. با این وجود endpoint زنده Auth settings مقدار external.google=false برگرداند. بنابراین Provider فعلاً خاموش است؛ پیام خطا صرفاً خطای UI نیست. مدیر پروژه باید در Authentication → Sign In / Providers → Google آن را فعال و Web Client ID/Secret را تنظیم کند، سپس external.google=true را دوباره بررسی کند. Google Client Secret فقط در Dashboard Supabase وارد شود و هرگز در Git، APK یا چت قرار نگیرد.
