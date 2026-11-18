@@ -42,3 +42,10 @@ OAuth هنوز به Web Client ID/Android OAuth Client ID، SHA-1 و Google Prov
 - RPC عمومی `create_direct_conversation` فقط wrapper با SECURITY INVOKER است؛ کار حساس در تابع SECURITY DEFINER داخل schema غیرقابل‌نمایش `private` انجام می‌شود و `auth.uid()` را اعتبارسنجی می‌کند.
 - service-role، Google Client Secret و signing key هرگز در APK قرار نمی‌گیرند.
 - رمزنگاری E2EE ادعا نشده است؛ TLS و سیاست‌های Supabase کافی برای ادعای E2EE نیستند.
+
+
+## ممیزی تکمیلی ۱۸ نوامبر ۲۰۲۶
+
+Project Ref زنده slwzjufipavuwcbwoyro و URL Production برابر https://slwzjufipavuwcbwoyro.supabase.co تأیید شد. در Auth settings مقدار external.google=false بود. مسیر وب برای جلوگیری از پردازش خودکار و دستی هم‌زمان، detectSessionInUrl=false دارد و callback خودش نشست را بازیابی و code را با exchangeCodeForSession مبادله می‌کند. یک Promise مشترک از اجرای مجدد تبادل در React Strict Mode جلوگیری می‌کند.
+
+Web روی Commit آزمایش‌شده b9ad73e9c0d8dd67a7678aecfba723ea18ebeffe: TypeScript، Production Build، ۱۰ تست و npm audit --omit=dev موفق؛ ESLint صفر خطا/۹ هشدار. این نتایج به معنای موفقیت OAuth واقعی نیستند؛ Provider در سرور غیرفعال است. Android Release/دستگاه واقعی و E2E دوحسابی هنوز تأیید نشده‌اند.
