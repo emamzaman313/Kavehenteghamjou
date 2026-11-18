@@ -1,7 +1,7 @@
 # وضعیت واقعی پیاده‌سازی و آزمون کاوه انتقامجو
 
 آخرین بازبینی: ۱۸ نوامبر ۲۰۲۶ (UTC)
-آخرین Commit کد بررسی‌شده در `main`: `d204f71253c129770dc69436a4373ffd7e46c05c`
+آخرین Commit کد بررسی‌شده در `main`: `398f5b39491ed5e5e198f567bcc38f601c7aa433`
 
 این سند بین کد، تست خودکار، Build، تست End-to-End و آماده‌بودن Release تفاوت می‌گذارد. موفقیت Build اثبات ورود OAuth واقعی، تست دستگاه یا رفتار دوحسابی نیست.
 
@@ -20,18 +20,19 @@
 - Project Ref: `slwzjufipavuwcbwoyro`
 - URL: `https://slwzjufipavuwcbwoyro.supabase.co`
 - وضعیت: `ACTIVE_HEALTHY`، region: `ap-northeast-1`، PostgreSQL 17.12.
-- جدول‌های public: ۲۶؛ RLS فعال: ۲۶ از ۲۶.
-- Policyهای public: ۶۸.
-- تعداد `auth.users`: صفر؛ `public.profiles`: صفر؛ posts/messages/file_assets/storage objects در ممیزی قبلی نیز صفر.
+- جدول‌های public: ۲۹؛ RLS فعال: ۲۹ از ۲۹.
+- Policyهای public: ۷۱.
+- تعداد فعلی `auth.users`: ۳ و `public.profiles`: ۳؛ posts/messages/file_assets/storage objects در زمان بررسی هنوز صفر هستند.
 - Bucket `user-files` خصوصی؛ حداکثر اندازه: `50,000,000` بایت.
 - Realtime publication شامل `conversation_members`، `messages`، `notifications` و `posts` است.
 - RPC `public.create_direct_conversation(p_other_user_id uuid)` موجود و wrapper آن SECURITY INVOKER است.
-- Security Advisor: بدون finding؛ Performance Advisor: ۳۳ مورد INFO ایندکس‌های استفاده‌نشده و یک هشدار چند SELECT policy روی `file_assets`.
-- هیچ داده، Policy، جدول یا Migration در این مأموریت تغییر نکرد.
+- جداول جدید `site_access_settings`، `site_access_admins` و `site_access_attempts` همگی RLS فعال دارند و دسترسی مستقیم `anon`/`authenticated` از آن‌ها سلب شده است؛ فقط Edge Function از Service Role استفاده می‌کند.
+- پس از افزودن policyها، Security Advisor برای این جداول هشدار RLS ندارد؛ یک هشدار مستقل `auth_leaked_password_protection` همچنان وجود دارد. Performance Advisor شامل ۳۳ مورد INFO ایندکس‌های استفاده‌نشده و هشدار قبلی چند SELECT policy روی `file_assets` است.
+- سه Migration مربوط به ورود با کد دسترسی در Production اعمال شده‌اند؛ وضعیت و مقداردهی اولیه با query فقط‌خواندنی تأیید شده است.
 
 ## Remote Migration Ledger
 
-ده Migration موجود در Remote Ledger:
+سیزده Migration موجود در Remote Ledger:
 
 1. `20261118082218` — `kaveh_foundation_schema`
 2. `20261118082313` — `kaveh_message_edit_permissions`
@@ -43,6 +44,9 @@
 8. `20261118091018` — `kaveh_shared_file_read_access`
 9. `20261118124842` — `kaveh_conversation_last_message_at_trigger`
 10. `20261118131339` — `kaveh_realtime_conversation_read_receipts`
+11. `20261118190325` — `kaveh_shared_access_code`
+12. `20261118190529` — `kaveh_shared_access_code_live_init` (مقداردهی فقط روی Production؛ متن کد در Git قرار نگرفته است)
+13. `20261118191056` — `kaveh_access_code_service_policies`
 
 چهار Migration اول در تاریخچه محلی به‌طور کامل بازیابی نشده‌اند. شش فایل بعدی در `supabase/migrations/` وجود دارند. `archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` هرگز اجرا نشود. `remote-state-snapshot.md` سند توصیفی است، نه backup/migration قابل اجرا.
 
@@ -50,13 +54,15 @@
 
 ### پیاده‌سازی و تست خودکار
 
-- OAuth + PKCE و session persistence در Supabase JS.
-- Login UI اکنون با try/catch/finally خطای returned/throw شده را مدیریت می‌کند؛ Provider disabled، شبکه و لغو ورود پیام امن فارسی دارند.
-- callback مسیر `/auth/callback` خطاهای query/hash را می‌خواند، authorization code را exchange می‌کند و در خطا امکان بازگشت/تلاش دوباره دارد.
-- تست‌های جدید: `web/tests/auth-errors.test.ts`، شامل Provider disabled، network، منع افشای payload و callback error.
-- Web CI run: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44325901682
-- Commit تست‌شده: `a9e9e23e8f2a71c04d8da1884eab26c70238c3a9`.
-- نتیجه: TypeScript موفق، ESLint صفر error و ۹ warning، ۱۰ تست از ۱۰ تست موفق، Next.js production build موفق.
+- ورود ایمیلی وب از لینک یک‌بارمصرف Supabase با PKCE استفاده می‌کند؛ صفحه `/auth/callback` کد را با session مبادله می‌کند. قالب فعلی Auth لینک می‌فرستد، نه عدد ۶ رقمی؛ UI مطابق آن به‌روزرسانی شده است.
+- مسیر «ورود با کد دسترسی» افزوده شده است؛ Edge Function کد را در سرور با bcrypt بررسی می‌کند و برای هر ورود یک حساب مهمان مستقل می‌سازد.
+- پنل مدیر امکان روشن/خاموش‌کردن قابلیت و تغییر کد ۶ کاراکتری را دارد. مدیر اولیه از جدول خصوصی `site_access_admins` تعیین شده است.
+- مقدار آغازین طبق درخواست مالک در Supabase به‌صورت bcrypt hash مقداردهی شده است؛ مقدار خام در مخزن عمومی قرار نگرفته است.
+- پنج تلاش ناموفق باعث محدودیت ۱۵ دقیقه‌ای بر اساس HMAC مبدأ درخواست می‌شود.
+- تست‌های جدید: `web/tests/auth-errors.test.ts` و `web/tests/access-code.test.ts`.
+- Web CI run: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44377507753
+- Commit تست‌شده: `aa99add7b985e868e2cc26e1ccfee85ecac648a0`.
+- نتیجه: TypeScript، ESLint، تست‌های واحد و Next.js production build همگی موفق. اجرای Security checks برای آخرین تغییرات مخزن نیز موفق است: https://github.com/emamzaman313/Kavehenteghamjou/actions/runs/44377908908.
 - صفحه‌های خانه، گفتگو، فایل، اکتشاف، پروفایل، اعلان و تنظیمات در سورس به Supabase متصل هستند؛ با صفر بودن userها، صحت E2E آن‌ها ثابت نشده است.
 
 ### Google Provider
@@ -101,7 +107,8 @@
 - Project: `kaveh-avenger`; دامنه اصلی: https://kaveh-avenger.vercel.app
 - Vercel Production env `NEXT_PUBLIC_SUPABASE_URL` با `https://slwzjufipavuwcbwoyro.supabase.co` برابر بود؛ Publishable Key نیز تنظیم شده بود.
 - Deployment قبلی READY: `dpl_A7bRxNEdXPfzdmk7iPo2F9sceKJg`، Commit `77dc96d4b4d9c02aa5962001fdf0f4777193fa22`.
-- Deployment جدید برای Commit `d204f712` با شناسه `dpl_5Z2f6VFMSYbcF5kfM9M9yaZiUZ9R` ایجاد و وضعیت `READY` آن تأیید شد؛ alias شامل `kaveh-avenger.vercel.app` است. ابزار مرور عمومی نتوانست صفحه را واکشی کند؛ بنابراین تست تعاملی مرورگر/Google OAuth ادعا نمی‌شود.
+- Deployment قبلی برای Commit `dd774609` با شناسه `dpl_3wkivPRGzz6ZhinkiK7hkoCEjtw2` وضعیت `READY` داشت؛ انتشار Commit جدیدِ شامل ورود با کد، جداگانه در سوابق Vercel بررسی می‌شود.
+- Build موفق CI به‌تنهایی تست واقعی مرورگر، تحویل ایمیل، ایجاد حساب مهمان یا ورود عملی با کد را اثبات نمی‌کند.
 
 ## Google OAuth و Release gateها
 
@@ -140,3 +147,18 @@
 7. آزمون محدودیت‌های فایل و RLS با حساب مجاز و غیرمجاز.
 
 هیچ داده‌ای از Supabase حذف نشده، هیچ migration اجراشده‌ای دوباره اجرا نشده و هیچ secret در مخزن قرار داده نشده است.
+
+
+## ورود با کد دسترسی — تغییرات ۱۸ نوامبر ۲۰۲۶
+
+### Supabase
+- سه جدول خصوصی برای تنظیمات، مدیران مجاز و تلاش‌های ناموفق اضافه شد؛ هر سه RLS-enabled هستند و دسترسی مستقیم `anon`/`authenticated` از آن‌ها لغو شده است.
+- توابع بررسی hash، ذخیره تنظیمات و محدودسازی تلاش‌ها فقط برای `service_role` قابل اجرا هستند.
+- Edge Function به نام `access-code-login` با `verify_jwt=false` مستقر شده؛ مسیرهای مدیریتی در بدنه تابع Bearer token را اعتبارسنجی و نقش مدیر را از جدول خصوصی می‌خوانند.
+- بررسی دیتابیس: کد مقداردهی‌شده موفق، کد اشتباه ناموفق، قابلیت روشن، و یک مدیر در فهرست ثبت شده است.
+- محدودیت: چون کد اولیه ساده و مشترک است، مالک باید بلافاصله آن را از پنل مدیریت عوض کند.
+
+### آزمون و محدودیت شواهد
+- Web CI run `44377507753` در Commit `aa99add7` شامل فرم ورود با کد، پنل مدیر، helper و تست‌های آن بود؛ TypeScript، lint، test و build موفق شدند.
+- Security run `44377908908` برای Commit `456ef9e5` موفق شد؛ Secret scanning و dependency audit موفق، Dependency review به‌علت اجرا نشدن روی Pull Request skipped بود.
+- کد مهمان و پنل مدیر در محیط واقعی با مرورگر/درخواست POST end-to-end آزمایش نشده‌اند؛ ابزار اجرای این نشست امکان درخواست مستقیم به Edge Function را نداد. Deployment Vercel و درخواست واقعی کاربر باید برای اثبات کامل ورود آزمایش شوند.
