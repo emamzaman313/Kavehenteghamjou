@@ -129,6 +129,8 @@ fun ChatScreen(
     var refreshing by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var realtimeConnected by remember { mutableStateOf(false) }
+    var hasOlderMessages by remember { mutableStateOf(false) }
+    var loadingOlderMessages by remember { mutableStateOf(false) }
     var showNewConversation by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     val searchResults = remember { mutableStateListOf<ProfileRow>() }
@@ -248,6 +250,7 @@ fun ChatScreen(
 
             messages.clear()
             messages.addAll(loaded)
+            hasOlderMessages = loaded.size == 100
 
             // Advance the read cursor only through the latest message actually
             // fetched from the server; do not use the device clock.
@@ -263,6 +266,31 @@ fun ChatScreen(
             }
         } catch (exception: Exception) {
             errorText = exception.message ?: "دریافت پیام‌ها ناموفق بود."
+        }
+    }
+
+    suspend fun loadOlderMessages(conversationId: String) {
+        val oldest = messages.firstOrNull()?.createdAt ?: return
+        if (!hasOlderMessages || loadingOlderMessages) return
+        loadingOlderMessages = true
+        try {
+            val older = supabase.postgrest["messages"].select {
+                filter {
+                    eq("conversation_id", conversationId)
+                    exact("deleted_at", null)
+                    lt("created_at", oldest)
+                }
+                order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                limit(count = 100)
+            }.decodeList<MessageRow>().reversed()
+            val existingIds = messages.map { it.id }.toSet()
+            val uniqueOlder = older.filterNot { it.id in existingIds }
+            messages.addAll(0, uniqueOlder)
+            hasOlderMessages = older.size == 100
+        } catch (exception: Exception) {
+            errorText = exception.message ?: "بارگذاری پیام‌های قدیمی ناموفق بود."
+        } finally {
+            loadingOlderMessages = false
         }
     }
 
@@ -469,6 +497,7 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
                                 messages.clear()
+                                hasOlderMessages = false
                                 activeConversation = conversation
                             },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -486,6 +515,18 @@ fun ChatScreen(
                 }
             }
         } else {
+            if (hasOlderMessages) {
+                Button(
+                    onClick = {
+                        val conversationId = activeConversation?.id
+                        if (conversationId != null) scope.launch { loadOlderMessages(conversationId) }
+                    },
+                    enabled = !loadingOlderMessages
+                ) {
+                    if (loadingOlderMessages) CircularProgressIndicator(modifier = Modifier.height(16.dp), strokeWidth = 2.dp)
+                    else Text("بارگذاری پیام‌های قدیمی‌تر")
+                }
+            }
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 reverseLayout = false,
