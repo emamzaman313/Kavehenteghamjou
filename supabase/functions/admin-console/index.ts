@@ -80,7 +80,25 @@ Deno.serve(async (request: Request) => {
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) return respond({ ok: false, reason: "reports_query_failed" }, 500, origin);
-    return respond({ ok: true, reports: data ?? [] }, 200, origin);
+    const postIds = [...new Set((data ?? []).filter((row) => row.target_type === "post").map((row) => row.target_id))];
+    const userIds = [...new Set((data ?? []).filter((row) => row.target_type === "user").map((row) => row.target_id))];
+    const [postTargets, userTargets] = await Promise.all([
+      postIds.length ? admin.from("posts").select("id,body,author_id,visibility").in("id", postIds) : Promise.resolve({ data: [], error: null }),
+      userIds.length ? admin.from("profiles").select("id,display_name,username").in("id", userIds) : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (postTargets.error || userTargets.error) return respond({ ok: false, reason: "report_targets_query_failed" }, 500, origin);
+    const postById = new Map((postTargets.data ?? []).map((row) => [row.id, row]));
+    const userById = new Map((userTargets.data ?? []).map((row) => [row.id, row]));
+    const reports = (data ?? []).map((row) => ({
+      ...row,
+      target_summary: row.target_type === "post"
+        ? (postById.get(row.target_id)?.body || "پست رسانه‌ای")
+        : row.target_type === "user"
+          ? (userById.get(row.target_id)?.display_name || userById.get(row.target_id)?.username || "کاربر")
+          : null,
+      target_author_id: row.target_type === "post" ? postById.get(row.target_id)?.author_id ?? null : null,
+    }));
+    return respond({ ok: true, reports }, 200, origin);
   }
 
   if (body.action === "review_report") {
