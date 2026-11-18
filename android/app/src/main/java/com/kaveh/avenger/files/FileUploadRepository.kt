@@ -27,11 +27,15 @@ private data class FileAssetInsert(
 )
 
 data class UploadedFile(
+    val fileAssetId: String,
     val originalName: String,
     val byteSize: Long,
     val objectPath: String,
     val sha256: String
 )
+
+@Serializable
+private data class FileAssetIdRow(val id: String)
 
 class FileTooLargeException(maxBytes: Long) :
     IllegalArgumentException("حجم فایل از سقف ${maxBytes / 1_000_000} مگابایت بیشتر است.")
@@ -77,7 +81,7 @@ class FileUploadRepository(private val supabase: SupabaseClient) {
         }
 
         // Keep the exact original filename (including Persian/Unicode) only as metadata.
-        supabase.postgrest.from("file_assets").insert(
+        val insertedAsset = supabase.postgrest.from("file_assets").insert(
             FileAssetInsert(
                 owner_id = ownerId,
                 object_path = objectPath,
@@ -86,9 +90,12 @@ class FileUploadRepository(private val supabase: SupabaseClient) {
                 byte_size = bytes.size.toLong(),
                 sha256_hex = sha256
             )
-        )
+        ) {
+            select()
+        }.decodeSingle<FileAssetIdRow>()
 
         return UploadedFile(
+            fileAssetId = insertedAsset.id,
             originalName = originalName,
             byteSize = bytes.size.toLong(),
             objectPath = objectPath,

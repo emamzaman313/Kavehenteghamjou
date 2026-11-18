@@ -1,5 +1,8 @@
 package com.kaveh.avenger.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.Button
@@ -33,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.SupabaseClient
@@ -51,6 +57,8 @@ import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.storage.storage
+import com.kaveh.avenger.files.FileUploadRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collect
@@ -95,6 +103,33 @@ private data class MessageInsert(
 )
 
 @Serializable
+private data class MessageIdRow(val id: String)
+
+@Serializable
+private data class MessageAttachmentRow(
+    @SerialName("message_id") val messageId: String,
+    @SerialName("file_asset_id") val fileAssetId: String,
+    @SerialName("display_order") val displayOrder: Int = 0
+)
+
+@Serializable
+private data class MessageAttachmentInsert(
+    @SerialName("message_id") val messageId: String,
+    @SerialName("file_asset_id") val fileAssetId: String,
+    @SerialName("display_order") val displayOrder: Int = 0
+)
+
+@Serializable
+private data class FileAssetRow(
+    val id: String,
+    @SerialName("bucket_id") val bucketId: String,
+    @SerialName("object_path") val objectPath: String,
+    @SerialName("original_name") val originalName: String,
+    @SerialName("mime_type") val mimeType: String? = null,
+    @SerialName("byte_size") val byteSize: Long
+)
+
+@Serializable
 private data class ProfileRow(
     val id: String,
     @SerialName("display_name") val displayName: String,
@@ -120,6 +155,7 @@ fun ChatScreen(
     userId: String,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val conversations = remember { mutableStateListOf<ChatConversation>() }
     val messages = remember { mutableStateListOf<MessageRow>() }
     var activeConversation by remember { mutableStateOf<ChatConversation?>(null) }
@@ -136,6 +172,10 @@ fun ChatScreen(
     val searchResults = remember { mutableStateListOf<ProfileRow>() }
     var searchingPeople by remember { mutableStateOf(false) }
     var creatingConversationFor by remember { mutableStateOf<String?>(null) }
+    var uploadingAttachment by remember { mutableStateOf(false) }
+    var downloadingFilePath by remember { mutableStateOf<String?>(null) }
+    var pendingDownloadBytes by remember { mutableStateOf<ByteArray?>(null) }
+    val attachmentsByMessage = remember { mutableStateMapOf<String, List<FileAssetRow>>() }
 
     suspend fun loadConversations() {
         loading = true
@@ -251,6 +291,22 @@ fun ChatScreen(
             messages.clear()
             messages.addAll(loaded)
             hasOlderMessages = loaded.size == 100
+            attachmentsByMessage.clear()
+            if (loaded.isNotEmpty()) {
+                val attachmentRows = supabase.postgrest["message_attachments"].select {
+                    filter { isIn("message_id", loaded.map { it.id }) }
+                }.decodeList<MessageAttachmentRow>()
+                val fileIds = attachmentRows.map { it.fileAssetId }.distinct()
+                if (fileIds.isNotEmpty()) {
+                    val fileRows = supabase.postgrest["file_assets"].select {
+                        filter { isIn("id", fileIds) }
+                    }.decodeList<FileAssetRow>()
+                    val filesById = fileRows.associateBy { it.id }
+                    attachmentRows.groupBy { it.messageId }.forEach { (messageId, rows) ->
+                        attachmentsByMessage[messageId] = rows.mapNotNull { filesById[it.fileAssetId] }
+                    }
+                }
+            }
 
             // Advance the read cursor only through the latest message actually
             // fetched from the server; do not use the device clock.
@@ -292,6 +348,71 @@ fun ChatScreen(
         } finally {
             loadingOlderMessages = false
         }
+    }
+
+    suspend fun uploadAttachment(uri: Uri) {
+        val conversationId = activeConversation?.id ?: return
+        uploadingAttachment = true
+        errorText = null
+        try {
+            val uploaded = FileUploadRepository(supabase).upload(context, userId, uri)
+            val message = supabase.postgrest.from("messages").insert(
+                MessageInsert(
+                    conversationId = conversationId,
+                    senderId = userId,
+                    body = "📎 ${uploaded.originalName}"
+                )
+            ) {
+                select()
+            }.decodeSingle<MessageIdRow>()
+            supabase.postgrest.from("message_attachments").insert(
+                MessageAttachmentInsert(
+                    messageId = message.id,
+                    fileAssetId = uploaded.fileAssetId
+                )
+            )
+            loadMessages(conversationId)
+            loadConversations()
+        } catch (exception: Exception) {
+            errorText = exception.message ?: "ارسال فایل ناموفق بود."
+        } finally {
+            uploadingAttachment = false
+        }
+    }
+
+    val saveFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { uri ->
+        val bytes = pendingDownloadBytes
+        if (uri != null && bytes != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: error("ذخیره فایل در مقصد انتخاب‌شده ممکن نشد.")
+            }.onFailure { exception ->
+                errorText = exception.message ?: "ذخیره فایل ناموفق بود."
+            }
+        }
+        pendingDownloadBytes = null
+    }
+
+    suspend fun downloadAttachment(file: FileAssetRow) {
+        downloadingFilePath = file.objectPath
+        errorText = null
+        try {
+            pendingDownloadBytes = supabase.storage.from(file.bucketId).downloadAuthenticated(file.objectPath)
+            saveFileLauncher.launch(file.originalName)
+        } catch (exception: Exception) {
+            errorText = exception.message ?: "دریافت فایل ناموفق بود."
+            pendingDownloadBytes = null
+        } finally {
+            downloadingFilePath = null
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) scope.launch { uploadAttachment(uri) }
     }
 
     LaunchedEffect(userId) {
@@ -547,6 +668,17 @@ fun ChatScreen(
                                     message.body,
                                     color = if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                attachmentsByMessage[message.id].orEmpty().forEach { file ->
+                                    Button(
+                                        onClick = { scope.launch { downloadAttachment(file) } },
+                                        enabled = downloadingFilePath != file.objectPath
+                                    ) {
+                                        Text(
+                                            if (downloadingFilePath == file.objectPath) "در حال دریافت…"
+                                            else "دریافت ${file.originalName}"
+                                        )
+                                    }
+                                }
                                 Text(
                                     formatMessageTime(message.createdAt),
                                     style = MaterialTheme.typography.labelSmall,
@@ -572,6 +704,13 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                IconButton(
+                    enabled = !uploadingAttachment && !sending,
+                    onClick = { filePickerLauncher.launch(arrayOf("*/*")) }
+                ) {
+                    if (uploadingAttachment) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Outlined.AttachFile, contentDescription = "پیوست فایل")
+                }
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
                     value = draft,
