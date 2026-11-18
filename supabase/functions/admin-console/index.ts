@@ -38,7 +38,7 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user",
+    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role",
     targetId: string,
     details: Record<string, unknown> = {},
     targetType: "post" | "user" = "post",
@@ -98,7 +98,56 @@ Deno.serve(async (request: Request) => {
         admin_role: adminRoleById.get(user.id) ?? null,
       };
     }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-    return respond({ ok: true, users }, 200, origin);
+    return respond({ ok: true, users, can_manage_admins: adminRow.role === "owner" }, 200, origin);
+  }
+
+  if (body.action === "set_admin_role" || body.action === "remove_admin_role") {
+    if (adminRow.role !== "owner") return respond({ ok: false, reason: "owner_only" }, 403, origin);
+    if (!validId(body.userId)) return respond({ ok: false, reason: "invalid_user_id" }, 400, origin);
+    if (body.userId === authData.user.id) return respond({ ok: false, reason: "cannot_change_own_role" }, 400, origin);
+    const { data: targetResult, error: targetError } = await admin.auth.admin.getUserById(body.userId);
+    if (targetError || !targetResult.user) return respond({ ok: false, reason: "user_not_found" }, 404, origin);
+    const { data: existingRole, error: roleLookupError } = await admin.from("site_access_admins")
+      .select("user_id,role").eq("user_id", body.userId).maybeSingle();
+    if (roleLookupError) return respond({ ok: false, reason: "role_lookup_failed" }, 500, origin);
+
+    if (body.action === "set_admin_role") {
+      const role = String(body.role ?? "");
+      if (!["admin", "moderator", "support"].includes(role)) return respond({ ok: false, reason: "invalid_admin_role" }, 400, origin);
+      if (existingRole?.role === "owner") return respond({ ok: false, reason: "owner_role_protected" }, 403, origin);
+      const audit = await beginAudit("set_admin_role", body.userId, { role }, "user");
+      if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+      const { error } = await admin.from("site_access_admins").upsert({ user_id: body.userId, role }, { onConflict: "user_id" });
+      if (error) {
+        await finishAudit(audit.id, "failed");
+        return respond({ ok: false, reason: "role_update_failed" }, 500, origin);
+      }
+      const roleLabel = role === "admin" ? "مدیر" : role === "moderator" ? "ناظر" : "پشتیبانی";
+      const { error: notificationError } = await admin.from("notifications").insert({
+        recipient_id: body.userId, actor_id: authData.user.id, kind: "admin_role_changed",
+        entity_type: "moderation", entity_id: audit.id,
+        payload: { message: `نقش مدیریتی حساب شما به «${roleLabel}» تغییر کرد.`, moderation_action: "role_changed", role },
+      });
+      const auditRecorded = await finishAudit(audit.id, "succeeded");
+      return respond({ ok: true, auditRecorded, notificationSent: !notificationError }, 200, origin);
+    }
+
+    if (!existingRole) return respond({ ok: false, reason: "user_is_not_admin" }, 404, origin);
+    if (existingRole.role === "owner") return respond({ ok: false, reason: "owner_role_protected" }, 403, origin);
+    const audit = await beginAudit("remove_admin_role", body.userId, { previous_role: existingRole.role }, "user");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const { error } = await admin.from("site_access_admins").delete().eq("user_id", body.userId);
+    if (error) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "role_removal_failed" }, 500, origin);
+    }
+    const { error: notificationError } = await admin.from("notifications").insert({
+      recipient_id: body.userId, actor_id: authData.user.id, kind: "admin_role_removed",
+      entity_type: "moderation", entity_id: audit.id,
+      payload: { message: "دسترسی مدیریتی حساب شما برداشته شد.", moderation_action: "role_removed" },
+    });
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, auditRecorded, notificationSent: !notificationError }, 200, origin);
   }
 
   if (["warn_user", "ban_user", "unban_user"].includes(String(body.action))) {
