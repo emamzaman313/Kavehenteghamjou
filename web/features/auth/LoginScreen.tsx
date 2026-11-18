@@ -21,6 +21,12 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const [notice, setNotice] = useState('');
   const [resendIn, setResendIn] = useState(0);
 
+  const normalizeOtp = (value: string) => value
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/\\D/g, '')
+    .slice(0, 6);
+
   useEffect(() => {
     if (resendIn <= 0) return;
     const timer = window.setTimeout(() => setResendIn((current) => Math.max(0, current - 1)), 1000);
