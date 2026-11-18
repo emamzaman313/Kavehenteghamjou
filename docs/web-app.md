@@ -1,39 +1,49 @@
 # نسخه وب کاوه انتقامجو
 
-## ساختار
+## ساختار و Backend
 
-`web/` یک Next.js App Router مستقل با TypeScript و React است. لایه داده از Supabase JS استفاده می‌کند و مستقیماً به همان پروژه `slwzjufipavuwcbwoyro` متصل می‌شود؛ دیتابیس جداگانه‌ای برای وب وجود ندارد.
+web/ یک Next.js App Router مستقل با TypeScript و React است. نسخه وب و Android از پروژه Supabase مشترک استفاده می‌کنند؛ Project Ref برابر slwzjufipavuwcbwoyro و نشانی تأییدشده Production برابر https://slwzjufipavuwcbwoyro.supabase.co است. دیتابیس مستقل برای وب وجود ندارد.
 
 ## اتصال و امنیت
 
-- کلید عمومی Publishable در `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` استفاده می‌شود.
+- NEXT_PUBLIC_SUPABASE_URL و NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY تنها متغیرهای عمومی کلاینت هستند.
+- مقدار URL در محیط Vercel Production بازخوانی و با Project Ref واقعی تطبیق داده شد؛ host کوتاه مشاهده‌شده در تصویر، مقدار فعلی Production نیست.
 - هیچ Service Role یا Secret Key در Browser قرار نمی‌گیرد.
-- ورود Google از OAuth + PKCE و callback مسیر `/auth/callback` استفاده می‌کند.
-- تمام Queryها با نشست Authenticated اجرا می‌شوند و RLS دیتابیس کنترل نهایی دسترسی است.
-- Storage bucket `user-files` خصوصی و سقف آن ۵۰٬۰۰۰٬۰۰۰ بایت است.
-- دانلود از مسیر `createSignedUrl` با اعتبار ۹۰ ثانیه انجام می‌شود.
-- SHA-256 با خواندن Stream فایل و chunkهای کوچک محاسبه می‌شود، نه `arrayBuffer()` کل فایل.
+- ورود از Google OAuth با PKCE و callback مسیر /auth/callback استفاده می‌کند.
+- callback در شاخه اصلاحی کد را صریحاً و فقط یک‌بار مبادله می‌کند و نشست موجود را نیز بازیابی می‌کند.
+- RLS دیتابیس مرجع نهایی کنترل دسترسی است؛ Storage bucket user-files خصوصی و سقف آن دقیقاً ۵۰٬۰۰۰٬۰۰۰ بایت است.
+- دانلود فایل در Web از signed URL کوتاه‌عمر استفاده می‌کند.
 
-## صفحات و قابلیت‌های متصل
+## صفحات و اتصال فعلی
 
-| بخش | قابلیت فعلی |
+| بخش | وضعیت در سورس |
 |---|---|
-| ورود | Google OAuth redirect / PKCE؛ نیازمند تنظیم Provider در داشبورد |
-| خانه | خواندن فید عمومی، انتشار متن، واکنش و دیدگاه |
-| گفتگو | ایجاد گفتگوی مستقیم، تاریخچه، ارسال پیام، Realtime |
-| فایل‌ها | چندانتخابی، Drag & Drop، کنترل حجم، آپلود و دانلود امن |
-| اکتشاف | جست‌وجوی پروفایل و دنبال‌کردن |
-| پروفایل | ویرایش نام، نام کاربری و بیو؛ نمایش رتبه و نشان از DB |
-| اعلان‌ها | خواندن، Realtime count و علامت‌گذاری خوانده‌شده |
-| تنظیمات | تم، زبان ترجیحی و خروج |
+| ورود | Google OAuth + PKCE؛ Provider واقعی فعلاً غیرفعال است |
+| خانه | فید و انتشار محتوا |
+| گفتگو | گفتگوی مستقیم، تاریخچه، پیام، Realtime، read cursor و پیوست |
+| فایل | انتخاب چند فایل، کنترل حجم، آپلود/دانلود خصوصی و metadata |
+| اکتشاف | جست‌وجوی کاربران و follow |
+| پروفایل | ویرایش اطلاعات عمومی و نمایش رتبه/نشان سرور |
+| اعلان‌ها | خواندن و Realtime |
+| تنظیمات | تم، زبان و خروج |
 
-## راه‌اندازی
+وجود مسیر یا صفحه به‌تنهایی اثبات‌کننده End-to-End بودن آن نیست؛ آزمایش دوحسابی و RLS هنوز جداگانه لازم است.
 
-مراحل و OAuth setup در `web/README.md` قرار دارد. متغیرهای نمونه در `.env.example` هستند.
+## نتایج تست شاخه اصلاح Auth
 
-## محدودیت‌های فعلی
+در Commit تست‌شده f77dc0032974e4e4f33033b7c3b322bd05e13cb9:
 
-- هنوز build production به دلیل عدم دسترسی محیط توسعه به npm registry اجرا نشده است؛ `package-lock.json` نیز تا زمان نصب موفق تولید نشده است.
-- PWA کامل نیست: manifest اولیه وجود دارد، اما Service Worker و آیکون رسمی برند در workspace فعلی در دسترس نیست.
-- آپلود فعلی استاندارد Supabase Storage است؛ انتقال resumable/multipart و پیشرفت بایت‌به‌بایت باقی مانده است.
-- UI گروه/کانال، استوری، تماس، Push، و پنل مدیریت واقعی باقی مانده‌اند.
+- npm ci: موفق، ۴۰۶ بسته نصب شد.
+- npm run typecheck: موفق.
+- npm run lint: Exit 0، بدون خطا و با ۹ هشدار موجود.
+- npm test: دو فایل، ۸ تست موفق.
+- npm run build: Next.js Production Build موفق.
+- مسیرهای Production اصلی و /auth/callback در Deployment فعلی HTTP 200 برگرداندند؛ این مورد جایگزین آزمون OAuth واقعی نیست.
+
+## محدودیت‌های اثبات‌شده
+
+- endpoint عمومی Supabase Auth در ممیزی زنده external.google=false برگرداند؛ بنابراین خطای provider is not enabled از خود Provider غیرفعال می‌آید. تغییر کد رابط این تنظیم سرور را فعال نمی‌کند.
+- ورود واقعی، انتخاب حساب Google، callback واقعی و session restore بعد از OAuth تا فعال‌سازی Provider و ثبت credentials آزمایش نشده‌اند.
+- uploader وب از روش استاندارد Storage استفاده می‌کند؛ صف پایدار، resumable/multipart و پیشرفت بایت‌به‌بایت هنوز تکمیل نشده‌اند.
+- PWA کامل نیست؛ manifest به‌تنهایی کافی نیست و service worker/دارایی رسمی برند در دسترس نیست.
+- گروه/کانال، استوری، تماس، Push و پنل مدیریت تکمیل نشده‌اند.
