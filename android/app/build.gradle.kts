@@ -15,7 +15,7 @@ fun asBuildConfig(value: String): String = "\"" + value.replace("\\", "\\\\").re
 
 android {
     namespace = "com.kaveh.avenger"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.kaveh.avenger"
