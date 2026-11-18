@@ -19,6 +19,8 @@ The following versions were read from the live Supabase migration ledger. Filena
 | `20261118190325` | `kaveh_shared_access_code` | Included |
 | `20261118190529` | `kaveh_shared_access_code_live_init` | Live-only one-time initialization; intentionally no plaintext code in Git |
 | `20261118191056` | `kaveh_access_code_service_policies` | Included |
+| `20261118195400` | `kaveh_post_media_attachments` | Included |
+| `20261118195723` | `kaveh_post_attachment_author_index` | Included |
 
 **Important:** the live migration ledger is authoritative. The first four original SQL bodies have not yet been exported into this repository. An early local SQL draft is archived at `supabase/archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` and is explicitly non-deployable because it predates the final RLS and privilege fixes.
 
