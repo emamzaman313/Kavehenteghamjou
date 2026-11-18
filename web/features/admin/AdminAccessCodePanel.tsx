@@ -17,6 +17,8 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
   const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; is_banned: boolean; admin_role: string | null }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [canManageAdmins, setCanManageAdmins] = useState(false);
+  const [adminRoleDrafts, setAdminRoleDrafts] = useState<Record<string, string>>({});
   const [userReasons, setUserReasons] = useState<Record<string, string>>({});
   const [userDurations, setUserDurations] = useState<Record<string, string>>({});
   const [userBusy, setUserBusy] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
       return;
     }
     setManagedUsers(data.users ?? []);
+    setCanManageAdmins(data.can_manage_admins === true);
   }, [supabase, notify]);
 
   useEffect(() => { void refreshOverview(); }, [refreshOverview]);
@@ -65,6 +68,26 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   useEffect(() => {
     if (adminTab === 'users') void refreshUsers();
   }, [adminTab, refreshUsers]);
+
+  const manageAdminRole = async (action: 'set_admin_role' | 'remove_admin_role', userId: string) => {
+    if (userBusy) return;
+    setUserBusy(userId);
+    const { data, error } = await supabase.functions.invoke('admin-console', {
+      body: { action, userId, ...(action === 'set_admin_role' ? { role: adminRoleDrafts[userId] ?? 'admin' } : {}) },
+    });
+    setUserBusy(null);
+    if (error || data?.ok !== true) {
+      const messages: Record<string, string> = {
+        owner_only: 'فقط مالک اصلی می‌تواند نقش مدیران را تغییر دهد.',
+        owner_role_protected: 'نقش مالک اصلی قابل تغییر یا لغو نیست.',
+        cannot_change_own_role: 'تغییر نقش حساب خودتان مجاز نیست.',
+      };
+      notify(messages[data?.reason] ?? 'تغییر دسترسی مدیریتی انجام نشد.', 'error');
+      return;
+    }
+    notify(action === 'set_admin_role' ? 'نقش مدیریتی ذخیره شد.' : 'دسترسی مدیریتی کاربر لغو شد.');
+    await Promise.all([refreshUsers(), refreshAudit()]);
+  };
 
   const moderateUser = async (action: 'warn_user' | 'ban_user' | 'unban_user', userId: string) => {
     if (userBusy) return;
@@ -200,6 +223,13 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
                   {roleLabel ? <small className="admin-protected-label">حساب مدیریتی: {roleLabel} — محافظت‌شده</small> : isBanned ? <small className="admin-banned-label">محدود تا {new Date(user.banned_until!).toLocaleString('fa-IR')}</small> : <small>وضعیت حساب: عادی</small>}
                 </div>
               </div>
+              {canManageAdmins && user.admin_role !== 'owner' && <div className="admin-role-management">
+                <select className="auth-input admin-role-select" value={adminRoleDrafts[user.id] ?? user.admin_role ?? 'admin'} onChange={(event) => setAdminRoleDrafts((current) => ({ ...current, [user.id]: event.target.value }))} disabled={userBusy !== null}>
+                  <option value="admin">مدیر</option><option value="moderator">ناظر</option><option value="support">پشتیبانی</option>
+                </select>
+                <button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void manageAdminRole('set_admin_role', user.id)}>{user.admin_role ? 'ذخیره نقش' : 'افزودن به مدیران'}</button>
+                {user.admin_role && <button className="button button-quiet admin-ban-button" type="button" disabled={userBusy !== null} onClick={() => void manageAdminRole('remove_admin_role', user.id)}>لغو دسترسی</button>}
+              </div>}
               {!user.admin_role && <div className="admin-user-moderation">
                 <input className="auth-input" type="text" maxLength={500} value={userReasons[user.id] ?? ''} onChange={(event) => setUserReasons((current) => ({ ...current, [user.id]: event.target.value }))} placeholder="دلیل اخطار یا محدودیت را بنویسید" disabled={userBusy === user.id}/>
                 <div className="admin-user-actions">
@@ -222,9 +252,9 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           {auditLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت گزارش‌ها…</span></div> : auditRows.length === 0 ? <p>هنوز عملیات مدیریتی ثبت نشده است.</p> : auditRows.map((entry) => <div className="admin-activity-row" key={entry.id}>
             <span className="admin-activity-dot"/>
             <div>
-              <b>{entry.action === 'delete_post' ? 'حذف پست' : entry.action === 'moderate_post' ? 'تغییر وضعیت پست' : entry.action === 'warn_user' ? 'اخطار به کاربر' : entry.action === 'ban_user' ? 'مسدودسازی کاربر' : entry.action === 'unban_user' ? 'رفع مسدودی کاربر' : entry.action}</b>
+              <b>{entry.action === 'delete_post' ? 'حذف پست' : entry.action === 'moderate_post' ? 'تغییر وضعیت پست' : entry.action === 'warn_user' ? 'اخطار به کاربر' : entry.action === 'ban_user' ? 'مسدودسازی کاربر' : entry.action === 'unban_user' ? 'رفع مسدودی کاربر' : entry.action === 'set_admin_role' ? 'تغییر نقش مدیریتی' : entry.action === 'remove_admin_role' ? 'لغو دسترسی مدیریتی' : entry.action}</b>
               <small>{entry.target_type === 'user' ? 'شناسه کاربر: ' : 'شناسه محتوا: '}{entry.target_id.slice(0, 8)}… · مدیر: {entry.actor_id?.slice(0, 8) ?? 'نامشخص'} · {entry.status === 'succeeded' ? 'موفق' : entry.status === 'failed' ? 'ناموفق' : 'در حال اجرا'}</small>
-              <small>{entry.details?.visibility ? 'وضعیت مقصد: ' + String(entry.details.visibility) + ' · ' : ''}{entry.details?.duration ? 'مدت محدودیت: ' + String(entry.details.duration) + ' · ' : ''}{entry.details?.reason ? 'دلیل: ' + String(entry.details.reason) + ' · ' : ''}{new Date(entry.created_at).toLocaleString('fa-IR')}</small>
+              <small>{entry.details?.visibility ? 'وضعیت مقصد: ' + String(entry.details.visibility) + ' · ' : ''}{entry.details?.duration ? 'مدت محدودیت: ' + String(entry.details.duration) + ' · ' : ''}{entry.details?.role ? 'نقش: ' + String(entry.details.role) + ' · ' : ''}{entry.details?.previous_role ? 'نقش قبلی: ' + String(entry.details.previous_role) + ' · ' : ''}{entry.details?.reason ? 'دلیل: ' + String(entry.details.reason) + ' · ' : ''}{new Date(entry.created_at).toLocaleString('fa-IR')}</small>
             </div>
           </div>)}
         </div>}
