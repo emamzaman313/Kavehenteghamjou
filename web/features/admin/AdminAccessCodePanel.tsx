@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Ban, Eye, EyeOff, Film, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Activity, Ban, CheckCircle2, Eye, EyeOff, Film, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
