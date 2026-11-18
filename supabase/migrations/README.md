@@ -29,3 +29,10 @@ Do not run `supabase db reset` or deploy the archived draft. Before a clean-room
 The latest read-receipt migration only adds `public.conversation_members` to the `supabase_realtime` publication if it is not already present. It does not disable RLS or modify user data.
 
 The shared access-code feature stores only a bcrypt hash in `public.site_access_settings`; the live-only `20261118190529` initialization inserted the requested default code hash without committing the plaintext value. The `site_access_admins`, `site_access_attempts`, and `site_access_settings` tables are RLS-enabled, have no direct grants for `anon` or `authenticated`, and are accessed by the `access-code-login` Edge Function using the service role. Do not copy a plaintext code into a repository migration.
+
+
+## Post media publishing
+
+The live project now has a dedicated public Storage bucket, `post-media`, for media that users explicitly attach to public posts. Uploads are limited to 50 MB and stored under the authenticated user's UUID prefix. The original private cloud file is not made public: selecting a cloud file copies its bytes into this dedicated public-post bucket, and only that copy is shared. The `public.post_attachments` table has RLS enabled, explicit authenticated-role grants, and policies that require ownership on insert/delete and visibility of the parent post on read.
+
+The shared access-code feature remains disabled in production until the owner sets a non-guessable six-character code in the admin panel. The old default `123456` is not considered safe for public use.
