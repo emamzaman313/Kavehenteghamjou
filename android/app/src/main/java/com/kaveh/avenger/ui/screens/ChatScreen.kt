@@ -45,6 +45,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.channel
@@ -205,6 +206,15 @@ fun ChatScreen(
                 loadConversations()
             }
         }
+        val statusCollector = launch {
+            channel.status.collect { status ->
+                realtimeConnected = status == RealtimeChannel.Status.SUBSCRIBED
+                if (realtimeConnected) {
+                    loadMessages(conversationId)
+                    loadConversations()
+                }
+            }
+        }
 
         try {
             channel.subscribe(blockUntilSubscribed = true)
@@ -217,6 +227,7 @@ fun ChatScreen(
             errorText = exception.message ?: "اتصال زنده برقرار نشد."
         } finally {
             realtimeConnected = false
+            statusCollector.cancel()
             collector.cancel()
             supabase.realtime.removeChannel(channel)
         }
@@ -240,6 +251,7 @@ fun ChatScreen(
                         activeConversation = null
                         messages.clear()
                         errorText = null
+                        scope.launch { loadConversations() }
                     }) {
                         Icon(Icons.Outlined.ArrowBack, contentDescription = "بازگشت")
                     }
