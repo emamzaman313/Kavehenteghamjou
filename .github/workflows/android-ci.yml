@@ -28,7 +28,21 @@ jobs:
   android:
     name: Unit tests and Android packages
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: https://slwzjufipavuwcbwoyro.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_ef-LNkOiNzxg_9d0b1To4Q_awu1BoV7
+      GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
     steps:
+      - name: Configure Android public client values
+        run: |
+          {
+            printf 'SUPABASE_URL=%s\n' "$SUPABASE_URL"
+            printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "$SUPABASE_PUBLISHABLE_KEY"
+            printf 'GOOGLE_WEB_CLIENT_ID=%s\n' "$GOOGLE_WEB_CLIENT_ID"
+          } > local.properties
+          if [ -z "$GOOGLE_WEB_CLIENT_ID" ]; then
+            echo "::warning::GOOGLE_WEB_CLIENT_ID repository variable is not configured; Google sign-in will remain unavailable in this APK."
+          fi
       - name: Checkout
         uses: actions/checkout@v4
 
