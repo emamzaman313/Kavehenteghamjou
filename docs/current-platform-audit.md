@@ -154,3 +154,23 @@ Web production domain: `https://kaveh-avenger.vercel.app`
 
 ### دامنه این ممیزی
 در این مرحله فقط خواندن مخزن، وضعیت Deployment، GitHub Actions، Supabase schema، Migration Ledger و Advisors انجام شد. هیچ SQL تغییردهنده، Migration، حذف داده، تغییر Storage policy یا تغییر تنظیمات Auth اجرا نشده است.
+
+
+## الحاقیه اجرای فاز امنیت مدیریت — ۱۹ نوامبر ۲۰۲۶
+
+### تغییرات انجام‌شده در Production
+- Migration جدید `20261118212549_kaveh_admin_audit_log` اجرا شد و در Migration Ledger زنده ثبت شده است.
+- جدول `public.admin_audit_logs` با فیلدهای actor، action، target، status، details، زمان شروع و زمان تکمیل ساخته شد.
+- RLS روی جدول فعال است؛ دسترسی SELECT برای `anon` و `authenticated` رد می‌شود و درج/به‌روزرسانی فقط از مسیر `service_role` انجام می‌شود.
+- Edge Function با نام `admin-console` به نسخه ۳ ارتقا یافت و وضعیت آن `ACTIVE` و `verify_jwt=true` تأیید شد.
+- عملیات `moderate_post` و `delete_post` اکنون پیش از اجرا رویداد `started` ثبت می‌کنند و پس از نتیجه، وضعیت `succeeded` یا `failed` را ثبت می‌کنند. در صورت عدم امکان ثبت رویداد شروع، عملیات مدیریتی اجرا نمی‌شود.
+- تعداد رکوردهای Audit در زمان بررسی صفر است؛ هیچ عملیات مدیریتی آزمایشی یا حذف/تغییر پست واقعی برای تست انجام نشده است.
+
+### تست و محدودیت
+- Migration در دیتابیس Production موفق اجرا شد.
+- ساختار ستون‌ها، فعال بودن RLS، رد دسترسی خواندن برای نقش‌های `anon` و `authenticated` و مجوز INSERT برای `service_role` با SQL فقط‌خواندنی تأیید شد.
+- نسخه فعال Edge Function از Supabase خوانده و وجود کد ثبت Audit تأیید شد.
+- GitHub Security checks برای Commit کد تابع `9325a7d7df82f2980c1e8cb97c90f0e84cbe757e` موفق گزارش شده است. اجرای workflow برای Commitهای صرفاً تغییر نام/مستندسازی در زمان این ثبت هنوز در حال اجرا بوده است.
+- تست end-to-end با نشست مدیر واقعی انجام نشده؛ بنابراین ثبت یک رویداد واقعی هنوز تأیید نشده است.
+- Security Advisor یک INFO برای RLS بدون Policy روی `admin_audit_logs` نشان می‌دهد؛ این وضعیت عمدی است، چون هیچ نقش کلاینتی نباید مستقیماً گزارش‌های مدیریتی را بخواند. هشدار leaked-password protection همچنان باقی است.
+- هیچ داده کاربر، پست یا فایل موجودی حذف یا بازنویسی نشده است.
