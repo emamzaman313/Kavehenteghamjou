@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'کاوه انتقامجو',
   description: 'پیام‌رسان، شبکه اجتماعی و فضای اشتراک‌گذاری فایل کاوه انتقامجو',
   applicationName: 'کاوه انتقامجو',
+  icons: { icon: '/icon.svg', shortcut: '/icon.svg', apple: '/icon.svg' },
   manifest: '/manifest.webmanifest',
 };
 
