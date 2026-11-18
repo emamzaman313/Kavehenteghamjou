@@ -75,7 +75,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
 
   const verifyEmailOtp = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!supabase || busy || !/^\\d{6}$/.test(emailOtp)) return;
+    if (!supabase || busy || !/^\d{6}$/.test(emailOtp)) return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -191,7 +191,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
               dir="ltr"
               placeholder="۱۲۳۴۵۶"
               value={emailOtp}
-              onChange={(event) => setEmailOtp(event.target.value.replace(/\\D/g, '').slice(0, 6))}
+              onChange={(event) => setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
               required
               disabled={busy}
               aria-label="کد تأیید ایمیل"
