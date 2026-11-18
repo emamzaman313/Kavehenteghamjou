@@ -134,6 +134,24 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     if (error) notify('بارگذاری پیام‌های قدیمی ناموفق بود: ' + error.message, 'error');
     else {
       const older = ((data ?? []) as Message[]).reverse();
+      const olderIds = older.map((message) => message.id);
+      if (olderIds.length) {
+        const { data: links, error: linksError } = await supabase.from('message_attachments')
+          .select('message_id,file_asset_id').in('message_id', olderIds);
+        if (linksError) notify('بارگذاری پیوست‌های قدیمی ناموفق بود: ' + linksError.message, 'error');
+        const fileIds = [...new Set((links ?? []).map((link) => link.file_asset_id))];
+        if (fileIds.length) {
+          const { data: assets, error: assetsError } = await supabase.from('file_assets').select('*').in('id', fileIds);
+          if (assetsError) notify('دریافت اطلاعات فایل‌های قدیمی ناموفق بود: ' + assetsError.message, 'error');
+          const assetMap = new Map<string, FileAsset>((assets ?? []).map((asset): [string, FileAsset] => [asset.id, asset as FileAsset]));
+          const grouped: Record<string, FileAsset[]> = {};
+          (links ?? []).forEach((link) => {
+            const asset = assetMap.get(link.file_asset_id);
+            if (asset) grouped[link.message_id] = [...(grouped[link.message_id] ?? []), asset];
+          });
+          setAttachmentsByMessage((current) => ({ ...current, ...grouped }));
+        }
+      }
       setMessages((current) => {
         const existingIds = new Set(current.map((message) => message.id));
         return [...older.filter((message) => !existingIds.has(message.id)), ...current];
