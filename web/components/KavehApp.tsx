@@ -4,6 +4,7 @@ import { Bell, Check, Compass, Home, LogOut, MessageCircle, Search, Settings, Sh
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
+import { authErrorMessage, getOAuthCallbackError } from '@/lib/auth-errors';
 import type { ToastTone } from '@/lib/ui-types';
 import type { Profile } from '@/lib/types';
 import { Avatar, BrandMark } from '@/components/ui';
@@ -58,6 +59,11 @@ export default function KavehApp() {
   }, [supabase]);
 
   const notify = useCallback((text: string, tone: Toast['tone'] = 'success') => toastMessage(setToasts, text, tone), []);
+
+  useEffect(() => {
+    const callbackError = getOAuthCallbackError(window.location.search, window.location.hash);
+    if (callbackError) notify(authErrorMessage(callbackError), 'error');
+  }, [notify]);
 
   const loadProfile = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
