@@ -194,7 +194,7 @@ private fun HomeOverview(email: String?) {
         )
         StatusCard(
             title = "پیام‌رسانی و شبکه اجتماعی",
-            subtitle = "رابط و جریان‌های اصلی هنوز به بک‌اند متصل نشده‌اند",
+            subtitle = "گفتگوی متنی و Realtime به Supabase متصل شده؛ پیوست و امکانات پیشرفته در حال تکمیل است",
             badge = "در حال توسعه",
             complete = false
         )
