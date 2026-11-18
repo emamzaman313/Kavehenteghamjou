@@ -24,8 +24,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const normalizeOtp = (value: string) => value
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
     .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
-    .replace(/\D/g, '')
-    .slice(0, 6);
+    .replace(/\D/g, '');
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -70,7 +69,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       setEmailOtp('');
       setStep('sent');
       setResendIn(30);
-      setNotice('کد شش‌رقمی ورود به ایمیل ارسال شد. فقط کد آخرین ایمیل معتبر است؛ ایمیل‌های قبلی را نادیده بگیرید.');
+      setNotice('کد ورود به ایمیل ارسال شد. تمام ارقام کد آخرین ایمیل را وارد کنید؛ ایمیل‌های قبلی را نادیده بگیرید.');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
@@ -80,7 +79,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
 
   const verifyEmailOtp = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!supabase || busy || !/^\d{6}$/.test(emailOtp)) return;
+    if (!supabase || busy || !/^\d+$/.test(normalizeOtp(emailOtp))) return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -194,17 +193,15 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
 
       {step === 'sent' && (
         <div className="auth-form">
-          <p className="auth-code-hint">کد ورود برای <b dir="ltr">{email}</b> ارسال شد. کد شش‌رقمی آخرین ایمیل را در کادر زیر وارد کنید.</p>
+          <p className="auth-code-hint">کد ورود برای <b dir="ltr">{email}</b> ارسال شد. تمام ارقام کد آخرین ایمیل را در کادر زیر وارد کنید.</p>
           <form className="auth-form" onSubmit={(event) => void verifyEmailOtp(event)}>
-            <label className="auth-label" htmlFor="login-email-otp">کد تأیید ۶ رقمی</label>
+            <label className="auth-label" htmlFor="login-email-otp">کد تأیید ایمیل</label>
             <input
               id="login-email-otp"
               className="auth-input auth-code-input"
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              pattern="[0-9]{6}"
-              maxLength={6}
               dir="ltr"
               placeholder="۱۲۳۴۵۶"
               value={emailOtp}
@@ -213,7 +210,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
               disabled={busy}
               aria-label="کد تأیید ایمیل"
             />
-            <button className="google-button" type="submit" disabled={busy || emailOtp.length !== 6}>
+            <button className="google-button" type="submit" disabled={busy || !/^\d+$/.test(normalizeOtp(emailOtp))}>
               {busy ? <span className="spinner small"/> : <ShieldCheck size={18}/>}
               <span>{busy ? 'در حال بررسی کد…' : 'تأیید کد و ورود'}</span><ArrowLeft size={17}/>
             </button>
