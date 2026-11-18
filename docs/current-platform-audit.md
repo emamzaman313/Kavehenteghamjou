@@ -242,4 +242,5 @@ Web production domain: `https://kaveh-avenger.vercel.app`
 - تغییر نقش و لغو دسترسی در Audit ثبت و برای کاربر اعلان درون‌برنامه‌ای ارسال می‌شود.
 - شمارش زنده نقش‌ها هنگام بررسی: یک owner. هیچ مدیر جدیدی اضافه نشده و هیچ نقش فعلی تغییر نکرده است.
 - مجوزهای service_role برای درج/به‌روزرسانی/حذف از `site_access_admins` با SQL فقط‌خواندنی تأیید شد؛ جدول همچنان برای دسترسی مستقیم کلاینت محافظت شده است.
-- Web CI و انتشار Production برای رابط جدید مدیریت نقش‌ها باید پس از آخرین Commit تأیید شود.
+- Web CI برای Commit کد رابط `4fd824ba259e7c558f8f7d6dd732e51b114da44b` موفق شد: TypeScript، ESLint، Unit tests و Next.js production build. Security checks برای Commit مستندات نهایی `b6145e2178964a11f6dc880ba7dc10e1d291cb69` نیز موفق است.
+- وب‌سایت Production با Commit `b6145e2178964a11f6dc880ba7dc10e1d291cb69` در Vercel با وضعیت `READY` منتشر شد و دامنه اصلی `https://kaveh-avenger.vercel.app` به آن Alias شد.
