@@ -380,3 +380,26 @@ a { color:inherit; }
 @media(max-width:800px) { .admin-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .admin-overview-grid { grid-template-columns:1fr; } }
 
 .post-media-audio { width:100%; min-height:46px; margin:8px 0; border-radius:12px; }
+
+
+/* Admin user moderation */
+.admin-managed-user { display:grid; gap:10px; padding:12px 0; border-top:1px solid var(--line); min-width:0; }
+.admin-managed-user .admin-user-row { border:0; padding:0; align-items:flex-start; }
+.admin-managed-user-info { min-width:0; flex:1; }
+.admin-managed-user-info small { white-space:normal; overflow-wrap:anywhere; }
+.admin-user-moderation { display:grid; gap:8px; padding-inline-start:44px; }
+.admin-user-moderation>.auth-input { width:100%; min-width:0; }
+.admin-user-actions { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.admin-user-actions .button { min-height:34px; font-size:10px; }
+.admin-ban-duration { width:auto; min-width:104px; min-height:34px; padding:6px 9px; font-size:10px; }
+.admin-ban-button { color:var(--danger); }
+.admin-protected-label { color:var(--accent-strong)!important; }
+.admin-banned-label { color:var(--danger)!important; }
+.admin-user-policy-note { margin:0; color:var(--muted); font-size:10px; line-height:1.9; }
+.admin-user-busy { color:var(--muted); padding-inline-start:44px; }
+@media(max-width:560px) {
+  .admin-user-moderation { padding-inline-start:0; }
+  .admin-user-actions { align-items:stretch; }
+  .admin-user-actions .button { flex:1; justify-content:center; }
+  .admin-ban-duration { flex:1; }
+}
