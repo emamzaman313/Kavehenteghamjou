@@ -52,7 +52,6 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         email: normalizedEmail,
         options: {
           shouldCreateUser: true,
-          
         },
       });
       if (authError) {
@@ -65,7 +64,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       setEmailOtp('');
       setStep('sent');
       setResendIn(30);
-      setNotice('ایمیل ورود ارسال شد. کد فقط در آخرین ایمیل معتبر است؛ اگر چند ایمیل گرفته‌اید، کد جدیدترین ایمیل را وارد کنید. همچنین می‌توانید پیوند ورود همان ایمیل را باز کنید. پوشه هرزنامه را هم بررسی کنید.');
+      setNotice('کد شش‌رقمی ورود به ایمیل ارسال شد. فقط کد آخرین ایمیل معتبر است؛ ایمیل‌های قبلی را نادیده بگیرید.');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
@@ -166,7 +165,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
             <input id="login-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={!configured || busy}/>
             <button className="google-button" type="submit" disabled={!configured || busy || !email.trim()}>
               {busy ? <span className="spinner small"/> : <Mail size={18}/>}
-              <span>{busy ? 'در حال ارسال کد…' : 'ثبت‌نام / ورود با ایمیل'}</span><ArrowLeft size={17}/>
+              <span>{busy ? 'در حال ارسال کد…' : 'ورود / ثبت‌نام با کد ایمیل'}</span><ArrowLeft size={17}/>
             </button>
           </form>
           <button className="auth-alternate-button" type="button" onClick={openAccessCode} disabled={!configured || busy}>
