@@ -49,7 +49,6 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
 
     // Native Google identity flow (no WebView)
     implementation("androidx.credentials:credentials:1.6.0")
