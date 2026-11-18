@@ -33,7 +33,12 @@ API محصول فعلاً بر Supabase Data API، Storage و Realtime استو�
 ## Realtime
 
 - `messages`: تغییرات پیام
+- `conversation_members`: تغییرات وضعیت خواندن و cursor اعضا
 - `notifications`: اعلان‌های حساب
 - `posts`: تغییرات feed
 
-فعال‌بودن publication به‌تنهایی مجوز دسترسی نمی‌دهد؛ RLS باید هم‌زمان رعایت شود. Android Realtime client هنوز متصل و آزمایش نشده است.
+Web و Android در سورس به کانال Realtime پیام‌ها متصل‌اند و هنگام دریافت رویداد، پیام‌ها و فهرست گفتگو را تازه می‌کنند. Android هنگام خروج از صفحه کانال را آزاد می‌کند. وضعیت Read از `conversation_members.last_read_at` استخراج می‌شود؛ مقدار cursor از آخرین پیام دریافت‌شده از سرور گرفته می‌شود، نه ساعت دستگاه.
+
+**وضعیت آزمون:** Android Unit Tests و Build در GitHub Actions موفق‌اند؛ Web TypeScript، ESLint، Vitest و Production Build نیز موفق‌اند. بااین‌حال، تبادل end-to-end بین دو حساب مستقل هنوز آزمایش نشده، چون پروژه Supabase هنگام آخرین بررسی صفر کاربر Auth و صفر پروفایل داشت. بنابراین Realtime در محیط واقعی چندکاربره را هنوز تأییدشده اعلام نمی‌کنیم.
+
+فعال‌بودن publication به‌تنهایی مجوز دسترسی نمی‌دهد؛ RLS باید هم‌زمان رعایت شود.
