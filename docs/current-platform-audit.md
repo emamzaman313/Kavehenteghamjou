@@ -220,3 +220,14 @@ Web production domain: `https://kaveh-avenger.vercel.app`
 - Migration در Production اجرا شد و قیود جدید با SQL خواندنی تأیید شدند.
 - Edge Function نسخه ۷ با `verify_jwt=true` فعال است.
 - Web CI و Security checks برای آخرین Commit رابط در زمان ثبت این گزارش در حال اجرا هستند؛ تا پایان workflow نتیجه Build اعلام نمی‌شود.
+
+
+## وضعیت نهایی انتشار مدیریت کاربران — ۱۹ نوامبر ۲۰۲۶
+
+- Edge Function `admin-console` اکنون نسخه ۸ و `verify_jwt=true` است؛ فهرست کاربران، اخطار، مسدودسازی، رفع مسدودی، اعلان به کاربر و ثبت گزارش در همین نسخه فعال است.
+- وب‌سایت Production با Commit رابط `92ab85cba6ed2b7f6e15775466ebdbe5f08047b9` در Vercel با وضعیت `READY` منتشر شد؛ دامنه اصلی `https://kaveh-avenger.vercel.app` به آن Alias شده است.
+- Web CI برای Commit `92ab85cba6ed2b7f6e15775466ebdbe5f08047b9` موفق شد: TypeScript، ESLint، Unit tests و Next.js production build.
+- Security checks برای همان Commit موفق شد.
+- ترجمه عنوان اعلان‌های moderation در `NotificationsView.tsx` نیز اضافه شد؛ CI مربوط به آخرین Commit `537c581daffaca509d8e480fc72ac092947a6526` در زمان ثبت این الحاقیه هنوز باید تأیید شود.
+- بررسی فقط‌خواندنی Production: ۵ Auth users، ۵ profiles، صفر رویداد Audit و صفر notification در زمان بررسی. هیچ کاربری برای آزمایش اخطار یا مسدود نشد.
+- مجوزهای service_role برای درج اعلان و درج/به‌روزرسانی Audit با `has_table_privilege` تأیید شد.
