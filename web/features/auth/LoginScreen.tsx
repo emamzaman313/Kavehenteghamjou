@@ -14,6 +14,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [accessCode, setAccessCode] = useState('');
+  const [emailOtp, setEmailOtp] = useState('');
   const [accessEnabled, setAccessEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -61,9 +62,34 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       }
 
       setEmail(normalizedEmail);
+      setEmailOtp('');
       setStep('sent');
       setResendIn(10);
-      setNotice('پیوند یک‌بارمصرف ورود ارسال شد. ایمیل را باز کنید و روی لینک ورود بزنید؛ نیازی به واردکردن کد ۶ رقمی نیست. پوشه هرزنامه را هم بررسی کنید.');
+      setNotice('ایمیل ورود ارسال شد. می‌توانید روی پیوند ورود داخل ایمیل بزنید یا کد ۶ رقمی آن را در همین صفحه وارد کنید. پوشه هرزنامه را هم بررسی کنید.');
+    } catch (cause) {
+      setError(authErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyEmailOtp = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || busy || !/^\\d{6}$/.test(emailOtp)) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: emailOtp,
+        type: 'email',
+      });
+      if (verifyError) {
+        setError(authErrorMessage(verifyError));
+        return;
+      }
+      setNotice('کد تأیید شد. در حال ورود به حساب شما…');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
@@ -151,7 +177,30 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
 
       {step === 'sent' && (
         <div className="auth-form">
-          <p className="auth-code-hint">پیوند ورود برای <b dir="ltr">{email}</b> ارسال شد. صندوق ورودی را باز کنید و روی لینک ورود به کاوه انتقامجو بزنید.</p>
+          <p className="auth-code-hint">ایمیل ورود برای <b dir="ltr">{email}</b> ارسال شد. لینک داخل ایمیل را باز کنید یا کد شش‌رقمی را اینجا وارد کنید.</p>
+          <form className="auth-form" onSubmit={(event) => void verifyEmailOtp(event)}>
+            <label className="auth-label" htmlFor="login-email-otp">کد تأیید ۶ رقمی</label>
+            <input
+              id="login-email-otp"
+              className="auth-input auth-code-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              dir="ltr"
+              placeholder="۱۲۳۴۵۶"
+              value={emailOtp}
+              onChange={(event) => setEmailOtp(event.target.value.replace(/\\D/g, '').slice(0, 6))}
+              required
+              disabled={busy}
+              aria-label="کد تأیید ایمیل"
+            />
+            <button className="google-button" type="submit" disabled={busy || emailOtp.length !== 6}>
+              {busy ? <span className="spinner small"/> : <ShieldCheck size={18}/>}
+              <span>{busy ? 'در حال بررسی کد…' : 'تأیید کد و ورود'}</span><ArrowLeft size={17}/>
+            </button>
+          </form>
           <div className="auth-secondary-actions">
             <button type="button" onClick={() => { setStep('email'); setError(''); setNotice(''); }} disabled={busy}>تغییر ایمیل</button>
             <button type="button" onClick={() => void sendLink()} disabled={busy || resendIn > 0}>{busy ? 'در حال ارسال…' : resendIn > 0 ? `ارسال دوباره لینک (${resendIn})` : 'ارسال دوباره لینک'}</button>
