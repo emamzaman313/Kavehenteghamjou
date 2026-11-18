@@ -158,6 +158,9 @@ fun ChatScreen(
 
             conversations.clear()
             conversations.addAll(loaded)
+            activeConversation = activeConversation?.let { active ->
+                loaded.firstOrNull { it.id == active.id } ?: active
+            }
         } catch (exception: Exception) {
             errorText = exception.message ?: "دریافت گفتگوها ناموفق بود."
         } finally {
