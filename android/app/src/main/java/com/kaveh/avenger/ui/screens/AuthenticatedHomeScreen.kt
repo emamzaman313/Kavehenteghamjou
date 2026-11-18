@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.kaveh.avenger.data.SupabaseClientProvider
 import kotlinx.coroutines.launch
 
 private enum class MainTab(val title: String) {
@@ -112,11 +113,9 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
             Spacer(Modifier.height(14.dp))
             when (tabs[selectedTab]) {
                 MainTab.Home -> HomeOverview(email)
-                MainTab.Chats -> ModulePlaceholder(
-                    eyebrow = "ارتباطات خصوصی",
-                    title = "گفتگوهای شما",
-                    description = "زیرساخت گفتگوها و عضویت‌ها در پایگاه داده آماده شده است. فهرست و ارسال زندهٔ پیام در مرحلهٔ بعد به این صفحه متصل می‌شود.",
-                    status = "هستهٔ دیتابیس آماده؛ رابط گفتگو در حال توسعه"
+                MainTab.Chats -> ChatScreen(
+                    supabase = SupabaseClientProvider.client,
+                    userId = userId
                 )
                 MainTab.Publish -> FileUploadScreen(userId = userId)
                 MainTab.Explore -> ModulePlaceholder(
