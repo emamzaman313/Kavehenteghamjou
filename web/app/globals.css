@@ -270,3 +270,10 @@ a { color:inherit; }
 .attachment-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:230px; }
 .attachment-chip:hover { border-color:rgba(199,155,87,.45); }
 .upload-progress-label { color:var(--muted); font-size:9px; margin-top:8px; }
+
+/* Chat UI state indicators */
+.unread-count { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--accent); color:#17130d; font-size:9px; font-weight:800; }
+.load-older-button { display:block; margin:0 auto 16px; padding:8px 13px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:10px; cursor:pointer; }
+.load-older-button:disabled { opacity:.55; cursor:wait; }
+.live-pill.offline { color:var(--muted); }
+.live-pill.offline i { background:var(--muted); box-shadow:none; }
