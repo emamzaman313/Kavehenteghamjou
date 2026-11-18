@@ -54,7 +54,7 @@ fun EmailOtpScreen(
             try {
                 authRepository.sendCode(email)
                 codeSent = true
-                infoMessage = "کد ۶ رقمی به ایمیل شما ارسال شد. صندوق ورودی و هرزنامه را بررسی کنید."
+                infoMessage = "کد ورود به ایمیل شما ارسال شد. تمام ارقام کد را وارد کنید. صندوق ورودی و هرزنامه را بررسی کنید."
             } catch (error: Exception) {
                 errorMessage = error.message ?: "ارسال کد انجام نشد. دوباره تلاش کنید."
             } finally {
@@ -98,10 +98,10 @@ fun EmailOtpScreen(
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = code,
-                        onValueChange = { code = it.filter(Char::isDigit).take(6); errorMessage = "" },
+                        onValueChange = { code = it.filter(Char::isDigit).map { digit -> digit.digitToInt().toString() }.joinToString(""); errorMessage = "" },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("کد تأیید ۶ رقمی") },
-                        placeholder = { Text("123456") },
+                        label = { Text("کد تأیید ایمیل") },
+                        placeholder = { Text("کد دریافتی در ایمیل") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
@@ -130,7 +130,7 @@ fun EmailOtpScreen(
                             }
                         }
                     },
-                    enabled = !isLoading && if (codeSent) code.length == 6 else email.contains("@") && email.substringAfter("@").contains("."),
+                    enabled = !isLoading && if (codeSent) code.isNotBlank() else email.contains("@") && email.substringAfter("@").contains("."),
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
