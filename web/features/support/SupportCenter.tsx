@@ -1,6 +1,6 @@
 'use client';
 
-import { LifeBuoy, MessageCircle, Plus, Send, RefreshCw } from 'lucide-react';
+import { LifeBuoy, MessageCircle, Plus, Send, RefreshCw, Paperclip, Download } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
@@ -11,7 +11,7 @@ type Ticket = {
   requester?: { display_name: string; username: string | null } | null;
 };
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string };
-type ReadCursor = { conversation_id: string; last_read_at: string | null };
+type ReadCursor = { conversation_id: string; last_read_at: string | null };\ntype SupportAttachment = { id:string; original_name:string; bucket_id:string; object_path:string; mime_type:string|null; byte_size:number };
 
 const statusLabels: Record<string,string> = { open:'جدید', in_progress:'در حال بررسی', waiting_user:'منتظر پاسخ شما', resolved:'حل‌شده', closed:'بسته‌شده' };
 const categoryLabels: Record<string,string> = { general:'عمومی', account:'حساب کاربری', technical:'مشکل فنی', report:'گزارش تخلف', billing:'مالی', other:'سایر' };
@@ -20,7 +20,7 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   supabase: SupabaseClient; userId: string; notify: Notify; staff?: boolean;
 }) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
-  const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});
+  const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});\n  const [attachments,setAttachments] = useState<Record<string,{file:SupportAttachment;url:string}[]>>({});\n  const [uploading,setUploading] = useState(false);
   const [active,setActive] = useState<string|null>(null);
   const [messages,setMessages] = useState<Message[]>([]);
   const [loading,setLoading] = useState(true);
@@ -85,6 +85,29 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     else {
       const loaded = (data ?? []) as Message[];
       setMessages(loaded);
+      const messageIds = loaded.map(message=>message.id);
+      if (messageIds.length) {
+        const {data:links,error:linksError} = await supabase.from('message_attachments')
+          .select('message_id,file_asset_id').in('message_id',messageIds);
+        if (linksError) notify('دریافت پیوست‌های گفتگو ناموفق بود: '+linksError.message,'error');
+        const fileIds = [...new Set((links ?? []).map(link=>link.file_asset_id))];
+        if (fileIds.length) {
+          const {data:assets,error:assetsError} = await supabase.from('file_assets')
+            .select('id,original_name,bucket_id,object_path,mime_type,byte_size').in('id',fileIds);
+          if (assetsError) notify('دریافت اطلاعات فایل‌ها ناموفق بود: '+assetsError.message,'error');
+          const assetMap = new Map((assets ?? []).map(file=>[file.id,file as SupportAttachment]));
+          const grouped: Record<string,{file:SupportAttachment;url:string}[]> = {};
+          for (const link of links ?? []) {
+            const file = assetMap.get(link.file_asset_id);
+            if (!file) continue;
+            const {data:signed,error:signedError} = await supabase.storage.from(file.bucket_id)
+              .createSignedUrl(file.object_path,300,{download:file.original_name});
+            if (signedError || !signed?.signedUrl) continue;
+            grouped[link.message_id] = [...(grouped[link.message_id] ?? []),{file,url:signed.signedUrl}];
+          }
+          setAttachments(current=>({...current,...grouped}));
+        }
+      }
       const latestFetchedAt = loaded[loaded.length - 1]?.created_at;
       if (latestFetchedAt) {
         const {error:readError} = await supabase.from('conversation_members')
@@ -132,12 +155,59 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     const text = reply.trim();
     if (!ticket || !text || sending) return;
     setSending(true);
-    const {error} = await supabase.from('messages').insert({conversation_id:ticket.conversation_id,sender_id:userId,body:text,format:'plain'});
+    const {data:sentMessage,error} = await supabase.from('messages')
+      .insert({conversation_id:ticket.conversation_id,sender_id:userId,body:text,format:'plain'})
+      .select('id').single();
     setSending(false);
     if (error) { notify('ارسال پاسخ ناموفق بود: '+error.message,'error'); return; }
+    if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch',{body:{message_id:sentMessage.id}});
     setReply('');
     await loadMessages(ticket.id);
     await refresh();
+  };
+
+  const sendAttachment = async (file:File) => {
+    const ticket = tickets.find(x=>x.id===active);
+    if (!ticket || uploading) return;
+    if (file.size===0 || file.size>50*1024*1024) {
+      notify('اندازه فایل باید بیشتر از صفر و حداکثر ۵۰ مگابایت باشد.','error');
+      return;
+    }
+    setUploading(true);
+    let path:string|null=null;
+    let assetId:string|null=null;
+    let messageId:string|null=null;
+    try {
+      const safeName = file.name.replace(/[\\/\\\\\\u0000-\\u001f]/g,'_').slice(0,180) || 'attachment';
+      const bytes = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256',bytes);
+      const hash = Array.from(new Uint8Array(digest)).map(value=>value.toString(16).padStart(2,'0')).join('');
+      path = userId+'/'+crypto.randomUUID();
+      const {error:uploadError} = await supabase.storage.from('user-files').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+      if (uploadError) throw uploadError;
+      const {data:asset,error:assetError} = await supabase.from('file_assets').insert({
+        owner_id:userId,bucket_id:'user-files',object_path:path,original_name:safeName,
+        mime_type:file.type||null,byte_size:file.size,sha256_hex:hash,status:'ready'
+      }).select('id').single();
+      if (assetError || !asset) throw assetError ?? new Error('ثبت مشخصات فایل ناموفق بود.');
+      assetId = asset.id;
+      const {data:message,error:messageError} = await supabase.from('messages').insert({
+        conversation_id:ticket.conversation_id,sender_id:userId,body:'📎 '+safeName,format:'plain'
+      }).select('id').single();
+      if (messageError || !message) throw messageError ?? new Error('ثبت پیام پیوست ناموفق بود.');
+      messageId = message.id;
+      const {error:linkError} = await supabase.from('message_attachments').insert({message_id:message.id,file_asset_id:asset.id,display_order:0});
+      if (linkError) throw linkError;
+      void supabase.functions.invoke('notification-dispatch',{body:{message_id:message.id}});
+      await loadMessages(ticket.id);
+      await refresh();
+      notify('فایل به گفتگوی پشتیبانی پیوست شد.');
+    } catch (error) {
+      if (messageId) await supabase.from('messages').delete().eq('id',messageId);
+      if (assetId) await supabase.from('file_assets').delete().eq('id',assetId);
+      if (path) await supabase.storage.from('user-files').remove([path]);
+      notify('ارسال فایل ناموفق بود: '+(error instanceof Error?error.message:'خطای نامشخص'),'error');
+    } finally { setUploading(false); }
   };
 
   const updateTicketField = async (field:'status'|'priority', value:string) => {
@@ -187,13 +257,20 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
           <div style={{display:'grid',gap:9,padding:'14px 0',maxHeight:430,overflowY:'auto'}}>
             {messages.map(message=><div key={message.id} style={{justifySelf:message.sender_id===userId?'end':'start',maxWidth:'88%',padding:'10px 12px',borderRadius:13,background:message.sender_id===userId?'rgba(22,139,255,.14)':'var(--surface-2,rgba(127,127,127,.12))',border:'1px solid var(--line)'}}>
               <p style={{margin:0,fontSize:12,lineHeight:1.9,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{message.body}</p>
+              {(attachments[message.id]??[]).map(({file,url})=><a key={file.id} href={url} target="_blank" rel="noopener noreferrer" download={file.original_name} style={{display:'flex',alignItems:'center',gap:7,marginTop:8,padding:8,borderRadius:9,background:'var(--surface-2,rgba(127,127,127,.12))',color:'var(--accent)',fontSize:11,textDecoration:'none',overflowWrap:'anywhere'}}><Download size={14}/><span>{file.original_name} · {(file.byte_size/1024/1024).toFixed(2)} MB</span></a>)}
               <small style={{display:'block',marginTop:5,color:'var(--muted)',fontSize:9}}>{message.sender_id===userId?'شما':staff?'کاربر':'پشتیبانی'} · {new Date(message.created_at).toLocaleString('fa-IR')}</small>
             </div>)}
           </div>
-          {selected.status!=='closed' && <form onSubmit={sendReply} style={{display:'flex',gap:8,borderTop:'1px solid var(--line)',paddingTop:12}}>
-            <input value={reply} onChange={e=>setReply(e.target.value)} maxLength={10000} placeholder="پیام خود را بنویسید…" aria-label="پیام پاسخ" />
-            <button className="button button-primary" type="submit" disabled={sending||!reply.trim()}><Send size={15}/>{sending?'ارسال…':'ارسال'}</button>
-          </form>}
+          {selected.status!=='closed' && <div style={{display:'grid',gap:8,borderTop:'1px solid var(--line)',paddingTop:12}}>
+            <form onSubmit={sendReply} style={{display:'flex',gap:8}}>
+              <input value={reply} onChange={e=>setReply(e.target.value)} maxLength={10000} placeholder="پیام خود را بنویسید…" aria-label="پیام پاسخ" />
+              <button className="button button-primary" type="submit" disabled={sending||!reply.trim()}><Send size={15}/>{sending?'ارسال…':'ارسال'}</button>
+            </form>
+            <label style={{display:'inline-flex',alignItems:'center',gap:8,fontSize:11,color:'var(--muted)',cursor:uploading?'wait':'pointer',width:'fit-content'}}>
+              <Paperclip size={15}/>{uploading?'در حال بارگذاری فایل…':'افزودن فایل (حداکثر ۵۰ مگابایت)'}
+              <input type="file" disabled={uploading} onChange={event=>{const file=event.target.files?.[0];if(file)void sendAttachment(file);event.currentTarget.value='';}} style={{position:'absolute',width:1,height:1,opacity:0,pointerEvents:'none'}}/>
+            </label>
+          </div>}
           {selected.status==='resolved' && !staff && <p style={{fontSize:10,color:'var(--muted)'}}>این درخواست حل‌شده علامت‌گذاری شده است؛ برای ادامه گفتگو می‌توانید پاسخ ارسال کنید.</p>}
         </>}
       </div>
