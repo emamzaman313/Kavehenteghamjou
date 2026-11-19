@@ -56,7 +56,9 @@ private data class AdminActionRequest(
     val duration: String? = null,
     val role: String? = null,
     val restriction: String? = null,
-    val muteId: String? = null
+    val muteId: String? = null,
+    val key: String? = null,
+    val enabled: Boolean? = null
 )
 
 private suspend fun callAdminConsole(supabase: SupabaseClient, request: AdminActionRequest): JsonObject {
@@ -98,6 +100,8 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
     var muteDuration by remember { mutableStateOf("24h") }
     var showRestrictionMenu by remember { mutableStateOf(false) }
     var showDurationMenu by remember { mutableStateOf(false) }
+    var featureFlags by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var overviewStats by remember { mutableStateOf<JsonObject?>(null) }
 
     val muteRestrictions = listOf(
         "message_send" to "ارسال همه پیام‌ها",
@@ -114,6 +118,34 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
         "720h" to "۳۰ روز",
         "permanent" to "دائمی"
     )
+
+    suspend fun loadOverview() {
+        loading = true; error = null
+        try {
+            val result = callAdminConsole(supabase, AdminActionRequest(action = "overview"))
+            overviewStats = result["stats"]?.jsonObject
+        } catch (exception: Exception) { error = exception.message ?: "دریافت آمار ناموفق بود." }
+        finally { loading = false }
+    }
+
+    suspend fun loadFeatureFlags() {
+        loading = true; error = null
+        try {
+            val result = callAdminConsole(supabase, AdminActionRequest(action = "feature_flags_list"))
+            featureFlags = result["flags"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+        } catch (exception: Exception) { error = exception.message ?: "دریافت امکانات ناموفق بود." }
+        finally { loading = false }
+    }
+
+    suspend fun updateFeatureFlag(key: String, enabled: Boolean) {
+        busyId = key; error = null
+        try {
+            callAdminConsole(supabase, AdminActionRequest(action = "feature_flag_set", key = key, enabled = enabled))
+            notice = if (enabled) "امکان فعال شد." else "امکان غیرفعال شد."
+            loadFeatureFlags()
+        } catch (exception: Exception) { error = exception.message ?: "تغییر امکان ناموفق بود." }
+        finally { busyId = null }
+    }
 
     suspend fun loadReports() {
         loading = true
@@ -146,7 +178,9 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
         Text("پنل مدیریت", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("نقش فعال: $role", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { section = "overview"; scope.launch { loadOverview() } }) { Text("مرکز فرماندهی") }
             Button(onClick = { section = "reports"; scope.launch { loadReports() } }) { Text("گزارش‌ها") }
+            if (role in listOf("owner", "admin")) Button(onClick = { section = "features"; scope.launch { loadFeatureFlags() } }) { Text("کنترل امکانات") }
             if (role in listOf("owner", "admin")) {
                 Button(onClick = { section = "users"; scope.launch { loadUsers() } }) { Text("کاربران") }
             }
@@ -191,7 +225,43 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-        if (section == "reports") {
+        if (section == "overview" && role in listOf("owner", "admin")) {
+            val stats = overviewStats
+            val labels = listOf("users" to "کاربران", "posts" to "پست‌ها", "comments" to "دیدگاه‌ها", "pending_reports" to "گزارش‌های باز", "new_users_7d" to "عضو جدید در ۷ روز")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("نمای کلی زنده", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Button(onClick={scope.launch{loadOverview()}}){Text("تازه‌سازی")}
+                    Text("آمار بر اساس داده‌های سرور",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                labels.forEach { (key,label) ->
+                    Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(13.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text(label)
+                            Text(stats?.get(key)?.jsonPrimitive?.contentOrNull ?: "—",fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        } else if (section == "features" && role in listOf("owner", "admin")) {
+            Text("کنترل مرکزی امکانات",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+            featureFlags.forEach { flag ->
+                val key=flag["key"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val title=flag["title"]?.jsonPrimitive?.contentOrNull ?: key
+                val description=flag["description"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val enabled=flag["enabled"]?.jsonPrimitive?.booleanOrNull == true
+                Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(13.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Text(title,fontWeight=FontWeight.SemiBold)
+                            Text(description,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(if(enabled)"فعال" else "غیرفعال",style=MaterialTheme.typography.labelSmall,color=if(enabled)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                        }
+                        androidx.compose.material3.Switch(checked=enabled,enabled=busyId==null,onCheckedChange={value->scope.launch{updateFeatureFlag(key,value)}})
+                    }
+                }
+            }
+        } else if (section == "reports") {
             if (!loading && reports.isEmpty() && error == null) Text("گزارشی برای نمایش وجود ندارد.")
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(reports, key = { it["id"]?.jsonPrimitive?.contentOrNull ?: it.hashCode().toString() }) { report ->
