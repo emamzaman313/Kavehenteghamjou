@@ -436,3 +436,22 @@ a { color:inherit; }
 .post-report-form .button { min-height:34px; font-size:10px; }
 
 .admin-report-target { margin:0; padding:9px 11px; border-inline-start:3px solid var(--accent-strong); border-radius:8px; background:var(--surface-soft); font-size:10px; line-height:1.8; overflow-wrap:anywhere; }
+
+
+/* Centrally published appearance tokens */
+.app-frame { --accent:var(--remote-accent,#168bff); --accent-strong:color-mix(in srgb,var(--remote-accent,#168bff) 42%,white); }
+.app-frame.theme-dark { --bg:var(--remote-background,#09090b); --surface:var(--remote-surface,#111114); --surface-2:color-mix(in srgb,var(--remote-surface,#111114) 84%,white); }
+.app-frame .panel-card,.app-frame .composer-card,.app-frame .post-card,.app-frame .settings-card,.app-frame .admin-console-card { border-radius:var(--remote-radius,16px); }
+.admin-appearance-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.admin-appearance-grid label { display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:12px; color:var(--muted); font-size:10px; }
+.admin-appearance-grid input[type=color] { width:100%; height:42px; border:0; padding:0; background:transparent; cursor:pointer; }
+.admin-radius-control input { width:100%; accent-color:var(--accent); }
+.admin-appearance-preview { padding:18px; border:1px solid var(--line); }
+.admin-appearance-preview>div { display:grid; gap:10px; max-width:360px; margin:auto; padding:22px; color:#f4f1eb; }
+.admin-appearance-preview p { margin:0; font-size:11px; color:#c5c0b8; }
+.admin-appearance-preview button { justify-self:start; border:0; color:white; padding:9px 16px; font-size:10px; }
+.admin-appearance-history { display:grid; gap:8px; }
+.admin-appearance-history>strong { font-size:11px; }
+.admin-appearance-version { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-top:1px solid var(--line); color:var(--muted); font-size:10px; }
+.admin-appearance-version .button { min-height:30px; font-size:9px; }
+@media(max-width:560px) { .admin-appearance-grid { grid-template-columns:1fr; } .admin-appearance-version { align-items:flex-start; flex-direction:column; } }
