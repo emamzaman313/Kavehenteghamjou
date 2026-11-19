@@ -275,7 +275,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       {spaceType === "group" && <label className="admin-toggle-row"><input type="checkbox" checked={spaceApproval} onChange={(e) => setSpaceApproval(e.target.checked)}/><span>عضویت با تأیید مدیر گروه</span></label>}
       {spaceType === "channel" && <small className="admin-security-note">کانال عمومی ساخته می‌شود؛ دسترسی نوشتن فعلاً فقط برای اعضای ثبت‌شده است.</small>}
       <div className="admin-user-actions"><button className="button button-primary" disabled={creatingSpace}>{creatingSpace ? "در حال ساخت…" : "ساخت"}</button><button type="button" className="button button-ghost" onClick={() => setShowCreateSpace(false)}>انصراف</button></div>
-    </form>
+    </form>}
     <div className="chat-list-scroll">{loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : conversations.length === 0 ? <EmptyState icon={<MessageCircle/>} title="گفتگویی نداری" description="از دکمهٔ + یک گفتگو با کاربر دیگری شروع کن."/> : conversations.map((c) => {
       const p = members[peerByConversation[c.id] ?? ''];
       const title = c.title || (c.kind === 'direct' ? p?.display_name : c.kind === 'group' ? 'گروه کاوه' : 'کانال کاوه');
