@@ -14,6 +14,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.height
 import com.kaveh.avenger.BuildConfig
+import coil.ImageLoader
+import coil.compose.AsyncImage
+import coil.decode.GifDecoder
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -55,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.SupabaseClient
@@ -163,6 +167,7 @@ private data class FeedCardState(
 fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val profileImageLoader = remember(context) { ImageLoader.Builder(context).components { add(GifDecoder.Factory()) }.build() }
     val cards = remember { mutableStateListOf<FeedCardState>() }
     var loading by remember { mutableStateOf(true) }
     var busyPost by remember { mutableStateOf<String?>(null) }
@@ -498,6 +503,15 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(person.username?.let { "@$it" } ?: "کاربر کاوه", color = MaterialTheme.colorScheme.primary)
                     Text(person.bio.ifBlank { "این کاربر هنوز توضیحی برای پروفایل ثبت نکرده است." })
+                    person.coverPath?.let { path ->
+                        AsyncImage(
+                            model = supabase.storage["profile-media"].publicUrl(path),
+                            imageLoader = profileImageLoader,
+                            contentDescription = "کاور پروفایل",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().height(150.dp)
+                        )
+                    }
                     Text("حریم خصوصی: " + when(person.profileVisibility) { "private" -> "خصوصی"; "followers" -> "دنبال‌کنندگان"; else -> "عمومی" }, style = MaterialTheme.typography.labelSmall)
                     Text("تم اختصاصی", fontWeight = FontWeight.SemiBold)
                     Surface(
@@ -580,6 +594,7 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
     var featuredBadges by remember { mutableStateOf(setOf<String>()) }
     var availableBadges by remember { mutableStateOf<List<Pair<String,String>>>(emptyList()) }
     val context = LocalContext.current
+    val profileImageLoader = remember(context) { ImageLoader.Builder(context).components { add(GifDecoder.Factory()) }.build() }
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedCover = it }
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedMusic = uri
@@ -726,6 +741,16 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
             Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("کاور اختصاصی پروفایل", fontWeight = FontWeight.Bold)
+                    val coverModel = selectedCover ?: profile?.coverPath?.let { supabase.storage["profile-media"].publicUrl(it) }
+                    if (coverModel != null) {
+                        AsyncImage(
+                            model = coverModel,
+                            imageLoader = profileImageLoader,
+                            contentDescription = "پیش‌نمایش کاور پروفایل",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().height(160.dp)
+                        )
+                    }
                     Text(
                         when { selectedCover != null -> "تصویر جدید انتخاب شده است."; profile?.coverPath != null -> "کاور اختصاصی ذخیره‌شده فعال است."; else -> "برای پروفایلت یک تصویر کاور انتخاب کن." },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
