@@ -319,6 +319,12 @@ private data class ReelInsertRow(
 )
 
 @Serializable
+private data class ReelViewInsertRow(
+    @SerialName("reel_id") val reelId: String,
+    @SerialName("viewer_id") val viewerId: String
+)
+
+@Serializable
 private data class ReelReactionRow(
     @SerialName("reel_id") val reelId: String,
     @SerialName("user_id") val userId: String,
@@ -339,6 +345,7 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
     var loading by remember { mutableStateOf(true) }
     var busyReel by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val viewedReels = remember { mutableSetOf<String>() }
 
     var caption by remember { mutableStateOf("") }
     var selectedVideo by remember { mutableStateOf<Uri?>(null) }
@@ -430,11 +437,25 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                         val videoUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/post-media/" + card.reel.videoPath
                         AndroidView(
                             modifier = Modifier.fillMaxWidth().height(250.dp),
-                            factory = { context ->
-                                VideoView(context).apply {
-                                    val controller = MediaController(context)
+                            factory = { viewContext ->
+                                VideoView(viewContext).apply {
+                                    tag = videoUrl
+                                    val controller = MediaController(viewContext)
                                     controller.setAnchorView(this)
                                     setMediaController(controller)
+                                    setOnPreparedListener { player ->
+                                        player.isLooping = true
+                                        player.start()
+                                        if (viewedReels.add(card.reel.id)) {
+                                            scope.launch {
+                                                try {
+                                                    supabase.postgrest["reel_views"].insert(ReelViewInsertRow(card.reel.id, userId))
+                                                } catch (_: Exception) {
+                                                    // A duplicate view is expected when the same reel is revisited.
+                                                }
+                                            }
+                                        }
+                                    }
                                     setVideoURI(Uri.parse(videoUrl))
                                 }
                             },
@@ -443,7 +464,8 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                                     view.tag = videoUrl
                                     view.setVideoURI(Uri.parse(videoUrl))
                                 }
-                            }
+                            },
+                            onRelease = { view -> view.stopPlayback() }
                         )
                         if (card.reel.caption.isNotBlank()) Text(card.reel.caption)
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
