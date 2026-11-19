@@ -368,8 +368,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
-                if (selectedTab == "events") {
                 }
+                if (selectedTab == "events") {
                 item { Text("رویدادهای جامعه", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                 items(events, key = { it.id }) { event ->
                     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -416,8 +416,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
-                if (selectedTab == "honors") {
                 }
+                if (selectedTab == "honors") {
                 item { Text("تالار افتخار", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                 items(badges, key = { it.code }) { badge ->
                     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
