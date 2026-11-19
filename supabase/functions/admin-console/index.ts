@@ -555,7 +555,7 @@ Deno.serve(async (request: Request) => {
     const { data: current, error: currentError } = await admin.from("platform_feature_flags")
       .select("key,title,enabled").eq("key", key).maybeSingle();
     if (currentError || !current) return respond({ ok: false, reason: "feature_flag_not_found" }, 404, origin);
-    const audit = await beginAudit("feature_flag_set", key, { title: current.title, previous_enabled: current.enabled, enabled: body.enabled }, "feature_flag");
+    const audit = await beginAudit("feature_flag_set", authData.user.id, { feature_key: key, title: current.title, previous_enabled: current.enabled, enabled: body.enabled }, "feature_flag");
     if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
     const { data: updated, error } = await admin.from("platform_feature_flags")
       .update({ enabled: body.enabled, updated_at: new Date().toISOString(), updated_by: authData.user.id })
