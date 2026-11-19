@@ -141,7 +141,40 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
   };
 
   return <div className="feed-layout"><div className="feed-main">
-    <SectionHeader eyebrow="جریان محتوا" title="سلام، خوش اومدی" description="آنچه در جامعهٔ کاوه می‌گذرد، همین‌جاست." action={<button className="button button-quiet" onClick={onGoChats}><MessageCircle size={17}/> گفتگوها</button>}/>
+    <section className="home-hero" aria-label="خوش‌آمدگویی به کاوه انتقامجو">
+      <div className="home-hero-copy">
+        <div className="home-hero-kicker"><i/> KAVEH AVENGER <span>فضای اختصاصی تو</span></div>
+        <h1>اینجا، صدای تو<br/><em>شروع یک اتفاق تازه است.</em></h1>
+        <p>گفتگوهای واقعی، ایده‌های تازه و لحظه‌هایی که ارزش به‌اشتراک‌گذاشتن دارند؛ همه در یک فضای مستقل.</p>
+        <div className="home-hero-actions">
+          <button className="hero-primary-action" onClick={onGoChats}><MessageCircle size={17}/> شروع یک گفتگو <span>←</span></button>
+          <div className="hero-live-state"><i/> فضای تو آماده است</div>
+        </div>
+        <div className="home-hero-pill-row"><span>ارتباط</span><b>·</b><span>جامعه</span><b>·</b><span>رسانه</span></div>
+      </div>
+      <div className="home-hero-art" aria-hidden="true">
+        <div className="hero-art-grid"/>
+        <div className="hero-art-orbit orbit-one"/>
+        <div className="hero-art-orbit orbit-two"/>
+        <div className="hero-art-core">
+          <svg viewBox="0 0 360 360" role="presentation">
+            <defs>
+              <linearGradient id="hero-blade" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#f5d9a8"/><stop offset=".48" stopColor="#8bd4ff"/><stop offset="1" stopColor="#2873d4"/></linearGradient>
+              <filter id="hero-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <circle cx="180" cy="180" r="126" fill="none" stroke="rgba(180,218,255,.24)" strokeWidth="1"/>
+            <circle cx="180" cy="180" r="103" fill="none" stroke="rgba(222,185,128,.34)" strokeWidth="1" strokeDasharray="3 11"/>
+            <path d="M180 49 211 147 309 180 211 213 180 311 149 213 51 180 149 147Z" fill="url(#hero-blade)" opacity=".92" filter="url(#hero-glow)"/>
+            <path d="M180 91 202 158 269 180 202 202 180 269 158 202 91 180 158 158Z" fill="#0b1c32" stroke="rgba(255,255,255,.6)" strokeWidth="1.5"/>
+            <circle cx="180" cy="180" r="19" fill="#f4d7a2"/>
+            <path d="M180 143V217M143 180H217" stroke="#fff5df" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <div className="hero-art-caption"><span>01 / 03</span><b>YOUR SPACE. YOUR VOICE.</b></div>
+      </div>
+      <div className="home-hero-bottomline"><span>یک جهان برای ارتباط</span><span>طراحی‌شده برای تو <b>✳</b></span></div>
+    </section>
+    <SectionHeader eyebrow="THE COMMUNITY FEED" title="جریان جامعه" description="تازه‌ترین نوشته‌ها و اتفاقات فضای کاوه." action={<button className="button button-quiet" onClick={onGoChats}><MessageCircle size={17}/> گفتگوها</button>}/>
     <PostComposer supabase={supabase} userId={userId} notify={notify} onPublished={() => void load()}/>\n    
     <div className="feed-toolbar"><div><strong>تازه‌ترین‌ها</strong><span>محتوای عمومی جامعه</span></div><button className="icon-button" onClick={() => void load()} title="تازه‌سازی"><Activity size={18}/></button></div>
     {loading ? <div className="skeleton-list">{[1,2,3].map((n) => <div className="skeleton-card" key={n}/>)}</div> : posts.length === 0 ? <EmptyState icon={<Sparkles/>} title="هنوز پستی منتشر نشده" description="اولین پست را تو منتشر کن و فید را زنده کن."/> : posts.map((post) => <article className="post-card" key={post.id}><div className="post-author"><Avatar profile={authors[post.author_id]} size="md"/><div><strong>{authors[post.author_id]?.display_name ?? 'کاربر کاوه'}</strong><small>{authors[post.author_id]?.username ? `@${authors[post.author_id].username} · ` : ''}{formatDate(post.published_at ?? post.created_at)}</small></div></div>{post.body && <p className="post-body">{post.body}</p>}{attachments[post.id]?.length ? <div className="post-media-grid">{attachments[post.id].map((item) => { const { data } = supabase.storage.from(item.bucket_id).getPublicUrl(item.object_path); const url = data.publicUrl; return item.mime_type?.startsWith('image/') ? <a className="post-media-link" href={url} target="_blank" rel="noreferrer" key={item.id}><img className="post-media-image" src={url} alt={item.original_name} loading="lazy"/></a> : item.mime_type?.startsWith('video/') ? <video className="post-media-video" key={item.id} controls playsInline preload="metadata" src={url}/> : item.mime_type?.startsWith('audio/') ? <audio className="post-media-audio" key={item.id} controls preload="metadata" src={url}/> : <a className="post-file-attachment" href={url} download={item.original_name} target="_blank" rel="noreferrer" key={item.id}><span>{item.original_name}</span></a>; })}</div> : null}<div className="post-meta"><span><Activity size={14}/> انتشار عمومی</span><span>{counts[post.id] ?? 0} واکنش</span></div><div className="post-actions"><button className={liked.has(post.id) ? 'is-liked' : ''} onClick={() => void toggleLike(post.id)}><Heart size={18} fill={liked.has(post.id) ? 'currentColor' : 'none'}/> پسندیدن</button><button onClick={() => void loadComments(post.id)}><MessageCircle size={18}/> دیدگاه‌ها</button><button onClick={() => void copyPostLink(post.id)}><Copy size={18}/> کپی پیوند</button><button onClick={() => { setReportingPost(reportingPost === post.id ? null : post.id); setReportDetails(''); }}><Flag size={18}/> گزارش</button></div>{reportingPost === post.id && <div className="post-report-form">
