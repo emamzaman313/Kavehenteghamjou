@@ -32,6 +32,8 @@ In Settings → Secrets and variables → Actions → Variables, add repository 
 
 The Google provider must also be enabled in Supabase Authentication → Sign In / Providers → Google, with the matching Web Client ID and the Web Client Secret entered only in the Supabase Dashboard. Add the Android OAuth client using package `com.kaveh.avenger` and the SHA-1 fingerprint of the actual Release/upload certificate. The Android Client ID is not a substitute for the Web Client ID used by Credential Manager.
 
+For optional Android push delivery, also add repository Variables `FIREBASE_APP_ID`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`, and `FIREBASE_SENDER_ID`. Store the Firebase service-account JSON only in Supabase Edge Function Secrets as `FCM_SERVICE_ACCOUNT_JSON`; never add it to GitHub variables or the APK.
+
 ## 4. Build and verify
 
 Run Actions → Android Release → Run workflow, or push a version tag such as `v0.1.0`. The workflow:
