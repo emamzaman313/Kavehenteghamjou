@@ -14,7 +14,11 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance' | 'ranks'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance' | 'ranks' | 'features'>('overview');
+  const [featureFlags, setFeatureFlags] = useState<{key:string;title:string;description:string;enabled:boolean;updated_at:string}[]>([]);
+  const [featureFlagsLoading, setFeatureFlagsLoading] = useState(false);
+  const [featureBusy, setFeatureBusy] = useState<string|null>(null);
+  const [liveStatsConnected, setLiveStatsConnected] = useState(false);
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
   const [audioTracks, setAudioTracks] = useState<{ id: string; title: string; artist: string; audio_path: string; cover_path: string | null; duration_seconds: number | null; is_active: boolean; created_at: string }[]>([]);
   const [newTrackTitle, setNewTrackTitle] = useState('');
@@ -82,6 +86,39 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     }
     setOverview(data);
   }, [supabase, notify]);
+
+  const refreshFeatureFlags = useCallback(async () => {
+    setFeatureFlagsLoading(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'feature_flags_list' } });
+    setFeatureFlagsLoading(false);
+    if (error || data?.ok !== true) { notify('دریافت کنترل امکانات ناموفق بود.','error'); return; }
+    setFeatureFlags(data.flags ?? []);
+  },[supabase,notify]);
+
+  const setFeatureFlag = async (key:string, enabled:boolean) => {
+    if (featureBusy) return;
+    setFeatureBusy(key);
+    const {data,error}=await supabase.functions.invoke('admin-console',{body:{action:'feature_flag_set',key,enabled}});
+    setFeatureBusy(null);
+    if(error||data?.ok!==true){notify('تغییر وضعیت امکان ذخیره نشد.','error');return;}
+    setFeatureFlags(rows=>rows.map(row=>row.key===key?{...row,...data.flag}:row));
+    notify(enabled?'امکان موردنظر فعال شد.':'امکان موردنظر غیرفعال شد.');
+  };
+
+  useEffect(() => { if(adminTab==='features') void refreshFeatureFlags(); },[adminTab,refreshFeatureFlags]);
+
+  useEffect(() => {
+    if(adminTab!=='overview') return;
+    const channel=supabase.channel('admin-live-overview')
+      .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>{void refreshOverview();})
+      .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{void refreshOverview();})
+      .on('postgres_changes',{event:'*',schema:'public',table:'comments'},()=>{void refreshOverview();})
+      .on('postgres_changes',{event:'*',schema:'public',table:'reports'},()=>{void refreshOverview();})
+      .on('postgres_changes',{event:'*',schema:'public',table:'admin_audit_logs'},()=>{void refreshAudit();})
+      .subscribe(status=>setLiveStatsConnected(status==='SUBSCRIBED'));
+    const fallback=window.setInterval(()=>{void refreshOverview();},30000);
+    return ()=>{window.clearInterval(fallback);setLiveStatsConnected(false);void supabase.removeChannel(channel);};
+  },[adminTab,supabase,refreshOverview,refreshAudit]);
 
   const refreshAudit = useCallback(async () => {
     setAuditLoading(true);
@@ -596,9 +633,11 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           {role !== 'moderator' && <button className={adminTab === 'notifications' ? 'active' : ''} onClick={() => setAdminTab('notifications')}><Megaphone size={15}/> اعلان‌های زمان‌بندی‌شده</button>}
           {role !== 'moderator' && <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>}
           {role === 'owner' && <button className={adminTab === 'ranks' ? 'active' : ''} onClick={() => setAdminTab('ranks')}><ShieldCheck size={15}/> رتبه‌ها و مجوزها</button>}
+          {role !== 'moderator' && <button className={adminTab === 'features' ? 'active' : ''} onClick={() => setAdminTab('features')}><ShieldCheck size={15}/> کنترل امکانات</button>}
           {role !== 'moderator' && <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>}
         </div>
         {overviewLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت اطلاعات پنل…</span></div> : null}
+        {adminTab === 'overview' && <div className="admin-live-status"><span className={liveStatsConnected?'is-live':''}/>{liveStatsConnected?'آمار زنده متصل است':'اتصال زنده در حال برقراری؛ به‌روزرسانی دوره‌ای فعال است'}</div>}
         {adminTab === 'overview' && !overviewLoading && <div className="admin-overview-grid">
           <div className="admin-console-card"><strong>آخرین فعالیت‌ها</strong>{(overview?.posts ?? []).slice(0,5).map((post) => <div className="admin-activity-row" key={post.id}><span className="admin-activity-dot"/><div><b>{post.body || 'پست رسانه‌ای'}</b><small>{post.visibility === 'public' ? 'عمومی' : 'محدود'} · {new Date(post.created_at).toLocaleDateString('fa-IR')}</small></div></div>)}{!overview?.posts.length && <p>هنوز فعالیتی ثبت نشده است.</p>}</div>
           <div className="admin-console-card"><strong>آخرین اعضا</strong>{(overview?.users ?? []).slice(0,5).map((user) => <div className="admin-user-row" key={user.id}><span className="admin-user-avatar">{(user.display_name || 'ک').slice(0,1)}</span><div><b>{user.display_name || 'کاربر کاوه'}</b><small>{user.username ? '@' + user.username : 'نام کاربری ثبت نشده'}</small></div></div>)}</div>
@@ -816,6 +855,14 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           </div>)}
         </div>}
       </section>
+      {adminTab === 'features' && <section className="admin-console-card admin-feature-flags">
+        <div className="admin-audit-heading"><strong>مرکز کنترل امکانات پلتفرم</strong><button className="button button-quiet" type="button" onClick={()=>void refreshFeatureFlags()}><Activity size={15}/> تازه‌سازی</button></div>
+        <p className="admin-user-policy-note">تغییرات با دسترسی مدیریتی ثبت و در گزارش فعالیت مدیران ذخیره می‌شوند. خاموش‌کردن هر قابلیت باید با توجه به اثر آن بر تجربه کاربران انجام شود.</p>
+        {featureFlagsLoading?<div className="admin-loading"><span className="spinner"/>در حال دریافت تنظیمات…</div>:featureFlags.map(flag=><div className="admin-feature-row" key={flag.key}>
+          <div><strong>{flag.title}</strong><small>{flag.description}</small><small>آخرین تغییر: {new Date(flag.updated_at).toLocaleString('fa-IR')}</small></div>
+          <button type="button" role="switch" aria-checked={flag.enabled} aria-label={'تغییر وضعیت '+flag.title} className={'switch '+(flag.enabled?'on':'')} disabled={featureBusy!==null} onClick={()=>void setFeatureFlag(flag.key,!flag.enabled)}><i/></button>
+        </div>)}
+      </section>}
       {adminTab === 'appearance' && <section className="admin-console-card admin-appearance">
   <div className="admin-audit-heading"><strong>مدیریت ظاهر و تنظیمات مرکزی</strong><button className="button button-quiet" type="button" onClick={() => void refreshAppearance()}><Activity size={15}/> تازه‌سازی</button></div>
   <p className="admin-user-policy-note">تغییرات ابتدا در پیش‌نمایش محلی دیده می‌شوند. با انتشار، نسخه جدید در دیتابیس ثبت و برای تمام کاربران وب اعمال می‌شود. فایل‌ها و داده کاربران دست‌نخورده می‌مانند.</p>
