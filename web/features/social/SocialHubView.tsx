@@ -101,12 +101,15 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   });
   const uploadReel = async (event: FormEvent) => {
     event.preventDefault();
-    const validationError = validateReelUpload(video, cover, reelDuration);
+    const reelVideo = video;
+    const reelCover = cover;
+    const validationError = validateReelUpload(reelVideo, reelCover, reelDuration);
     if (validationError) return notify(validationError, 'error');
+    if (!reelVideo) return;
     setUploading(true);
     const safeName = (file: File) => file.name.replace(/[^\w.\-]/g, '_');
-    const path = userId + '/reels/' + crypto.randomUUID() + '-' + safeName(video);
-    const coverPath = cover ? userId + '/reel-covers/' + crypto.randomUUID() + '-' + safeName(cover) : null;
+    const path = userId + '/reels/' + crypto.randomUUID() + '-' + safeName(reelVideo);
+    const coverPath = reelCover ? userId + '/reel-covers/' + crypto.randomUUID() + '-' + safeName(reelCover) : null;
     const uploadedPaths: string[] = [];
     setReelUploadProgress(0);
     const uploaded = await uploadWithProgress('post-media', path, reelVideo, setReelUploadProgress);
