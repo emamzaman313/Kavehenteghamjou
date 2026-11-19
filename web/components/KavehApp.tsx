@@ -78,10 +78,7 @@ export default function KavehApp() {
     let active = true;
     const heartbeat = async () => {
       if (!active || document.visibilityState !== 'visible') return;
-      await supabase.from('user_presence').upsert(
-        { user_id: session.user.id, last_seen_at: new Date().toISOString() },
-        { onConflict: 'user_id' },
-      );
+      await supabase.rpc('touch_user_presence');
     };
     void heartbeat();
     const timer = window.setInterval(() => { void heartbeat(); }, 30_000);
