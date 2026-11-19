@@ -136,6 +136,9 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     val commentDrafts = remember { mutableStateMapOf<String, String>() }
     val expandedComments = remember { mutableStateMapOf<String, Boolean>() }
     val commentBusyByPost = remember { mutableStateMapOf<String, Boolean>() }
+    val replyTargets = remember { mutableStateMapOf<String, String?>() }
+    val editingComments = remember { mutableStateMapOf<String, String?>() }
+    val editDrafts = remember { mutableStateMapOf<String, String>() }
     suspend fun refresh() {
         loading = true
         error = null
@@ -276,17 +279,78 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                                 if (!wasExpanded && commentsByPost[card.post.id] == null) scope.launch { loadPostComments(card.post.id) }
                             }) { Text(if (expandedComments[card.post.id] == true) "بستن دیدگاه‌ها" else "دیدگاه‌ها") }
                             if (expandedComments[card.post.id] == true) {
-                                commentsByPost[card.post.id].orEmpty().forEach { comment ->
-                                    Column(Modifier.fillMaxWidth().padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(if (comment.parentCommentId == null) comment.body else "↳ ${comment.body}", style = MaterialTheme.typography.bodyMedium)
-                                        Text(if (comment.authorId == userId) "شما" else "کاربر", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                val allComments = commentsByPost[card.post.id].orEmpty()
+                                allComments.filter { it.parentCommentId == null }.forEach { root ->
+                                    Column(Modifier.fillMaxWidth().padding(start = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(root.body, style = MaterialTheme.typography.bodyMedium)
+                                        Text(if (root.authorId == userId) "شما" else "کاربر", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            TextButton(onClick = { replyTargets[card.post.id] = root.id }) { Text("پاسخ") }
+                                            if (root.authorId == userId) {
+                                                TextButton(onClick = { editingComments[root.id] = card.post.id; editDrafts[root.id] = root.body }) { Text("ویرایش") }
+                                                TextButton(onClick = { scope.launch {
+                                                    try {
+                                                        supabase.postgrest["comments"].delete { filter { eq("id", root.id); eq("author_id", userId) } }
+                                                        loadPostComments(card.post.id)
+                                                    } catch (exception: Exception) { error = exception.message ?: "حذف دیدگاه ناموفق بود." }
+                                                } }) { Text("حذف", color = MaterialTheme.colorScheme.error) }
+                                            }
+                                        }
+                                        if (editingComments[root.id] == card.post.id) {
+                                            OutlinedTextField(value = editDrafts[root.id].orEmpty(), onValueChange = { editDrafts[root.id] = it.take(10000) }, label = { Text("ویرایش دیدگاه") }, modifier = Modifier.fillMaxWidth())
+                                            Row {
+                                                TextButton(onClick = { scope.launch {
+                                                    val value = editDrafts[root.id].orEmpty().trim()
+                                                    if (value.isNotEmpty()) try {
+                                                        supabase.postgrest["comments"].update({ set("body", value); set("edited_at", java.time.Instant.now().toString()) }) { filter { eq("id", root.id); eq("author_id", userId) } }
+                                                        editingComments.remove(root.id); loadPostComments(card.post.id)
+                                                    } catch (exception: Exception) { error = exception.message ?: "ویرایش دیدگاه ناموفق بود." }
+                                                } }) { Text("ذخیره") }
+                                                TextButton(onClick = { editingComments.remove(root.id) }) { Text("لغو") }
+                                            }
+                                        }
+                                        allComments.filter { it.parentCommentId == root.id }.forEach { reply ->
+                                            Column(Modifier.fillMaxWidth().padding(start = 18.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Text("↳ ${reply.body}", style = MaterialTheme.typography.bodyMedium)
+                                                Text(if (reply.authorId == userId) "شما" else "کاربر", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    TextButton(onClick = { replyTargets[card.post.id] = root.id }) { Text("پاسخ") }
+                                                    if (reply.authorId == userId) {
+                                                        TextButton(onClick = { editingComments[reply.id] = card.post.id; editDrafts[reply.id] = reply.body }) { Text("ویرایش") }
+                                                        TextButton(onClick = { scope.launch {
+                                                            try {
+                                                                supabase.postgrest["comments"].delete { filter { eq("id", reply.id); eq("author_id", userId) } }
+                                                                loadPostComments(card.post.id)
+                                                            } catch (exception: Exception) { error = exception.message ?: "حذف پاسخ ناموفق بود." }
+                                                        } }) { Text("حذف", color = MaterialTheme.colorScheme.error) }
+                                                    }
+                                                }
+                                                if (editingComments[reply.id] == card.post.id) {
+                                                    OutlinedTextField(value = editDrafts[reply.id].orEmpty(), onValueChange = { editDrafts[reply.id] = it.take(10000) }, label = { Text("ویرایش پاسخ") }, modifier = Modifier.fillMaxWidth())
+                                                    Row {
+                                                        TextButton(onClick = { scope.launch {
+                                                            val value = editDrafts[reply.id].orEmpty().trim()
+                                                            if (value.isNotEmpty()) try {
+                                                                supabase.postgrest["comments"].update({ set("body", value); set("edited_at", java.time.Instant.now().toString()) }) { filter { eq("id", reply.id); eq("author_id", userId) } }
+                                                                editingComments.remove(reply.id); loadPostComments(card.post.id)
+                                                            } catch (exception: Exception) { error = exception.message ?: "ویرایش پاسخ ناموفق بود." }
+                                                        } }) { Text("ذخیره") }
+                                                        TextButton(onClick = { editingComments.remove(reply.id) }) { Text("لغو") }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
+                                }
+                                if (replyTargets[card.post.id] != null) {
+                                    Text("در حال پاسخ به دیدگاه", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                                    TextButton(onClick = { replyTargets[card.post.id] = null }) { Text("لغو پاسخ") }
                                 }
                                 OutlinedTextField(
                                     modifier = Modifier.fillMaxWidth(),
                                     value = commentDrafts[card.post.id].orEmpty(),
                                     onValueChange = { commentDrafts[card.post.id] = it.take(10000) },
-                                    label = { Text("نوشتن دیدگاه") },
+                                    label = { Text(if (replyTargets[card.post.id] == null) "نوشتن دیدگاه" else "نوشتن پاسخ") },
                                     minLines = 1,
                                     maxLines = 3
                                 )
@@ -298,8 +362,9 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                                             if (body.isNotEmpty()) scope.launch {
                                                 commentBusyByPost[card.post.id] = true
                                                 try {
-                                                    supabase.postgrest["comments"].insert(SocialCommentInsert(card.post.id, userId, body))
+                                                    supabase.postgrest["comments"].insert(SocialCommentInsert(card.post.id, userId, body, replyTargets[card.post.id]))
                                                     commentDrafts[card.post.id] = ""
+                                                    replyTargets[card.post.id] = null
                                                     loadPostComments(card.post.id)
                                                 } catch (exception: Exception) {
                                                     error = exception.message ?: "ارسال دیدگاه ناموفق بود."
@@ -406,6 +471,18 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                 }
                             }
                         }) { Text("پذیرفتن") }
+                        TextButton(onClick = {
+                            scope.launch {
+                                try {
+                                    supabase.postgrest["follows"].delete {
+                                        filter { eq("follower_id", request.followerId); eq("following_id", userId); eq("status", "pending") }
+                                    }
+                                    loadProfile()
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "رد درخواست ناموفق بود."
+                                }
+                            }
+                        }) { Text("رد کردن", color = MaterialTheme.colorScheme.error) }
                     }
                 }
             }
