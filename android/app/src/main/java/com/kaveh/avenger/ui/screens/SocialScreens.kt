@@ -1230,6 +1230,8 @@ fun NotificationsScreen(supabase: SupabaseClient, userId: String) {
                     "join_request_approved" -> "پذیرش درخواست عضویت"
                     "join_request_rejected" -> "رد درخواست عضویت"
                     "group_join_request" -> "درخواست عضویت جدید"
+                    "mission_completed" -> item.payload["title"]?.jsonPrimitive?.contentOrNull ?: "تکمیل مأموریت"
+                    "event_reward" -> item.payload["title"]?.jsonPrimitive?.contentOrNull ?: "جایزه رویداد"
                     else -> item.kind
                 }
                 val message = item.payload["message"]?.jsonPrimitive?.contentOrNull
