@@ -569,6 +569,7 @@ Deno.serve(async (request: Request) => {
   }
 
   if (body.action === "overview") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
     const sinceDate = new Date();
     sinceDate.setUTCDate(sinceDate.getUTCDate() - 6);
     sinceDate.setUTCHours(0, 0, 0, 0);
