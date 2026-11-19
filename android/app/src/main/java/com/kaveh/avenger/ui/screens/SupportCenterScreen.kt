@@ -47,6 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 private data class SupportTicketRow(
@@ -142,9 +143,9 @@ fun SupportCenterScreen(
             val ticketId = supabase.postgrest.rpc(
                 "create_support_ticket",
                 buildJsonObject {
-                    put("p_subject", cleanSubject)
-                    put("p_category", category)
-                    put("p_body", cleanBody)
+                    put("p_subject", JsonPrimitive(cleanSubject))
+                    put("p_category", JsonPrimitive(category))
+                    put("p_body", JsonPrimitive(cleanBody))
                 }
             ).decodeAs<String>()
             subject = ""
