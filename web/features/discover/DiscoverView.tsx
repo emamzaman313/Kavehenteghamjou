@@ -14,6 +14,8 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(false);
   const [joining, setJoining] = useState<string | null>(null);
+  const [followStatusByUser, setFollowStatusByUser] = useState<Record<string, string>>({});
+  const [followBusy, setFollowBusy] = useState<string | null>(null);
 
   const loadCommunities = async () => {
     const { data, error } = await supabase.rpc('discover_communities');
@@ -44,7 +46,17 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     setLoading(true);
     const safe = query.trim().replace(/[,%()]/g, '');
     const { data, error } = await supabase.from('profiles').select('*').or('username.ilike.%' + safe + '%,display_name.ilike.%' + safe + '%').neq('id', userId).limit(24);
-    if (error) notify(error.message, 'error'); else setPeople((data ?? []) as Profile[]);
+    if (error) notify(error.message, 'error'); else {
+      const results = (data ?? []) as Profile[];
+      setPeople(results);
+      const ids = results.map((person) => person.id);
+      if (ids.length) {
+        const { data: follows, error: followError } = await supabase.from('follows')
+          .select('following_id,status').eq('follower_id', userId).in('following_id', ids);
+        if (followError) notify('دریافت وضعیت دنبال‌کردن ناموفق بود: ' + followError.message, 'error');
+        else setFollowStatusByUser(Object.fromEntries((follows ?? []).map((row) => [row.following_id, row.status])));
+      } else setFollowStatusByUser({});
+    }
     setLoading(false);
   };
 
@@ -55,14 +67,38 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     let alive = true;
     void supabase.from('profiles').select('*').or('username.ilike.%' + safe + '%,display_name.ilike.%' + safe + '%').neq('id', userId).limit(24).then(({ data, error }) => {
       if (!alive) return;
-      if (error) notify(error.message, 'error'); else setPeople((data ?? []) as Profile[]);
+      if (error) notify(error.message, 'error'); else {
+        const results = (data ?? []) as Profile[];
+        setPeople(results);
+        const ids = results.map((person) => person.id);
+        if (ids.length) {
+          const { data: follows, error: followError } = await supabase.from('follows')
+            .select('following_id,status').eq('follower_id', userId).in('following_id', ids);
+          if (!alive) return;
+          if (followError) notify('دریافت وضعیت دنبال‌کردن ناموفق بود: ' + followError.message, 'error');
+          else setFollowStatusByUser(Object.fromEntries((follows ?? []).map((row) => [row.following_id, row.status])));
+        } else setFollowStatusByUser({});
+      }
     });
     return () => { alive = false; };
   }, [initialSearch, supabase, userId, notify]);
 
   const follow = async (id: string) => {
-    const { error } = await supabase.from('follows').insert({ follower_id: userId, following_id: id, status: 'accepted' });
-    if (error) notify(error.message, 'error'); else notify('دنبال‌کردن انجام شد.');
+    setFollowBusy(id);
+    const current = followStatusByUser[id];
+    const result = current
+      ? await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', id)
+      : await supabase.from('follows').insert({ follower_id: userId, following_id: id, status: 'pending' });
+    setFollowBusy(null);
+    if (result.error) notify(result.error.message, 'error');
+    else {
+      setFollowStatusByUser((old) => {
+        const next = { ...old };
+        if (current) delete next[id]; else next[id] = 'pending';
+        return next;
+      });
+      notify(current ? 'درخواست یا دنبال‌کردن لغو شد.' : 'درخواست دنبال‌کردن ارسال شد.');
+    }
   };
   const startChat = async (id: string) => {
     const { error } = await supabase.rpc('create_direct_conversation', { p_other_user_id: id });
@@ -78,7 +114,7 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     {people.length ? <div className="people-grid">{people.map((p) => <article className="person-card" key={p.id}>
       <Avatar profile={p} size="lg"/><strong>{p.display_name}</strong><span>@{p.username ?? 'بدون نام کاربری'}</span>
       <p>{p.bio || 'هنوز توضیحی برای این پروفایل ثبت نشده است.'}</p>
-      <div><button className="button button-primary button-small" onClick={() => void startChat(p.id)}><MessageCircle size={15}/> گفتگو</button><button className="button button-quiet button-small" onClick={() => void follow(p.id)}>دنبال‌کردن</button></div>
+      <div><button className="button button-primary button-small" onClick={() => void startChat(p.id)}><MessageCircle size={15}/> گفتگو</button><button className="button button-quiet button-small" disabled={followBusy === p.id} onClick={() => void follow(p.id)}>{followBusy === p.id ? 'در حال ثبت…' : followStatusByUser[p.id] === 'accepted' ? 'لغو دنبال‌کردن' : followStatusByUser[p.id] === 'pending' ? 'لغو درخواست' : 'درخواست دنبال‌کردن'}</button></div>
     </article>)}</div> : <EmptyState icon={<Compass/>} title="کسی پیدا نشد" description="برای شروع، نام یا نام کاربری را جست‌وجو کن."/>}
     <section className="page-stack">
       <h3><Users size={18}/> گروه‌ها و کانال‌های قابل پیوستن</h3>
