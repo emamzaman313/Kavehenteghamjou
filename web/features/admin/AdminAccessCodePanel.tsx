@@ -294,9 +294,22 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
       notify('عنوان، متن و زمان معتبر (حداقل یک دقیقه بعد) وارد کنید.', 'error');
       return;
     }
-    const recipientIds = announcementRecipients.split(/[\n,;\s]+/).map((value) => value.trim()).filter(Boolean);
-    if (announcementAudience === 'specific' && (recipientIds.length === 0 || recipientIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))) {
-      notify('برای مخاطبان مشخص، شناسه UUID معتبر کاربران را وارد کنید.', 'error');
+    const recipientInputs = announcementRecipients.split(/[\n,;\s]+/).map((value) => value.trim()).filter(Boolean);
+    const normalizedInputs = recipientInputs.map((value) => value.replace(/^@/, '').toLocaleLowerCase());
+    const resolvedRecipients = normalizedInputs.map((value) => managedUsers.find((user) =>
+      user.id.toLocaleLowerCase() === value ||
+      (user.email ?? '').toLocaleLowerCase() === value ||
+      (user.username ?? '').replace(/^@/, '').toLocaleLowerCase() === value
+    ));
+    const unresolvedInputs = normalizedInputs.filter((value) => !managedUsers.some((user) =>
+      user.id.toLocaleLowerCase() === value ||
+      (user.email ?? '').toLocaleLowerCase() === value ||
+      (user.username ?? '').replace(/^@/, '').toLocaleLowerCase() === value
+    ));
+    const recipientIds = [...new Set(resolvedRecipients.filter((user): user is NonNullable<typeof user> => Boolean(user)).map((user) => user.id))];
+    if (announcementAudience === 'specific' && (recipientInputs.length === 0 || unresolvedInputs.length > 0 || recipientIds.length === 0)) {
+      notify(unresolvedInputs.length ? 'این ایمیل/شناسه/نام کاربری پیدا نشد: ' + unresolvedInputs.join('، ') : 'حداقل یک کاربر مشخص انتخاب کنید.', 'error');
+      if (unresolvedInputs.length) { setUserSearch(unresolvedInputs[0]); void refreshUsers(); }
       return;
     }
     setScheduledSaving(true);
@@ -750,7 +763,10 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
             </select>
             {announcementAudience === 'specific' && <>
               <label className="field-label">جست‌وجو و انتخاب کاربران ({announcementRecipients.split(/[\\n,;\\s]+/).filter(Boolean).length} انتخاب‌شده)</label>
-              <input className="text-input" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="نام، ایمیل یا نام کاربری را جست‌وجو کن…"/>
+              <textarea className="text-input" rows={3} value={announcementRecipients} onChange={(event) => setAnnouncementRecipients(event.target.value)} placeholder="ایمیل، UUID یا شناسه کاربر یا نام کاربری را وارد کن؛ هر مورد در یک خط یا با ویرگول جدا شود…"/>
+              <small>می‌توانی چند مورد را هم‌زمان وارد کنی. ایمیل کامل، UUID یا نام کاربری دقیق پذیرفته می‌شود. موارد باید در فهرست کاربران سایت پیدا شوند.</small>
+              <label className="field-label">یا جست‌وجو و انتخاب از فهرست کاربران</label>
+              <input className="text-input" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="نام، ایمیل، شناسه یا نام کاربری را جست‌وجو کن…"/>
               {usersLoading ? <small>در حال دریافت فهرست کاربران…</small> : <div style={{ maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 8, padding: 10, border: '1px solid var(--border, rgba(127,127,127,.25))', borderRadius: 12 }}>
                 {visibleManagedUsers.slice(0, 100).map((user) => {
                   const selected = announcementRecipients.split(/[\\n,;\\s]+/).filter(Boolean).includes(user.id);
@@ -761,7 +777,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
                 })}
                 {visibleManagedUsers.length === 0 && <small>کاربری با این عبارت پیدا نشد.</small>}
               </div>}
-              <small>حداکثر ۱۰۰ نتیجه در این فهرست نمایش داده می‌شود؛ برای مخاطب عمومی همه کاربران را انتخاب کن.</small>
+              <small>حداکثر ۱۰۰ نتیجه در فهرست نمایش داده می‌شود. انتخاب از فهرست، شناسه همان کاربر را به ورودی بالا اضافه می‌کند.</small>
             </>}
             <label className="field-label">دستگاه مقصد</label>
             <select className="text-input" value={announcementPlatform} onChange={(event) => setAnnouncementPlatform(event.target.value as typeof announcementPlatform)}>
