@@ -24,6 +24,12 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const [searchUser, setSearchUser] = useState('');
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [showNew, setShowNew] = useState(false);
+  const [showCreateSpace, setShowCreateSpace] = useState(false);
+  const [spaceType, setSpaceType] = useState<'group' | 'channel'>('group');
+  const [spaceTitle, setSpaceTitle] = useState('');
+  const [spaceDescription, setSpaceDescription] = useState('');
+  const [spaceApproval, setSpaceApproval] = useState(false);
+  const [creatingSpace, setCreatingSpace] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState('CONNECTING');
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -233,10 +239,43 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     setShowNew(false); setSearchUser(''); setSearchResults([]); await loadConversations(); setActive(data as string);
   };
 
+  const createSpace = async (event: FormEvent) => {
+    event.preventDefault();
+    const title = spaceTitle.trim();
+    const description = spaceDescription.trim();
+    if (title.length < 3 || title.length > 60) { notify('نام گروه یا کانال باید بین ۳ تا ۶۰ نویسه باشد.', 'error'); return; }
+    if (description.length > 500) { notify('توضیحات حداکثر ۵۰۰ نویسه است.', 'error'); return; }
+    setCreatingSpace(true);
+    let conversationId: string | null = null;
+    try {
+      const { data: conversation, error: conversationError } = await supabase.from('conversations').insert({ kind: spaceType, title, created_by: userId }).select('id').single();
+      if (conversationError || !conversation) throw conversationError ?? new Error('ساخت فضای گفتگو ناموفق بود.');
+      conversationId = conversation.id;
+      const { error: memberError } = await supabase.from('conversation_members').insert({ conversation_id: conversationId, user_id: userId, member_role: 'owner' });
+      if (memberError) throw memberError;
+      const metadata = spaceType === 'group' ? await supabase.from('group_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, join_approval_required: spaceApproval }) : await supabase.from('channel_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, visibility: 'public' });
+      if (metadata.error) throw metadata.error;
+      notify(spaceType === 'group' ? 'گروه ساخته شد.' : 'کانال عمومی ساخته شد.');
+      setShowCreateSpace(false); setSpaceTitle(''); setSpaceDescription(''); setSpaceApproval(false);
+      await loadConversations(); setActive(conversationId);
+    } catch (error) {
+      if (conversationId) await supabase.from('conversations').delete().eq('id', conversationId).eq('created_by', userId);
+      notify('ساخت گروه یا کانال انجام نشد: ' + (error instanceof Error ? error.message : 'خطای نامشخص'), 'error');
+    } finally { setCreatingSpace(false); }
+  };
   const activeConversation = conversations.find((c) => c.id === active);
   const otherProfile = active ? members[peerByConversation[active] ?? ''] : null;
-  return <div className="chat-layout"><section className="chat-list-panel"><div className="chat-list-heading"><div><span className="eyebrow">ارتباطات شما</span><h1>گفتگوها</h1></div><button className="button button-primary button-square" onClick={() => setShowNew((v) => !v)} title="گفتگوی جدید"><Plus size={19}/></button></div>
+  return <div className="chat-layout"><section className="chat-list-panel"><div className="chat-list-heading"><div><span className="eyebrow">ارتباطات شما</span><h1>گفتگوها</h1></div><div className="admin-user-actions"><button className="button button-primary button-square" onClick={() => setShowNew((v) => !v)} title="گفتگوی جدید"><Plus size={19}/></button><button className="button button-ghost" onClick={() => { setShowCreateSpace((v) => !v); setShowNew(false); }}>گروه/کانال</button></div></div>
     {showNew && <div className="new-chat-box"><div className="search-input"><Search size={16}/><input value={searchUser} onChange={(e) => void searchPeople(e.target.value)} placeholder="نام یا نام کاربری…" autoFocus/></div>{searchResults.map((p) => <button className="person-result" key={p.id} onClick={() => void startConversation(p.id)}><Avatar profile={p} size="sm"/><span><strong>{p.display_name}</strong><small>@{p.username ?? 'بدون نام کاربری'}</small></span><ArrowLeft size={16}/></button>)}</div>}
+    {showCreateSpace && <form className="new-chat-box" onSubmit={createSpace}>
+      <strong>ساخت فضای جدید</strong>
+      <div className="composer-tools"><button type="button" onClick={() => setSpaceType("group")}>گروه</button><button type="button" onClick={() => setSpaceType("channel")}>کانال عمومی</button></div>
+      <input className="auth-input" value={spaceTitle} onChange={(e) => setSpaceTitle(e.target.value)} minLength={3} maxLength={60} required placeholder={spaceType === "group" ? "نام گروه" : "نام کانال"}/>
+      <textarea className="auth-input" value={spaceDescription} onChange={(e) => setSpaceDescription(e.target.value)} maxLength={500} rows={3} placeholder="توضیحات (اختیاری)"/>
+      {spaceType === "group" && <label className="admin-toggle-row"><input type="checkbox" checked={spaceApproval} onChange={(e) => setSpaceApproval(e.target.checked)}/><span>عضویت با تأیید مدیر گروه</span></label>}
+      {spaceType === "channel" && <small className="admin-security-note">کانال عمومی ساخته می‌شود؛ دسترسی نوشتن فعلاً فقط برای اعضای ثبت‌شده است.</small>}
+      <div className="admin-user-actions"><button className="button button-primary" disabled={creatingSpace}>{creatingSpace ? "در حال ساخت…" : "ساخت"}</button><button type="button" className="button button-ghost" onClick={() => setShowCreateSpace(false)}>انصراف</button></div>
+    </form>
     <div className="chat-list-scroll">{loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : conversations.length === 0 ? <EmptyState icon={<MessageCircle/>} title="گفتگویی نداری" description="از دکمهٔ + یک گفتگو با کاربر دیگری شروع کن."/> : conversations.map((c) => {
       const p = members[peerByConversation[c.id] ?? ''];
       const title = c.title || (c.kind === 'direct' ? p?.display_name : c.kind === 'group' ? 'گروه کاوه' : 'کانال کاوه');
