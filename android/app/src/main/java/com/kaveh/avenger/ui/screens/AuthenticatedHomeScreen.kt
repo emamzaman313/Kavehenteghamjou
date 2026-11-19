@@ -139,6 +139,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         MainTab.Media -> Icons.Outlined.MusicNote
                         MainTab.Communities -> Icons.Outlined.ChatBubbleOutline
                         MainTab.Notifications -> Icons.Outlined.Notifications
+                        MainTab.World -> Icons.Outlined.Explore
                         MainTab.Admin -> Icons.Outlined.PersonOutline
                         MainTab.Profile -> Icons.Outlined.PersonOutline
                     }
