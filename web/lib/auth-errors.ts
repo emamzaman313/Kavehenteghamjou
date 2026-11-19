@@ -37,6 +37,11 @@ export function authErrorMessage(error: unknown): string {
     .join(' ')
     .toLowerCase();
 
+  if (markers.includes('weak_password') || (markers.includes('password') && markers.includes('weak'))) {
+    if (markers.includes('pwned')) return 'این رمز در نشت‌های اطلاعاتی شناخته‌شده دیده شده است. رمز دیگری انتخاب کنید.';
+    return 'رمز عبور پذیرفته نشد. حداقل ۱۰ نویسه و ترکیب حروف کوچک و بزرگ انگلیسی، عدد و نماد را رعایت کنید.';
+  }
+
   if (
     markers.includes('provider is not enabled') ||
     markers.includes('unsupported provider') ||
