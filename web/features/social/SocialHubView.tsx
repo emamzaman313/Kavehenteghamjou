@@ -152,10 +152,10 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (error) return notify('ارسال گزارش ریلز ناموفق بود: ' + error.message, 'error');
     setReportingReel(null); setReelReportDetails(''); notify('گزارش ریلز برای بررسی مدیران ارسال شد.');
   };
-  const recordReelView = async (reelId: string) => {
+  const recordReelView = useCallback(async (reelId: string) => {
     const { error } = await supabase.from('reel_views').insert({ reel_id: reelId, viewer_id: userId });
     if (error && !/duplicate|unique/i.test(error.message)) notify('ثبت بازدید انجام نشد.', 'error');
-  };
+  }, [supabase, userId, notify]);
   // Reels behave like a real vertical short-video feed: only the visible
   // item plays, and each viewer is recorded once per page session.
   useEffect(() => {
@@ -182,7 +182,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
       observer.disconnect();
       videos.forEach((video) => video.pause());
     };
-  }, [tab, reels, userId]);
+  }, [tab, reels, recordReelView]);
 
   const queueScheduledNotice = async (event: FormEvent) => {
     event.preventDefault();
