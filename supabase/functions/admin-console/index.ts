@@ -574,9 +574,10 @@ Deno.serve(async (request: Request) => {
     sinceDate.setUTCDate(sinceDate.getUTCDate() - 6);
     sinceDate.setUTCHours(0, 0, 0, 0);
     const since = sinceDate.toISOString();
-    const [users, userCount, newUsers, posts, comments, media, reels, audioTracks, playlists, dailyTitles, reelViews, latestPosts, recentPosts, recentComments, recentReels, pendingReports, recentNotifications] = await Promise.all([
+    const [users, userCount, onlineUsers, newUsers, posts, comments, media, reels, audioTracks, playlists, dailyTitles, reelViews, latestPosts, recentPosts, recentComments, recentReels, pendingReports, recentNotifications] = await Promise.all([
       admin.from("profiles").select("id,display_name,username,created_at").order("created_at", { ascending: false }).limit(30),
       admin.from("profiles").select("id", { count: "exact", head: true }),
+      admin.from("user_presence").select("user_id", { count: "exact", head: true }).gte("last_seen_at", new Date(Date.now() - 120_000).toISOString()),
       admin.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", since),
       admin.from("posts").select("id", { count: "exact", head: true }),
       admin.from("comments").select("id", { count: "exact", head: true }),
@@ -593,7 +594,7 @@ Deno.serve(async (request: Request) => {
       admin.from("reports").select("id", { count: "exact", head: true }).in("status", ["open", "reviewing"]),
       admin.from("notifications").select("id", { count: "exact", head: true }).gte("created_at", since),
     ]);
-    const firstError = users.error || userCount.error || newUsers.error || posts.error || comments.error || media.error || reels.error || audioTracks.error || playlists.error || dailyTitles.error || reelViews.error || latestPosts.error || recentPosts.error || recentComments.error || recentReels.error || pendingReports.error || recentNotifications.error;
+    const firstError = users.error || userCount.error || onlineUsers.error || newUsers.error || posts.error || comments.error || media.error || reels.error || audioTracks.error || playlists.error || dailyTitles.error || reelViews.error || latestPosts.error || recentPosts.error || recentComments.error || recentReels.error || pendingReports.error || recentNotifications.error;
     if (firstError) return respond({ ok: false, reason: "query_failed" }, 500, origin);
     const days = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(sinceDate);
@@ -613,7 +614,7 @@ Deno.serve(async (request: Request) => {
     return respond({
       ok: true,
       stats: {
-        users: userCount.count ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0,
+        users: userCount.count ?? 0, online_users: onlineUsers.count ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0,
         media: media.count ?? 0, reels: reels.count ?? 0, audio_tracks: audioTracks.count ?? 0,
         playlists: playlists.count ?? 0, daily_titles: dailyTitles.count ?? 0, reel_views: reelViews.count ?? 0,
         new_users_7d: newUsers.count ?? 0, pending_reports: pendingReports.count ?? 0,
