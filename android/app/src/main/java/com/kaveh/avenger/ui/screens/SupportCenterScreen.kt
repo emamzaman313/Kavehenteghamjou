@@ -21,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,6 +86,7 @@ private fun supportStatusLabel(status: String): String = when (status) {
     else -> status
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SupportCenterScreen(
     supabase: SupabaseClient,
@@ -107,18 +109,18 @@ fun SupportCenterScreen(
         loading = true
         error = null
         try {
-            var query = supabase.postgrest["support_tickets"].select {
-                order(column = "last_message_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
-                limit(100)
-            }
-            if (!staff) {
-                query = supabase.postgrest["support_tickets"].select {
+            val loaded = if (staff) {
+                supabase.postgrest["support_tickets"].select {
+                    order(column = "last_message_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                    limit(100)
+                }.decodeList<SupportTicketRow>()
+            } else {
+                supabase.postgrest["support_tickets"].select {
                     filter { eq("requester_id", userId) }
                     order(column = "last_message_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                     limit(100)
-                }
+                }.decodeList<SupportTicketRow>()
             }
-            val loaded = query.decodeList<SupportTicketRow>()
             tickets = loaded
             selected = selected?.let { current -> loaded.firstOrNull { it.id == current.id } }
         } catch (exception: Exception) {
