@@ -9,7 +9,8 @@ import { SectionHeader, EmptyState } from '@/components/ui';
 type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean; views_count: number };
 type Track = { id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null };
 type DailyTitle = { id: string; title: string; body: string; category: string; starts_at: string; ends_at: string | null };
-type Playlist = { id: string; title: string; description: string; is_public: boolean };
+type Playlist = { id: string; owner_id: string; title: string; description: string; is_public: boolean };
+type PlaylistTrack = { track: Track; position: number };
 type ScheduledNotice = { id: string; title: string; body: string; scheduled_at: string; status: string };
 
 export default function SocialHubView({ supabase, userId, isAdmin, notify }: { supabase: SupabaseClient; userId: string; isAdmin: boolean; notify: Notify }) {
@@ -33,6 +34,8 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [playlistTitle, setPlaylistTitle] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState('');
   const [selectedTrack, setSelectedTrack] = useState('');
+  const [playlistPublic, setPlaylistPublic] = useState(false);
+  const [selectedPlaylistTracks, setSelectedPlaylistTracks] = useState<PlaylistTrack[]>([]);
   const [dailyTitle, setDailyTitle] = useState('');
   const [dailyBody, setDailyBody] = useState('');
   const [dailyCategory, setDailyCategory] = useState('announcement');
@@ -49,7 +52,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
       supabase.from('reels').select('id,author_id,caption,video_path,cover_path,mime_type,published_at,allow_comments,views_count').order('published_at', { ascending: false }).limit(40),
       supabase.from('audio_tracks').select('id,title,artist,audio_path,duration_seconds').eq('is_active', true).order('created_at', { ascending: false }),
       supabase.from('daily_titles').select('id,title,body,category,starts_at,ends_at').eq('is_published', true).lte('starts_at', new Date().toISOString()).or('ends_at.is.null,ends_at.gt.' + new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
-      supabase.from('playlists').select('id,title,description,is_public').eq('owner_id', userId).order('created_at', { ascending: false }),
+      supabase.from('playlists').select('id,owner_id,title,description,is_public').or(`owner_id.eq.${userId},is_public.eq.true`).order('created_at', { ascending: false }),
       supabase.from('reel_reactions').select('reel_id').eq('user_id', userId),
       supabase.from('reel_comments').select('id,reel_id,author_id,body,created_at').order('created_at', { ascending: true }).limit(120),
       isAdmin ? supabase.from('scheduled_notifications').select('id,title,body,scheduled_at,status').order('scheduled_at', { ascending: true }).limit(30) : Promise.resolve({data:[],error:null}),
@@ -95,19 +98,69 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     }
   };
 
+  const refreshPlaylistTracks = async (playlistId: string) => {
+    if (!playlistId) { setSelectedPlaylistTracks([]); return; }
+    const { data: rows, error } = await supabase.from('playlist_tracks')
+      .select('track_id,position')
+      .eq('playlist_id', playlistId)
+      .order('position', { ascending: true });
+    if (error) return notify('دریافت آهنگ‌های فهرست ناموفق بود: ' + error.message, 'error');
+    const ids = (rows ?? []).map((row) => row.track_id);
+    if (!ids.length) { setSelectedPlaylistTracks([]); return; }
+    const { data: trackRows, error: trackError } = await supabase.from('audio_tracks')
+      .select('id,title,artist,audio_path,duration_seconds')
+      .in('id', ids)
+      .eq('is_active', true);
+    if (trackError) return notify('دریافت فایل‌های صوتی فهرست ناموفق بود: ' + trackError.message, 'error');
+    const byId = new Map((trackRows ?? []).map((track) => [track.id, track as Track]));
+    setSelectedPlaylistTracks((rows ?? []).flatMap((row) => {
+      const track = byId.get(row.track_id);
+      return track ? [{ track, position: row.position }] : [];
+    }));
+  };
+
   const createPlaylist = async (event: FormEvent) => {
     event.preventDefault();
     if (!playlistTitle.trim()) return;
-    const { data, error } = await supabase.from('playlists').insert({ owner_id: userId, title: playlistTitle.trim() }).select('id,title,description,is_public').single();
+    const isPublic = isAdmin && playlistPublic;
+    const { data, error } = await supabase.from('playlists').insert({
+      owner_id: userId,
+      title: playlistTitle.trim(),
+      is_public: isPublic,
+    }).select('id,owner_id,title,description,is_public').single();
     if (error) return notify('ساخت فهرست پخش ناموفق بود: ' + error.message, 'error');
-    setPlaylists((old) => [data as Playlist, ...old]); setPlaylistTitle(''); setSelectedPlaylist(data.id); notify('فهرست پخش ساخته شد.');
+    setPlaylists((old) => [data as Playlist, ...old]);
+    setPlaylistTitle('');
+    setPlaylistPublic(false);
+    setSelectedPlaylist(data.id);
+    await refreshPlaylistTracks(data.id);
+    notify(isPublic ? 'فهرست پخش عمومی ساخته شد و برای کاربران قابل مشاهده است.' : 'فهرست پخش خصوصی ساخته شد.');
   };
 
   const addTrackToPlaylist = async () => {
     if (!selectedPlaylist || !selectedTrack) return;
-    const { error } = await supabase.from('playlist_tracks').insert({ playlist_id: selectedPlaylist, track_id: selectedTrack, position: 0 });
+    const target = playlists.find((playlist) => playlist.id === selectedPlaylist);
+    if (!target || target.owner_id !== userId) return notify('فقط سازنده فهرست می‌تواند آهنگ به آن اضافه کند.', 'error');
+    const nextPosition = selectedPlaylistTracks.reduce((max, item) => Math.max(max, item.position), -1) + 1;
+    const { error } = await supabase.from('playlist_tracks').insert({
+      playlist_id: selectedPlaylist,
+      track_id: selectedTrack,
+      position: nextPosition,
+    });
     if (error) return notify('افزودن آهنگ ناموفق بود: ' + error.message, 'error');
+    await refreshPlaylistTracks(selectedPlaylist);
     notify('آهنگ به فهرست پخش اضافه شد.');
+  };
+
+  const removeTrackFromPlaylist = async (trackId: string) => {
+    const target = playlists.find((playlist) => playlist.id === selectedPlaylist);
+    if (!target || target.owner_id !== userId) return notify('فقط سازنده فهرست می‌تواند آهنگ حذف کند.', 'error');
+    const { error } = await supabase.from('playlist_tracks').delete()
+      .eq('playlist_id', selectedPlaylist)
+      .eq('track_id', trackId);
+    if (error) return notify('حذف آهنگ از فهرست ناموفق بود: ' + error.message, 'error');
+    await refreshPlaylistTracks(selectedPlaylist);
+    notify('آهنگ از فهرست پخش حذف شد.');
   };
 
   const uploadTrack = async (event: FormEvent) => {
