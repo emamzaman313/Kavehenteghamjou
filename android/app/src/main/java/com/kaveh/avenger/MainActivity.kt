@@ -1,6 +1,9 @@
 package com.kaveh.avenger
 
 import android.os.Bundle
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import androidx.activity.ComponentActivity
@@ -28,6 +31,11 @@ import kotlinx.serialization.json.jsonPrimitive
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(NotificationChannel("kaveh_general_notifications", "اعلان‌های کاوه", NotificationManager.IMPORTANCE_DEFAULT))
+            manager.createNotificationChannel(NotificationChannel("kaveh_urgent_notifications", "اعلان‌های فوری کاوه", NotificationManager.IMPORTANCE_HIGH))
+        }
         if (BuildConfig.FIREBASE_APP_ID.isNotBlank() && BuildConfig.FIREBASE_API_KEY.isNotBlank() && BuildConfig.FIREBASE_PROJECT_ID.isNotBlank() && BuildConfig.FIREBASE_SENDER_ID.isNotBlank() && FirebaseApp.getApps(this).isEmpty()) {
             val options = FirebaseOptions.Builder()
                 .setApplicationId(BuildConfig.FIREBASE_APP_ID)
