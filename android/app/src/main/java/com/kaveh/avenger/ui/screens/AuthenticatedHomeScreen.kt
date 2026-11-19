@@ -62,6 +62,7 @@ import com.kaveh.avenger.notifications.PushTokenRegistration
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.launch
@@ -76,10 +77,15 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var adminRole by remember { mutableStateOf<String?>(null) }
+    var rankNames by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(userId) {
         adminRole = runCatching {
             SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()["role"]?.jsonPrimitive?.contentOrNull
         }.getOrNull()
+        rankNames = runCatching {
+            SupabaseClientProvider.client.postgrest.rpc("my_kaveh_ranks").decodeAs<kotlinx.serialization.json.JsonArray>()
+                .mapNotNull { item -> item.jsonObject["name_fa"]?.jsonPrimitive?.contentOrNull }
+        }.getOrDefault(emptyList())
     }
     val tabs = MainTab.entries.filter { it != MainTab.Admin }
     PushTokenRegistration(supabase = SupabaseClientProvider.client, userId = userId)
@@ -148,7 +154,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         ) {
             Spacer(Modifier.height(14.dp))
             when (selectedTab) {
-                MainTab.Home -> HomeOverview(email)
+                MainTab.Home -> HomeOverview(email, rankNames)
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
@@ -168,7 +174,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
 }
 
 @Composable
-private fun HomeOverview(email: String?) {
+private fun HomeOverview(email: String?, rankNames: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -209,6 +215,14 @@ private fun HomeOverview(email: String?) {
             }
         }
 
+        if (rankNames.isNotEmpty()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("رتبه‌های حساب شما", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(rankNames.joinToString(" · "), color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
         Text("وضعیت بخش‌ها", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         StatusCard(
             title = "پایگاه داده و دسترسی‌ها",
