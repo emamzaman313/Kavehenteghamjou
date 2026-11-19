@@ -173,7 +173,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     supabase = SupabaseClientProvider.client,
                     userId = userId
                 )
-                MainTab.Publish -> FileUploadScreen(userId = userId)
+                MainTab.Publish -> PublishPostScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Explore -> ExploreFeedScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Reels -> ReelsScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Media -> AudioAndDailyScreen(supabase = SupabaseClientProvider.client, userId = userId)
