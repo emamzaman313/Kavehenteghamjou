@@ -31,7 +31,7 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
 
   const openAuthorProfile = async (authorId: string) => {
     const author = authors[authorId];
-    if (!author) { notify('این پروفایل خصوصی است یا در دسترس شما نیست.', 'info'); return; }
+    if (!author) { notify('این پروفایل خصوصی است یا در دسترس شما نیست.', 'error'); return; }
     setSelectedProfile(author);
     setSelectedProfileBadges([]);
     const codes = author.featured_badges ?? [];
