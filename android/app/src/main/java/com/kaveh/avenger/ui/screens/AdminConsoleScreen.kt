@@ -1,6 +1,7 @@
 package com.kaveh.avenger.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -49,7 +53,9 @@ private data class AdminActionRequest(
     val userId: String? = null,
     val reason: String? = null,
     val duration: String? = null,
-    val role: String? = null
+    val role: String? = null,
+    val restriction: String? = null,
+    val muteId: String? = null
 )
 
 private suspend fun callAdminConsole(supabase: SupabaseClient, request: AdminActionRequest): JsonObject {
@@ -64,6 +70,12 @@ private suspend fun callAdminConsole(supabase: SupabaseClient, request: AdminAct
             "insufficient_role" -> "نقش حساب شما اجازه این عملیات را نمی‌دهد."
             "not_admin" -> "دسترسی مدیریتی برای این حساب فعال نیست."
             "invalid_reason" -> "دلیل باید بین ۳ تا ۵۰۰ نویسه باشد."
+            "invalid_mute_restriction" -> "نوع محدودیت انتخاب‌شده معتبر نیست."
+            "invalid_mute_duration" -> "مدت میوت انتخاب‌شده معتبر نیست."
+            "mute_create_failed" -> "ثبت محدودیت ناموفق بود."
+            "mute_not_found" -> "محدودیت موردنظر پیدا نشد."
+            "mute_already_revoked" -> "این محدودیت قبلاً لغو شده است."
+            "mute_revoke_failed" -> "لغو محدودیت ناموفق بود."
             else -> "عملیات مدیریتی انجام نشد: ${reason ?: response.status.value}"
         })
     }
@@ -81,6 +93,26 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
     var busyId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var muteRestriction by remember { mutableStateOf("message_send") }
+    var muteDuration by remember { mutableStateOf("24h") }
+    var showRestrictionMenu by remember { mutableStateOf(false) }
+    var showDurationMenu by remember { mutableStateOf(false) }
+
+    val muteRestrictions = listOf(
+        "message_send" to "ارسال همه پیام‌ها",
+        "group_message_send" to "پیام در گروه‌ها",
+        "comment" to "ثبت دیدگاه",
+        "post_publish" to "انتشار پست",
+        "reel_publish" to "انتشار ریلز",
+        "file_upload" to "بارگذاری فایل"
+    )
+    val muteDurations = listOf(
+        "1h" to "۱ ساعت",
+        "24h" to "۲۴ ساعت",
+        "168h" to "۷ روز",
+        "720h" to "۳۰ روز",
+        "permanent" to "دائمی"
+    )
 
     suspend fun loadReports() {
         loading = true
@@ -126,6 +158,34 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
                 label = { Text("دلیل اخطار یا محدودیت (حداقل ۳ نویسه)") },
                 minLines = 2
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Box {
+                    OutlinedButton(onClick = { showRestrictionMenu = true }) {
+                        Text(muteRestrictions.first { it.first == muteRestriction }.second)
+                    }
+                    DropdownMenu(expanded = showRestrictionMenu, onDismissRequest = { showRestrictionMenu = false }) {
+                        muteRestrictions.forEach { (value, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = { muteRestriction = value; showRestrictionMenu = false }
+                            )
+                        }
+                    }
+                }
+                Box {
+                    OutlinedButton(onClick = { showDurationMenu = true }) {
+                        Text(muteDurations.first { it.first == muteDuration }.second)
+                    }
+                    DropdownMenu(expanded = showDurationMenu, onDismissRequest = { showDurationMenu = false }) {
+                        muteDurations.forEach { (value, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = { muteDuration = value; showDurationMenu = false }
+                            )
+                        }
+                    }
+                }
+            }
         }
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -190,12 +250,49 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
                     val name = user["display_name"]?.jsonPrimitive?.contentOrNull ?: "کاربر"
                     val email = user["email"]?.jsonPrimitive?.contentOrNull ?: "بدون ایمیل"
                     val adminRole = user["admin_role"]?.jsonPrimitive?.contentOrNull
+                    val warningCount = user["warning_count"]?.jsonPrimitive?.contentOrNull ?: "0"
+                    val activeMutes = user["active_mutes"]?.jsonArray?.mapNotNull { runCatching { it.jsonObject }.getOrNull() } ?: emptyList()
                     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(name, fontWeight = FontWeight.Bold)
                             Text(email)
                             Text(if (banned) "حساب محدود شده" else "حساب فعال")
+                            Text("تعداد اخطارهای ثبت‌شده: $warningCount")
                             if (adminRole != null) Text("نقش مدیریتی: $adminRole")
+                            activeMutes.forEach { mute ->
+                                val muteId = mute["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                                val restriction = mute["restriction"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                                val restrictionLabel = muteRestrictions.firstOrNull { it.first == restriction }?.second ?: restriction
+                                val expiresAt = mute["expires_at"]?.jsonPrimitive?.contentOrNull
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(
+                                        "میوت فعال: $restrictionLabel · " + (expiresAt?.take(16) ?: "دائمی"),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    TextButton(
+                                        enabled = busyId != id && muteId.isNotBlank(),
+                                        onClick = {
+                                            scope.launch {
+                                                busyId = id; error = null
+                                                try {
+                                                    callAdminConsole(
+                                                        supabase,
+                                                        AdminActionRequest(
+                                                            "unmute_user",
+                                                            userId = id,
+                                                            reason = reason.trim().ifEmpty { "لغو محدودیت توسط مدیر" },
+                                                            muteId = muteId
+                                                        )
+                                                    )
+                                                    notice = "محدودیت انتخاب‌شده برای $name لغو شد."
+                                                    loadUsers()
+                                                } catch (exception: Exception) { error = exception.message }
+                                                finally { busyId = null }
+                                            }
+                                        }
+                                    ) { Text("رفع میوت") }
+                                }
+                            }
                             if (role == "owner" && id.isNotBlank() && adminRole != "owner") {
                                 Text("مدیریت نقش دسترسی", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -246,6 +343,27 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
                                         finally { busyId = null }
                                     }
                                 }) { Text("محدودسازی ۲۴ساعته") }
+                                Button(enabled = busyId != id && reason.trim().length >= 3 && adminRole == null, onClick = {
+                                    scope.launch {
+                                        busyId = id; error = null
+                                        try {
+                                            callAdminConsole(
+                                                supabase,
+                                                AdminActionRequest(
+                                                    "mute_user",
+                                                    userId = id,
+                                                    reason = reason.trim(),
+                                                    duration = muteDuration,
+                                                    restriction = muteRestriction
+                                                )
+                                            )
+                                            val label = muteRestrictions.first { it.first == muteRestriction }.second
+                                            notice = "محدودیت «$label» برای $name ثبت شد."
+                                            loadUsers()
+                                        } catch (exception: Exception) { error = exception.message }
+                                        finally { busyId = null }
+                                    }
+                                }) { Text("اعمال میوت") }
                                 if (banned) Button(enabled = busyId != id && adminRole == null, onClick = {
                                     scope.launch {
                                         busyId = id; error = null
