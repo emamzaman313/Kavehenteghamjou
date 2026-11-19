@@ -273,7 +273,8 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (error) return notify('لغو اعلان ناموفق بود: ' + error.message, 'error');
     setScheduled((old) => old.map((item) => item.id === id ? {...item, status:'cancelled'} : item));
   };
-  const publicUrl = (path: string) => supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;\n  const audioPublicUrl = (path: string) => supabase.storage.from('music-library').getPublicUrl(path).data.publicUrl;
+  const publicUrl = (path: string) => supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;
+  const audioPublicUrl = (path: string) => supabase.storage.from('music-library').getPublicUrl(path).data.publicUrl;
 
   return <div className="page-stack">
     <SectionHeader eyebrow="رسانه و جامعه" title="رسانه، ریلز و موسیقی" description="ویدئوهای کوتاه، کتابخانه موسیقی، فهرست‌های پخش و عنوان‌های روزانه." action={<button className="button button-quiet" onClick={() => void load()}><RefreshCw size={16}/> تازه‌سازی</button>}/>
