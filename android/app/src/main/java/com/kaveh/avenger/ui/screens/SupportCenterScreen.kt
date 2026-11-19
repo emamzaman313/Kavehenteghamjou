@@ -43,6 +43,13 @@ import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.realtime
+import io.github.jan.supabase.realtime.channel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -156,7 +163,31 @@ fun SupportCenterScreen(
         }
     }
 
-    LaunchedEffect(userId, staff) { refreshTickets() }
+    LaunchedEffect(userId, staff) {
+        refreshTickets()
+        val ticketChannel = supabase.channel("android-support-tickets-$userId")
+        val ticketChanges = ticketChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "support_tickets"
+        }
+        val ticketCollector = launch {
+            ticketChanges.collect {
+                refreshTickets()
+            }
+        }
+        try {
+            ticketChannel.subscribe(blockUntilSubscribed = true)
+            // Fetch once more after subscribing to close the initial-load race.
+            refreshTickets()
+            awaitCancellation()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (exception: Exception) {
+            error = exception.message ?: "اتصال زنده صندوق پشتیبانی برقرار نشد."
+        } finally {
+            ticketCollector.cancel()
+            supabase.realtime.removeChannel(ticketChannel)
+        }
+    }
 
     suspend fun updateTicketField(ticket: SupportTicketRow, field: String, value: String) {
         if (!staff || updatingTicket) return
