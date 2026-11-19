@@ -56,6 +56,9 @@ import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 @Serializable
 private data class SocialPostRow(
@@ -575,6 +578,91 @@ fun AudioAndDailyScreen(supabase: SupabaseClient) {
                         Text(title.title, fontWeight = FontWeight.Bold)
                         if (title.body.isNotBlank()) Text(title.body)
                         Text(title.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Serializable
+private data class NotificationRow(
+    val id: String,
+    val kind: String,
+    val payload: JsonObject = JsonObject(emptyMap()),
+    @SerialName("read_at") val readAt: String? = null,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Composable
+fun NotificationsScreen(supabase: SupabaseClient, userId: String) {
+    val scope = rememberCoroutineScope()
+    val rows = remember { mutableStateListOf<NotificationRow>() }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    suspend fun refresh() {
+        loading = true
+        error = null
+        try {
+            val result = supabase.postgrest["notifications"].select {
+                filter { eq("recipient_id", userId) }
+                order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                limit(50)
+            }.decodeList<NotificationRow>()
+            rows.clear()
+            rows.addAll(result)
+        } catch (exception: Exception) {
+            error = exception.message ?: "دریافت اعلان‌ها ناموفق بود."
+        } finally {
+            loading = false
+        }
+    }
+
+    LaunchedEffect(userId) { refresh() }
+
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("اعلان‌ها", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            IconButton(onClick = { scope.launch { refresh() } }) { Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی") }
+        }
+        if (loading) CircularProgressIndicator()
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (!loading && rows.isEmpty() && error == null) Text("اعلان تازه‌ای ندارید.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(rows, key = { it.id }) { item ->
+                val title = when (item.kind) {
+                    "chat_message" -> "پیام جدید"
+                    "admin_warning" -> "اخطار مدیریتی"
+                    "admin_ban" -> "محدودیت حساب"
+                    "admin_unban" -> "رفع محدودیت"
+                    "scheduled_announcement" -> item.payload["title"]?.jsonPrimitive?.contentOrNull ?: "اعلان زمان‌بندی‌شده"
+                    "join_request_approved" -> "پذیرش درخواست عضویت"
+                    "join_request_rejected" -> "رد درخواست عضویت"
+                    "group_join_request" -> "درخواست عضویت جدید"
+                    else -> item.kind
+                }
+                val message = item.payload["message"]?.jsonPrimitive?.contentOrNull
+                    ?: item.payload["body"]?.jsonPrimitive?.contentOrNull
+                    ?: "یک رویداد جدید برای حساب شما ثبت شده است."
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(title, fontWeight = FontWeight.Bold)
+                        Text(message, style = MaterialTheme.typography.bodyMedium)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(item.createdAt, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (item.readAt == null) Button(onClick = {
+                                scope.launch {
+                                    try {
+                                        supabase.postgrest["notifications"].update({ set("read_at", java.time.Instant.now().toString()) }) {
+                                            filter { eq("id", item.id); eq("recipient_id", userId) }
+                                        }
+                                        refresh()
+                                    } catch (exception: Exception) { error = exception.message ?: "علامت‌گذاری اعلان ناموفق بود." }
+                                }
+                            }) { Text("خوانده شد") }
+                        }
                     }
                 }
             }
