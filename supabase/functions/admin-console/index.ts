@@ -38,10 +38,10 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
+    action: "moderate_post" | "delete_post" | "delete_reel" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
     targetId: string,
     details: Record<string, unknown> = {},
-    targetType: "post" | "user" | "report" | "appearance" = "post",
+    targetType: "post" | "reel" | "user" | "report" | "appearance" = "post",
   ) {
     const { data, error } = await admin.from("admin_audit_logs").insert({
       actor_id: authData.user.id,
@@ -455,6 +455,33 @@ Deno.serve(async (request: Request) => {
     }
     const auditRecorded = await finishAudit(audit.id, "succeeded");
     return respond({ ok: true, auditRecorded }, 200, origin);
+  }
+
+  if (body.action === "delete_reel") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    if (!validId(body.reelId)) return respond({ ok: false, reason: "invalid_reel_id" }, 400, origin);
+    const { data: reel, error: lookupError } = await admin.from("reels")
+      .select("id,caption,video_path,cover_path")
+      .eq("id", body.reelId)
+      .maybeSingle();
+    if (lookupError || !reel) return respond({ ok: false, reason: "reel_not_found" }, 404, origin);
+    const audit = await beginAudit("delete_reel", reel.id, { caption: String(reel.caption ?? "").slice(0, 160) }, "reel");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const paths = [...new Set([reel.video_path, reel.cover_path].filter((path): path is string => typeof path === "string" && path.length > 0))];
+    if (paths.length) {
+      const { error: mediaError } = await admin.storage.from("post-media").remove(paths);
+      if (mediaError) {
+        await finishAudit(audit.id, "failed");
+        return respond({ ok: false, reason: "media_delete_failed" }, 500, origin);
+      }
+    }
+    const { error: deleteError } = await admin.from("reels").delete().eq("id", reel.id);
+    if (deleteError) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "delete_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, auditRecorded, related_rows_cascaded: true }, 200, origin);
   }
 
   return respond({ ok: false, reason: "unknown_action" }, 400, origin);
