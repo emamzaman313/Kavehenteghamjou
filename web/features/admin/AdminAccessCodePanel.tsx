@@ -198,7 +198,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
     const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'process_scheduled_notifications' } });
     setScheduledSaving(false);
     if (error || data?.ok !== true) { notify('پردازش اعلان‌های سررسیدشده ناموفق بود.', 'error'); return; }
-    notify(`${data.processed ?? 0} اعلان سررسیدشده پردازش شد.`);
+    notify(`${data.processed ?? 0} اعلان پردازش شد؛ ${data.delivered ?? 0} گیرنده، ${data.failed ?? 0} مورد ناموفق.`);
     await refreshScheduledNotifications();
   };
 
