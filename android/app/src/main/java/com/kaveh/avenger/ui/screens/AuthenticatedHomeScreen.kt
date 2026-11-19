@@ -107,7 +107,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
             }.getOrNull()?.let { featureFlags = it }
         }
     }
-    val isAdmin = adminRole in setOf("owner","admin","moderator")
+    val isAdmin = adminRole in setOf("owner","admin")
     fun featureOn(key:String)=isAdmin || featureFlags[key] != false
     val tabs = MainTab.entries.filter { tab ->
         if(tab==MainTab.Admin || tab==MainTab.World) false else when(tab) {
