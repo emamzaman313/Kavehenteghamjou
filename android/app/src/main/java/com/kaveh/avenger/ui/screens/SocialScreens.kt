@@ -493,6 +493,34 @@ private data class AudioTrackRow(
 )
 
 @Serializable
+private data class PlaylistRow(
+    val id: String,
+    val title: String,
+    val description: String = "",
+    @SerialName("is_public") val isPublic: Boolean = false
+)
+
+@Serializable
+private data class PlaylistInsertRow(
+    @SerialName("owner_id") val ownerId: String,
+    val title: String
+)
+
+@Serializable
+private data class PlaylistTrackInsertRow(
+    @SerialName("playlist_id") val playlistId: String,
+    @SerialName("track_id") val trackId: String,
+    val position: Int = 0
+)
+
+@Serializable
+private data class PlaylistTrackRow(
+    @SerialName("playlist_id") val playlistId: String,
+    @SerialName("track_id") val trackId: String,
+    val position: Int
+)
+
+@Serializable
 private data class DailyTitleRow(
     val id: String,
     val title: String,
@@ -502,10 +530,14 @@ private data class DailyTitleRow(
 )
 
 @Composable
-fun AudioAndDailyScreen(supabase: SupabaseClient) {
+fun AudioAndDailyScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
     val tracks = remember { mutableStateListOf<AudioTrackRow>() }
     val titles = remember { mutableStateListOf<DailyTitleRow>() }
+    val playlists = remember { mutableStateListOf<PlaylistRow>() }
+    val playlistTrackIds = remember { mutableStateListOf<String>() }
+    var playlistTitle by remember { mutableStateOf("") }
+    var selectedPlaylistId by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var playingTrack by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -520,13 +552,26 @@ fun AudioAndDailyScreen(supabase: SupabaseClient) {
                 order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                 limit(60)
             }.decodeList<AudioTrackRow>()
+            val loadedPlaylists = supabase.postgrest["playlists"].select {
+                filter { eq("owner_id", userId) }
+                order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+            }.decodeList<PlaylistRow>()
             val loadedTitles = supabase.postgrest["daily_titles"].select {
                 filter { eq("is_published", true); lte("starts_at", java.time.Instant.now().toString()) }
                 order(column = "starts_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                 limit(30)
             }.decodeList<DailyTitleRow>()
             tracks.clear(); tracks.addAll(loadedTracks)
+            playlists.clear(); playlists.addAll(loadedPlaylists)
+            if (selectedPlaylistId == null || playlists.none { it.id == selectedPlaylistId }) selectedPlaylistId = playlists.firstOrNull()?.id
             titles.clear(); titles.addAll(loadedTitles)
+            val activePlaylistId = selectedPlaylistId
+            val loadedPlaylistTracks = if (activePlaylistId == null) emptyList() else supabase.postgrest["playlist_tracks"].select {
+                filter { eq("playlist_id", activePlaylistId) }
+                order(column = "position", order = io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+            }.decodeList<PlaylistTrackRow>()
+            playlistTrackIds.clear()
+            playlistTrackIds.addAll(loadedPlaylistTracks.map { it.trackId })
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت رسانه و عنوان‌های روزانه ناموفق بود."
         } finally {
@@ -544,6 +589,29 @@ fun AudioAndDailyScreen(supabase: SupabaseClient) {
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Text("کتابخانه موسیقی", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            OutlinedTextField(value = playlistTitle, onValueChange = { playlistTitle = it.take(120) }, label = { Text("نام فهرست پخش") }, modifier = Modifier.weight(1f), singleLine = true)
+            Button(onClick = {
+                val title = playlistTitle.trim()
+                if (title.isNotEmpty()) scope.launch {
+                    try {
+                        supabase.postgrest["playlists"].insert(PlaylistInsertRow(userId, title))
+                        playlistTitle = ""
+                        refresh()
+                    } catch (exception: Exception) { error = exception.message ?: "ساخت فهرست پخش ناموفق بود." }
+                }
+            }, enabled = playlistTitle.trim().isNotEmpty()) { Text("ساخت") }
+        }
+        if (playlists.isNotEmpty()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                playlists.forEach { playlist ->
+                    Button(onClick = { selectedPlaylistId = playlist.id; scope.launch { refresh() } }) {
+                        Text(if (selectedPlaylistId == playlist.id) "✓ ${playlist.title}" else playlist.title)
+                    }
+                }
+            }
+            Text("آهنگ‌های این فهرست: ${playlistTrackIds.size}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         if (tracks.isEmpty() && !loading) Text("هنوز آهنگی اضافه نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(tracks, key = { it.id }) { track ->
@@ -568,6 +636,23 @@ fun AudioAndDailyScreen(supabase: SupabaseClient) {
                                 }
                             }
                         }) { Text(if (playingTrack == track.id) "توقف" else "پخش") }
+                        if (selectedPlaylistId != null) {
+                            Button(
+                                enabled = track.id !in playlistTrackIds,
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            supabase.postgrest["playlist_tracks"].insert(
+                                                PlaylistTrackInsertRow(selectedPlaylistId!!, track.id, playlistTrackIds.size)
+                                            )
+                                            playlistTrackIds.add(track.id)
+                                        } catch (exception: Exception) {
+                                            error = exception.message ?: "افزودن آهنگ به فهرست ناموفق بود."
+                                        }
+                                    }
+                                }
+                            ) { Text(if (track.id in playlistTrackIds) "افزوده شد" else "افزودن به فهرست") }
+                        }
                     }
                 }
             }
