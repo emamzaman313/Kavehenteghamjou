@@ -117,6 +117,12 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
       const patch = { display_name: name.trim(), username: username.trim() || null, bio: bio.trim(), avatar_path: avatarPath, avatar_url: avatarUrl, cover_path: coverPath, profile_visibility: profileVisibility, profile_theme: safeTheme, featured_badges: featuredBadges.filter(code => badges.some(b => b.badge_code === code)).slice(0,6), profile_music_path: profileMusicPath, profile_music_title: profileMusicPath ? musicTitle.trim().slice(0,120) || 'موسیقی پروفایل' : null, updated_at: new Date().toISOString() };
       const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
       if (error) throw error;
+      const obsoleteAssets = [
+        profile?.avatar_path && profile.avatar_path !== avatarPath ? { bucket: 'profile-media', path: profile.avatar_path } : null,
+        profile?.cover_path && profile.cover_path !== coverPath ? { bucket: 'profile-media', path: profile.cover_path } : null,
+        (profile as Profile & {profile_music_path?:string|null} | null)?.profile_music_path && (profile as Profile & {profile_music_path?:string|null}).profile_music_path !== profileMusicPath ? { bucket: 'post-media', path: (profile as Profile & {profile_music_path:string}).profile_music_path } : null,
+      ].filter((asset): asset is {bucket:string;path:string} => Boolean(asset && asset.path.startsWith(userId + '/')));
+      await Promise.all(obsoleteAssets.map(asset => supabase.storage.from(asset.bucket).remove([asset.path])));
       setAvatarFile(null); setAvatarPreview(null); setCoverFile(null); setCoverPreview(null); setMusicFile(null); setRemoveProfileMusic(false);
       notify('پروفایل به‌روزرسانی شد.'); await onSaved();
     } catch (error) {
