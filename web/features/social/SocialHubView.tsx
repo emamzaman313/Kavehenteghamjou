@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader, EmptyState } from '@/components/ui';
 
-type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean; views_count: number };
+type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean; views_count: number; visibility?: 'public' | 'followers' | 'private'; duration_seconds?: number | null };
 type Track = { id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null };
 type DailyTitle = { id: string; title: string; body: string; category: string; starts_at: string; ends_at: string | null };
 type Playlist = { id: string; owner_id: string; title: string; description: string; is_public: boolean };
@@ -29,6 +29,9 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [loading, setLoading] = useState(false);
   const [caption, setCaption] = useState('');
   const [video, setVideo] = useState<File | null>(null);
+  const [cover, setCover] = useState<File | null>(null);
+  const [reelVisibility, setReelVisibility] = useState<'public' | 'followers' | 'private'>('public');
+  const [reelDuration, setReelDuration] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [audioUploadProgress, setAudioUploadProgress] = useState(0);
   const [reelUploadProgress, setReelUploadProgress] = useState(0);
@@ -100,18 +103,44 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     event.preventDefault();
     if (!video || !video.type.startsWith('video/')) return notify('یک فایل ویدیویی معتبر انتخاب کنید.', 'error');
     if (video.size > 50 * 1024 * 1024) return notify('حداکثر حجم ویدئو ۵۰ مگابایت است.', 'error');
+    if (cover && !cover.type.startsWith('image/')) return notify('تصویر جلد باید یک فایل تصویری معتبر باشد.', 'error');
+    if (cover && cover.size > 10 * 1024 * 1024) return notify('حجم تصویر جلد نباید بیشتر از ۱۰ مگابایت باشد.', 'error');
+    if (reelDuration !== null && (reelDuration < 1 || reelDuration > 600)) return notify('مدت ریلز باید حداکثر ۱۰ دقیقه باشد.', 'error');
     setUploading(true);
-    const path = userId + '/reels/' + crypto.randomUUID() + '-' + video.name.replace(/[^\w.\-]/g, '_');
+    const safeName = (file: File) => file.name.replace(/[^\w.\-]/g, '_');
+    const path = userId + '/reels/' + crypto.randomUUID() + '-' + safeName(video);
+    const coverPath = cover ? userId + '/reel-covers/' + crypto.randomUUID() + '-' + safeName(cover) : null;
+    const uploadedPaths: string[] = [];
     setReelUploadProgress(0);
     const uploaded = await uploadWithProgress('post-media', path, video, setReelUploadProgress);
     if (uploaded.error) { setUploading(false); return notify('بارگذاری ویدئو ناموفق بود: ' + uploaded.error.message, 'error'); }
-    const inserted = await supabase.from('reels').insert({ author_id: userId, caption: caption.trim(), video_path: path, mime_type: video.type, visibility: 'public' });
+    uploadedPaths.push(path);
+    if (cover && coverPath) {
+      const coverUpload = await uploadWithProgress('post-media', coverPath, cover, () => undefined);
+      if (coverUpload.error) {
+        await supabase.storage.from('post-media').remove(uploadedPaths);
+        setUploading(false);
+        return notify('بارگذاری تصویر جلد ناموفق بود: ' + coverUpload.error.message, 'error');
+      }
+      uploadedPaths.push(coverPath);
+    }
+    const inserted = await supabase.from('reels').insert({
+      author_id: userId,
+      caption: caption.trim(),
+      video_path: path,
+      cover_path: coverPath,
+      mime_type: video.type,
+      duration_seconds: reelDuration,
+      visibility: reelVisibility,
+    });
     setUploading(false);
     if (inserted.error) {
-      await supabase.storage.from('post-media').remove([path]);
+      await supabase.storage.from('post-media').remove(uploadedPaths);
       return notify('ثبت ریلز ناموفق بود: ' + inserted.error.message, 'error');
     }
-    setCaption(''); setVideo(null); notify('ریلز منتشر شد.'); await load();
+    setCaption(''); setVideo(null); setCover(null); setReelDuration(null); setReelVisibility('public');
+    notify(reelVisibility === 'public' ? 'ریلز به‌صورت عمومی منتشر شد.' : reelVisibility === 'followers' ? 'ریلز فقط برای دنبال‌کنندگان منتشر شد.' : 'ریلز به‌صورت خصوصی ذخیره شد.');
+    await load();
   };
 
   const toggleLike = async (reel: Reel) => {
@@ -312,11 +341,17 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     {tab === 'reels' && <>
       <form className="panel-card page-stack" onSubmit={uploadReel}>
         <strong>انتشار ریلز جدید</strong>
+        <div className="creator-studio-intro"><span className="eyebrow">KAVEH CREATOR STUDIO</span><p>ویدئوی کوتاهت را آماده کن، جلد اختصاصی انتخاب کن و مشخص کن چه کسانی آن را ببینند.</p></div>
         <textarea className="field-input" rows={2} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="برای ویدئوی خود توضیح بنویس…"/>
-        <input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => setVideo(e.target.files?.[0] ?? null)}/>
-        {uploading && tab === 'reels' && <div className="upload-progress-card upload-progress-reel"><div className="upload-progress-head"><span>آپلود ویدئو</span><strong>{reelUploadProgress}٪</strong></div><div className="upload-progress-track"><i style={{ width: reelUploadProgress + '%' }}/></div></div>}<button className="button button-primary" disabled={uploading || !video}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
+        <div className="creator-studio-fields">
+          <label className="creator-file-field"><Video size={17}/><span><strong>ویدئوی اصلی</strong><small>{video ? video.name + ' · ' + (video.size / 1048576).toFixed(1) + ' MB' : 'MP4، WebM و فرمت‌های پشتیبانی‌شده'}</small></span><input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => { const file=e.target.files?.[0] ?? null; setVideo(file); setReelDuration(null); if(file){ const probe=document.createElement('video'); const url=URL.createObjectURL(file); probe.preload='metadata'; probe.onloadedmetadata=()=>{ setReelDuration(Number.isFinite(probe.duration)?Math.round(probe.duration):null); URL.revokeObjectURL(url); }; probe.onerror=()=>URL.revokeObjectURL(url); probe.src=url; } }}/></label>
+          <label className="creator-file-field"><ImagePlus size={17}/><span><strong>تصویر جلد (اختیاری)</strong><small>{cover ? cover.name + ' · ' + (cover.size / 1048576).toFixed(1) + ' MB' : 'یک تصویر برای کاور ریلز انتخاب کن'}</small></span><input type="file" accept="image/*" onChange={(e: ChangeEvent<HTMLInputElement>) => setCover(e.target.files?.[0] ?? null)}/></label>
+          <label className="creator-visibility"><span>محدودهٔ نمایش</span><select className="field-input" value={reelVisibility} onChange={(e) => setReelVisibility(e.target.value as 'public'|'followers'|'private')}><option value="public">عمومی · همه کاربران</option><option value="followers">دنبال‌کنندگان من</option><option value="private">خصوصی · فقط خودم</option></select></label>
+        </div>
+        {video && <div className="creator-media-summary"><span>{reelDuration === null ? 'در حال خواندن مدت ویدئو…' : 'مدت ویدئو: ' + Math.floor(reelDuration/60) + ':' + String(reelDuration%60).padStart(2,'0')}</span><span>حداکثر ۵۰ مگابایت · ۱۰ دقیقه</span></div>}
+        {uploading && tab === 'reels' && <div className="upload-progress-card upload-progress-reel"><div className="upload-progress-head"><span>آپلود ویدئو</span><strong>{reelUploadProgress}٪</strong></div><div className="upload-progress-track"><i style={{ width: reelUploadProgress + '%' }}/></div></div>}<button className="button button-primary" disabled={uploading || !video || reelDuration === null}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
       </form>
-      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="reel-feed" style={{ maxHeight: '78vh', overflowY: 'auto', scrollSnapType: 'y mandatory', overscrollBehaviorY: 'contain', display: 'grid', gap: 16 }}>{reels.map((reel) => <article className="person-card reel-card" key={reel.id} style={{ scrollSnapAlign: 'start' }}><video data-reel-video data-reel-id={reel.id} controls autoPlay muted loop playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video" style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#080808', borderRadius: 12 }}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button><button onClick={() => {setReportingReel(reportingReel === reel.id ? null : reel.id); setReelReportDetails('');}}>گزارش</button></div>{reportingReel === reel.id && <div className="post-report-form"><textarea className="field-input" value={reelReportDetails} onChange={(e) => setReelReportDetails(e.target.value)} maxLength={500} rows={2} placeholder="توضیحات گزارش (اختیاری)"/><div><button className="button button-quiet" onClick={() => setReportingReel(null)}>انصراف</button><button className="button button-primary" onClick={() => void submitReelReport(reel.id)}>ارسال گزارش</button></div></div>}{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
+      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="reel-feed" style={{ maxHeight: '78vh', overflowY: 'auto', scrollSnapType: 'y mandatory', overscrollBehaviorY: 'contain', display: 'grid', gap: 16 }}>{reels.map((reel) => <article className="person-card reel-card" key={reel.id} style={{ scrollSnapAlign: 'start' }}><video data-reel-video data-reel-id={reel.id} controls autoPlay muted loop playsInline preload="metadata" src={publicUrl(reel.video_path)} poster={reel.cover_path ? publicUrl(reel.cover_path) : undefined} className="post-media-video" style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#080808', borderRadius: 12 }}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه · {reel.visibility === 'private' ? 'خصوصی' : reel.visibility === 'followers' ? 'دنبال‌کنندگان' : 'عمومی'}</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button><button onClick={() => {setReportingReel(reportingReel === reel.id ? null : reel.id); setReelReportDetails('');}}>گزارش</button></div>{reportingReel === reel.id && <div className="post-report-form"><textarea className="field-input" value={reelReportDetails} onChange={(e) => setReelReportDetails(e.target.value)} maxLength={500} rows={2} placeholder="توضیحات گزارش (اختیاری)"/><div><button className="button button-quiet" onClick={() => setReportingReel(null)}>انصراف</button><button className="button button-primary" onClick={() => void submitReelReport(reel.id)}>ارسال گزارش</button></div></div>}{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
     </>}
     {tab === 'music' && <>
       {isAdmin && <section className="panel-card page-stack"><strong>موسیقی سراسری کل پلتفرم</strong><p>این آهنگ پس از انتشار، به‌عنوان موسیقی زمینه در وب و نسخه‌های موبایل معرفی می‌شود. شروع پخش در مرورگر ممکن است به لمس دکمه پخش توسط کاربر نیاز داشته باشد.</p><form className="page-stack" onSubmit={uploadTrack}><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام موسیقی" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="نام هنرمند (اختیاری)"/><input type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.wma,.aiff,.mid,.midi,.amr" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/>{audio && <small>فایل انتخاب‌شده: {audio.name} · {(audio.size / 1048576).toFixed(1)} MB</small>}{uploading && tab === 'music' && <div className="upload-progress-card upload-progress-audio"><div className="upload-progress-head"><span>انتقال موسیقی به سرور</span><strong>{audioUploadProgress}٪</strong></div><div className="upload-progress-orbit"><i style={{ '--progress': audioUploadProgress } as React.CSSProperties}/><b>{audioUploadProgress}٪</b></div><div className="upload-progress-track"><i style={{ width: audioUploadProgress + '%' }}/></div><small>درصد واقعی داده ارسال‌شده به Storage</small></div>}<button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Upload size={16}/>{uploading ? 'در حال آپلود…' : 'آپلود موسیقی به سرور'}</button></form><div className="page-stack"><label>انتخاب آهنگ سراسری</label><select className="field-input" value={globalTrackId} onChange={(e) => setGlobalTrackId(e.target.value)}><option value="">یک آهنگ را انتخاب کنید</option>{tracks.map((track) => <option key={track.id} value={track.id}>{track.title} — {track.artist || 'بدون نام هنرمند'}</option>)}</select><div className="inline-form"><button className="button button-primary" onClick={() => void publishGlobalMusic()} disabled={!globalTrackId}>انتشار برای همه</button><button className="button button-quiet" onClick={() => void disableGlobalMusic()} disabled={!globalMusicEnabled}>توقف موسیقی سراسری</button></div><small>وضعیت فعلی: {globalMusicEnabled ? 'فعال' : 'غیرفعال'}</small></div></section>}
