@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Ban, CheckCircle2, Eye, EyeOff, Film, Flag, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users, Palette, RotateCcw } from 'lucide-react';
+import { Activity, Ban, CheckCircle2, Eye, EyeOff, Film, Flag, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users, Palette, RotateCcw, Music2, ListMusic, Megaphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
@@ -25,7 +25,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [auditLoading, setAuditLoading] = useState(false);
   const [reportRows, setReportRows] = useState<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: string; target_summary: string | null; target_author_id: string | null }[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
-  const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number }; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
+  const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number; reels?: number; audio_tracks?: number; playlists?: number; daily_titles?: number; reel_views?: number }; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [appearanceRows, setAppearanceRows] = useState<{ id: string; version: number; config: { appearance?: { accent?: string; background?: string; surface?: string; radius?: number } }; is_published: boolean; created_at: string }[]>([]);
@@ -264,6 +264,11 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <div className="admin-stat"><LayoutDashboard/><span>پست‌ها</span><strong>{overview?.stats.posts ?? '—'}</strong></div>
           <div className="admin-stat"><MessageCircle/><span>دیدگاه‌ها</span><strong>{overview?.stats.comments ?? '—'}</strong></div>
           <div className="admin-stat"><Film/><span>رسانه‌ها</span><strong>{overview?.stats.media ?? '—'}</strong></div>
+          <div className="admin-stat"><Film/><span>ریلز</span><strong>{overview?.stats.reels ?? '—'}</strong></div>
+          <div className="admin-stat"><Music2/><span>آهنگ‌ها</span><strong>{overview?.stats.audio_tracks ?? '—'}</strong></div>
+          <div className="admin-stat"><ListMusic/><span>فهرست‌های پخش</span><strong>{overview?.stats.playlists ?? '—'}</strong></div>
+          <div className="admin-stat"><Megaphone/><span>عنوان‌ها و اطلاعیه‌ها</span><strong>{overview?.stats.daily_titles ?? '—'}</strong></div>
+          <div className="admin-stat"><Eye/><span>بازدید ریلز</span><strong>{overview?.stats.reel_views ?? '—'}</strong></div>
         </div>
         <div className="admin-tabs">
           <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>
