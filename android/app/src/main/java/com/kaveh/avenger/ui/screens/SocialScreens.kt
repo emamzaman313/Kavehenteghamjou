@@ -29,7 +29,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -1276,7 +1275,6 @@ private data class SocialPostInsert(
 fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
     var body by remember { mutableStateOf("") }
-    var visibility by remember { mutableStateOf("public") }
     var publishing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
@@ -1314,23 +1312,8 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                     placeholder = { Text("چه چیزی در ذهن داری؟") },
                     supportingText = { Text("${body.length} / 5000") }
                 )
-                Text("مخاطبان پست", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = visibility == "public",
-                        onClick = { visibility = "public" },
-                        label = { Text("عمومی") }
-                    )
-                    FilterChip(
-                        selected = visibility == "followers",
-                        onClick = { visibility = "followers" },
-                        label = { Text("دنبال‌کنندگان") }
-                    )
-                    FilterChip(
-                        selected = visibility == "private",
-                        onClick = { visibility = "private" },
-                        label = { Text("فقط خودم") }
-                    )
+                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)) {
+                    Text("انتشار عمومی", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                 }
                 if (message != null) {
                     Text(message!!, color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
@@ -1348,7 +1331,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                     SocialPostInsert(
                                         authorId = userId,
                                         body = body.trim(),
-                                        visibility = visibility,
+                                        visibility = "public",
                                         publishedAt = java.time.Instant.now().toString()
                                     )
                                 )
@@ -1375,7 +1358,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("یادآوری حریم خصوصی", fontWeight = FontWeight.SemiBold)
-                Text("مخاطب را پیش از انتشار انتخاب کن. محتوای عمومی می‌تواند در اکتشاف و فید جامعه نمایش داده شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("این نسخه پست را به‌صورت عمومی منتشر می‌کند؛ محتوا می‌تواند در اکتشاف و فید جامعه نمایش داده شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
