@@ -1260,3 +1260,122 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
         }
     }
 }
+
+
+@Serializable
+private data class SocialPostInsert(
+    @SerialName("author_id") val authorId: String,
+    val body: String,
+    val visibility: String,
+    @SerialName("comments_enabled") val commentsEnabled: Boolean = true,
+    @SerialName("published_at") val publishedAt: String
+)
+
+@Composable
+fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
+    val scope = rememberCoroutineScope()
+    var body by remember { mutableStateOf("") }
+    var visibility by remember { mutableStateOf("public") }
+    var publishing by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("CREATE · SHARE · CONNECT", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("یک اتفاق تازه منتشر کن", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("فکرها، تجربه‌ها و خبرهایت را با جامعه کاوه به اشتراک بگذار.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(26.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) {
+                        Text("✦", modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp), color = MaterialTheme.colorScheme.primary)
+                    }
+                    Column {
+                        Text("پست جدید", fontWeight = FontWeight.Bold)
+                        Text("حداکثر ۵۰۰۰ نویسه", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = { if (it.length <= 5000) { body = it; message = null } },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 7,
+                    maxLines = 12,
+                    placeholder = { Text("چه چیزی در ذهن داری؟") },
+                    supportingText = { Text("${body.length} / 5000") }
+                )
+                Text("مخاطبان پست", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = visibility == "public",
+                        onClick = { visibility = "public" },
+                        label = { Text("عمومی") }
+                    )
+                    FilterChip(
+                        selected = visibility == "followers",
+                        onClick = { visibility = "followers" },
+                        label = { Text("دنبال‌کنندگان") }
+                    )
+                    FilterChip(
+                        selected = visibility == "private",
+                        onClick = { visibility = "private" },
+                        label = { Text("فقط خودم") }
+                    )
+                }
+                if (message != null) {
+                    Text(message!!, color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                }
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !publishing && body.isNotBlank(),
+                    onClick = {
+                        scope.launch {
+                            publishing = true
+                            message = null
+                            failed = false
+                            try {
+                                supabase.postgrest["posts"].insert(
+                                    SocialPostInsert(
+                                        authorId = userId,
+                                        body = body.trim(),
+                                        visibility = visibility,
+                                        publishedAt = java.time.Instant.now().toString()
+                                    )
+                                )
+                                body = ""
+                                message = "پست با موفقیت منتشر شد."
+                            } catch (exception: Exception) {
+                                failed = true
+                                message = exception.message ?: "انتشار پست انجام نشد. دوباره تلاش کن."
+                            } finally {
+                                publishing = false
+                            }
+                        }
+                    }
+                ) {
+                    if (publishing) CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp)
+                    else Text("انتشار در کاوه")
+                }
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f))
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("یادآوری حریم خصوصی", fontWeight = FontWeight.SemiBold)
+                Text("مخاطب را پیش از انتشار انتخاب کن. محتوای عمومی می‌تواند در اکتشاف و فید جامعه نمایش داده شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
