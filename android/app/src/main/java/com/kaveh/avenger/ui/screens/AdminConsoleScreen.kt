@@ -325,7 +325,7 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
         if (section == "overview" && role in listOf("owner", "admin")) {
             val stats = overviewStats
             val labels = listOf(
-                "users" to "کل کاربران", "new_users_7d" to "عضو جدید در ۷ روز",
+                "users" to "کل کاربران", "online_users" to "کاربران آنلاین (۲ دقیقه اخیر)", "new_users_7d" to "عضو جدید در ۷ روز",
                 "posts" to "کل پست‌ها", "comments" to "کل دیدگاه‌ها",
                 "media" to "پیوست‌های رسانه‌ای", "reels" to "کل ریلزها",
                 "reel_views" to "بازدید ریلزها", "audio_tracks" to "آهنگ‌ها",
