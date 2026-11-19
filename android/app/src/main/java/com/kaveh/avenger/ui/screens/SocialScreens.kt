@@ -92,6 +92,7 @@ private data class SocialProfileRow(
     val username: String? = null,
     val bio: String = "",
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("cover_path") val coverPath: String? = null,
     @SerialName("profile_visibility") val profileVisibility: String = "public",
     @SerialName("created_at") val createdAt: String? = null
 )
@@ -470,6 +471,9 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedCover by remember { mutableStateOf<Uri?>(null) }
+    val context = LocalContext.current
+    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedCover = it }
 
     suspend fun loadProfile() {
         loading = true
@@ -586,6 +590,19 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                     }
                 }
             }
+            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("کاور اختصاصی پروفایل", fontWeight = FontWeight.Bold)
+                    Text(
+                        when { selectedCover != null -> "تصویر جدید انتخاب شده است."; profile?.coverPath != null -> "کاور اختصاصی ذخیره‌شده فعال است."; else -> "برای پروفایلت یک تصویر کاور انتخاب کن." },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(onClick = { coverPicker.launch("image/*") }, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (selectedCover == null) "انتخاب تصویر کاور" else "تغییر تصویر انتخاب‌شده")
+                    }
+                }
+            }
             OutlinedTextField(value = displayName, onValueChange = { displayName = it }, label = { Text("نام نمایشی") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = bio, onValueChange = { bio = it.take(300) }, label = { Text("درباره من") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Button(
@@ -595,12 +612,27 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                         message = null
                         error = null
                         try {
+                            var coverPath = profile?.coverPath
+                            selectedCover?.let { uri ->
+                                val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+                                require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/avif")) { "فرمت تصویر کاور پشتیبانی نمی‌شود." }
+                                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                    ?: throw IllegalStateException("خواندن تصویر کاور ناموفق بود.")
+                                require(bytes.size in 1..5_000_000) { "حجم کاور باید حداکثر ۵ مگابایت باشد." }
+                                coverPath = "$userId/profile-covers/${UUID.randomUUID()}"
+                                supabase.storage.from("profile-media").upload(coverPath!!, bytes) {
+                                    contentType = ContentType.parse(mime)
+                                    upsert = false
+                                }
+                            }
                             supabase.postgrest["profiles"].update({
                                 set("display_name", displayName.trim())
                                 set("bio", bio.trim())
+                                set("cover_path", coverPath)
                             }) {
                                 filter { eq("id", userId) }
                             }
+                            selectedCover = null
                             message = "پروفایل ذخیره شد."
                             loadProfile()
                         } catch (exception: Exception) {
