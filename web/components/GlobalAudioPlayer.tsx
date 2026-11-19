@@ -28,8 +28,14 @@ export default function GlobalAudioPlayer({ supabase }: { supabase: SupabaseClie
     return () => { active = false; void supabase.removeChannel(channel); };
   }, [supabase]);
 
-  const source = setting?.enabled && setting.track?.audio_path
-    ? supabase.storage.from('music-library').getPublicUrl(setting.track.audio_path).data.publicUrl : '';
+  const source = (() => {
+    const storedPath = setting?.enabled ? setting.track?.audio_path : null;
+    if (!storedPath) return '';
+    const separator = storedPath.indexOf('::');
+    const bucket = separator > 0 ? storedPath.slice(0, separator) : 'music-library';
+    const objectPath = separator > 0 ? storedPath.slice(separator + 2) : storedPath;
+    return supabase.storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
+  })();
 
   useEffect(() => {
     const audio = audioRef.current;
