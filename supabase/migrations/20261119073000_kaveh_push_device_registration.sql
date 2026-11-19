@@ -29,9 +29,11 @@ revoke all on function public.register_device_token(text,text,text) from public,
 grant execute on function public.register_device_token(text,text,text) to authenticated;
 
 create or replace function public.unregister_device_token(p_token text)
-returns void language sql security invoker set search_path=''
-as $$
+returns void language plpgsql security invoker set search_path=''
+as $
+begin
   delete from public.device_tokens where user_id=(select auth.uid()) and token=trim(p_token);
-$$;
+end;
+$;
 revoke all on function public.unregister_device_token(text) from public,anon;
 grant execute on function public.unregister_device_token(text) to authenticated;
