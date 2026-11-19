@@ -168,6 +168,7 @@ private data class ChatConversation(
 fun ChatScreen(
     supabase: SupabaseClient,
     userId: String,
+    conversationIds: Set<String>? = null,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -200,7 +201,7 @@ fun ChatScreen(
         try {
             val memberships = supabase.postgrest["conversation_members"].select {
                 filter { eq("user_id", userId) }
-            }.decodeList<ConversationMemberRow>()
+            }.decodeList<ConversationMemberRow>().filter { conversationIds == null || it.conversationId in conversationIds }
 
             val loaded = memberships.mapNotNull { membership ->
                 val conversation = supabase.postgrest["conversations"].select {
@@ -252,8 +253,8 @@ fun ChatScreen(
             conversations.clear()
             conversations.addAll(loaded)
             activeConversation = activeConversation?.let { active ->
-                loaded.firstOrNull { it.id == active.id } ?: active
-            }
+                loaded.firstOrNull { it.id == active.id }
+            } ?: if (conversationIds != null) loaded.firstOrNull() else null
         } catch (exception: Exception) {
             errorText = exception.message ?: "دریافت گفتگوها ناموفق بود."
         } finally {
@@ -473,7 +474,7 @@ fun ChatScreen(
         if (uri != null) scope.launch { uploadAttachment(uri) }
     }
 
-    LaunchedEffect(userId) {
+    LaunchedEffect(userId, conversationIds) {
         loadConversations()
         // Keep the inbox and unread counters current for conversations that
         // are not currently open, without subscribing to a single chat only.
@@ -594,7 +595,7 @@ fun ChatScreen(
                     )
                 }
             }
-            if (activeConversation == null) {
+            if (activeConversation == null && conversationIds == null) {
                 IconButton(onClick = { showNewConversation = !showNewConversation }) {
                     Icon(Icons.Outlined.Add, contentDescription = "گفتگوی جدید")
                 }
