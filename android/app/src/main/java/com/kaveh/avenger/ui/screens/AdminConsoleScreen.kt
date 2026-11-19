@@ -117,6 +117,8 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     var overviewUsers by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var overviewPosts by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var auditRows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var auditSearch by remember { mutableStateOf("") }
+    var auditStatusFilter by remember { mutableStateOf("all") }
     var adminReels by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var adminTracks by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
 
@@ -145,6 +147,18 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
         val searchable = listOf(summary, reasonText, details, targetType, report["id"]?.jsonPrimitive?.contentOrNull.orEmpty()).joinToString(" ")
         (reportFilter == "all" || status == reportFilter) &&
             (reportSearch.isBlank() || searchable.contains(reportSearch.trim(), ignoreCase = true))
+    }
+
+    val filteredAuditRows = auditRows.filter { event ->
+        val status = event["status"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val searchable = listOf(
+            event["action"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            event["target_type"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            event["target_id"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            event["actor_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        ).joinToString(" ")
+        (auditStatusFilter == "all" || status == auditStatusFilter) &&
+            (auditSearch.isBlank() || searchable.contains(auditSearch.trim(), ignoreCase = true))
     }
 
     suspend fun loadOverview() {
@@ -451,22 +465,44 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
             if(adminTracks.isEmpty()) Text("آهنگی در کتابخانه ثبت نشده است.")
         } else if (section == "audit" && role in listOf("owner", "admin")) {
             Text("سوابق عملیات مدیران",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
-            auditRows.forEach { event ->
-                val action=event["action"]?.jsonPrimitive?.contentOrNull ?: "عملیات"
-                val target=event["target_type"]?.jsonPrimitive?.contentOrNull ?: "—"
-                val status=event["status"]?.jsonPrimitive?.contentOrNull ?: "—"
-                val actor=event["actor_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val created=event["created_at"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp)) {
-                    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Text(action,fontWeight=FontWeight.SemiBold)
-                        Text("نوع هدف: $target · وضعیت: $status",style=MaterialTheme.typography.bodySmall)
-                        Text("مدیر: " + actor.take(8) + "…",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(created,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = auditSearch,
+                onValueChange = { auditSearch = it.take(160) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("جست‌وجوی عملیات، مدیر یا شناسه هدف") }
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                FilterChip(selected = auditStatusFilter == "all", onClick = { auditStatusFilter = "all" }, label = { Text("همه ${auditRows.size}") })
+                FilterChip(selected = auditStatusFilter == "started", onClick = { auditStatusFilter = "started" }, label = { Text("در حال اجرا ${auditRows.count { it["status"]?.jsonPrimitive?.contentOrNull == "started" }}") })
+                FilterChip(selected = auditStatusFilter == "succeeded", onClick = { auditStatusFilter = "succeeded" }, label = { Text("موفق ${auditRows.count { it["status"]?.jsonPrimitive?.contentOrNull == "succeeded" }}") })
+                FilterChip(selected = auditStatusFilter == "failed", onClick = { auditStatusFilter = "failed" }, label = { Text("ناموفق ${auditRows.count { it["status"]?.jsonPrimitive?.contentOrNull == "failed" }}") })
+            }
+            if (filteredAuditRows.isEmpty()) {
+                Text(if (auditRows.isEmpty()) "هنوز سابقه‌ای ثبت نشده است." else "عملیاتی با این فیلتر پیدا نشد.")
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(filteredAuditRows, key = { it["id"]?.jsonPrimitive?.contentOrNull ?: it.hashCode().toString() }) { event ->
+                        val action=event["action"]?.jsonPrimitive?.contentOrNull ?: "عملیات"
+                        val target=event["target_type"]?.jsonPrimitive?.contentOrNull ?: "—"
+                        val status=event["status"]?.jsonPrimitive?.contentOrNull ?: "—"
+                        val statusLabel=when(status) { "started" -> "در حال اجرا"; "succeeded" -> "موفق"; "failed" -> "ناموفق"; else -> status }
+                        val actor=event["actor_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        val created=event["created_at"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp)) {
+                            Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                                Text(action,fontWeight=FontWeight.SemiBold)
+                                Text("نوع هدف: $target · وضعیت: $statusLabel",style=MaterialTheme.typography.bodySmall)
+                                Text("مدیر: " + actor.take(8) + "…",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(created,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
             }
-            if(auditRows.isEmpty()) Text("هنوز سابقه‌ای ثبت نشده است.")
         } else if (section == "features" && role in listOf("owner", "admin")) {
             Text("کنترل مرکزی امکانات",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
             featureFlags.forEach { flag ->
