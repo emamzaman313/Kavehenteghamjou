@@ -56,6 +56,7 @@ export default function KavehApp() {
   const [search, setSearch] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminRole, setAdminRole] = useState<string | null>(null);
+  const [featureFlags, setFeatureFlags] = useState<Record<string,boolean>>({});
   const isSupportStaff = ['owner', 'admin', 'support'].includes(adminRole ?? '');
 
   useEffect(() => {
@@ -127,6 +128,20 @@ export default function KavehApp() {
     };
   }, [supabase]);
 
+  useEffect(() => {
+    if(!supabase) return;
+    let active=true;
+    const loadFlags=async()=>{
+      const {data,error}=await supabase.from('platform_feature_flags').select('key,enabled');
+      if(!error&&active){const next:Record<string,boolean>={};(data??[]).forEach(row=>{next[row.key]=row.enabled;});setFeatureFlags(next);}
+    };
+    void loadFlags();
+    const channel=supabase.channel('platform-feature-flags')
+      .on('postgres_changes',{event:'*',schema:'public',table:'platform_feature_flags'},()=>{void loadFlags();})
+      .subscribe();
+    return ()=>{active=false;void supabase.removeChannel(channel);};
+  },[supabase]);
+
   const loadProfile = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
     const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
@@ -158,12 +173,28 @@ export default function KavehApp() {
   if (!session || needsEmailPasswordSetup) return <LoginScreen supabase={supabase} configured={configured}/>;
   if (!supabase) return null;
 
+  const featureEnabled=(key:string)=>isAdmin || featureFlags[key] !== false;
+  const visibleNavItems=navItems.filter(item=>{
+    if(item.id==='home') return featureEnabled('posts');
+    if(item.id==='chats') return featureEnabled('chat');
+    if(item.id==='support') return featureEnabled('support');
+    if(item.id==='files') return featureEnabled('uploads');
+    if(item.id==='discover') return featureEnabled('social_discovery');
+    if(item.id==='social') return featureEnabled('reels');
+    return true;
+  });
+  useEffect(()=>{
+    const required:Record<string,string>={home:'posts',chats:'chat',support:'support',files:'uploads',discover:'social_discovery',social:'reels'};
+    const key=required[tab];
+    if(key && featureFlags[key]===false && !isAdmin) setTab('profile');
+  },[tab,featureFlags,isAdmin]);
+
   return <div className={`app-frame kaveh-premium-shell ${dark ? 'theme-dark' : 'theme-light'}`} style={{ '--remote-accent': appearance.accent, '--remote-background': appearance.background, '--remote-surface': appearance.surface, '--remote-radius': `${appearance.radius}px` } as CSSProperties}>
     <aside className="sidebar">
       <div className="sidebar-brand"><BrandMark/><div><strong>کاوه انتقامجو</strong><small>THE PRIVATE SOCIAL UNIVERSE</small></div></div>
       <div className="side-label"><span>01</span> فضای شما</div>
       <nav className="side-nav">
-        {navItems.map((item) => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span>{item.id === 'chats' && unread > 0 && <b className="nav-count">{unread}</b>}</button>)}
+        {visibleNavItems.map((item) => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span>{item.id === 'chats' && unread > 0 && <b className="nav-count">{unread}</b>}</button>)}
       </nav>
       <div className="side-divider"/>
       <div className="side-label"><span>02</span> حساب و تنظیمات</div>
@@ -198,7 +229,7 @@ export default function KavehApp() {
         {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify} role={adminRole === 'owner' || adminRole === 'admin' ? adminRole : 'moderator'}/>}
         {tab === 'admin' && !isAdmin && <section className="panel-card"><div className="notice notice-error">دسترسی مدیریت برای این حساب فعال نیست.</div></section>}
       </div>
-      <nav className="mobile-nav">{navItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}{isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت</span></button>}</nav>
+      <nav className="mobile-nav">{visibleNavItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}{isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت</span></button>}</nav>
     </main>
     <div className="toast-stack" aria-live="polite">{toasts.map((item) => <div key={item.id} className={`toast ${item.tone === 'error' ? 'toast-error' : ''}`}><span>{item.tone === 'error' ? <X size={16}/> : <Check size={16}/>}</span>{item.text}</div>)}</div>
   </div>;
