@@ -49,7 +49,9 @@ private data class WorldMissionRow(
     @SerialName("action_key") val actionKey: String,
     @SerialName("target_count") val targetCount: Int,
     @SerialName("reward_points") val rewardPoints: Int,
-    val active: Boolean
+    val active: Boolean,
+    @SerialName("starts_at") val startsAt: String = "",
+    @SerialName("ends_at") val endsAt: String? = null
 )
 
 @Serializable
@@ -69,27 +71,35 @@ private data class WorldEventRow(
     val status: String,
     @SerialName("starts_at") val startsAt: String,
     @SerialName("ends_at") val endsAt: String? = null,
-    @SerialName("points_reward") val pointsReward: Int
+    @SerialName("points_reward") val pointsReward: Int,
+    @SerialName("banner_path") val bannerPath: String? = null,
+    @SerialName("created_by") val createdBy: String? = null,
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("updated_at") val updatedAt: String = ""
 )
 
 @Serializable
 private data class WorldParticipantRow(
     @SerialName("event_id") val eventId: String,
-    @SerialName("user_id") val userId: String
+    @SerialName("user_id") val userId: String,
+    @SerialName("joined_at") val joinedAt: String = ""
 )
 
 @Serializable
 private data class WorldRankRow(
     @SerialName("user_id") val userId: String,
     val score: Long,
-    @SerialName("rank_code") val rankCode: String
+    @SerialName("rank_code") val rankCode: String,
+    @SerialName("updated_at") val updatedAt: String = ""
 )
 
 @Serializable
 private data class WorldRankLevelRow(
     val code: String,
     val title: String,
-    @SerialName("min_score") val minScore: Long
+    @SerialName("min_score") val minScore: Long,
+    @SerialName("sort_order") val sortOrder: Int = 0,
+    @SerialName("accent_token") val accentToken: String = "neutral"
 )
 
 @Serializable
