@@ -283,6 +283,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   }, [supabase, notify]);
 
   useEffect(() => { if (adminTab === 'notifications') void refreshScheduledNotifications(); }, [adminTab, refreshScheduledNotifications]);
+  useEffect(() => { if (adminTab === 'notifications' && announcementAudience === 'specific' && managedUsers.length === 0) void refreshUsers(); }, [adminTab, announcementAudience, managedUsers.length, refreshUsers]);
 
   const createScheduledNotification = async () => {
     if (scheduledSaving) return;
@@ -742,14 +743,25 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
             <textarea className="text-input" rows={4} maxLength={5000} value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} placeholder="متن کامل پیام برای کاربران…"/>
             <label className="field-label">تصویر اعلان (اختیاری، حداکثر ۵ مگابایت)</label>
             <input className="text-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAnnouncementImage(event.target.files?.[0] ?? null)}/>
-            {announcementImage && <div className="admin-user-row"><img src={URL.createObjectURL(announcementImage)} alt="پیش‌نمایش تصویر اعلان" style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 12 }}/><small>{announcementImage.name} · {(announcementImage.size / 1024 / 1024).toFixed(2)} MB</small></div>}
+            {announcementImage && <small>{announcementImage.name} · {(announcementImage.size / 1024 / 1024).toFixed(2)} MB</small>}
             <label className="field-label">مخاطبان</label>
             <select className="text-input" value={announcementAudience} onChange={(event) => setAnnouncementAudience(event.target.value as typeof announcementAudience)}>
               <option value="all">همه کاربران</option><option value="admins">فقط مدیران</option><option value="specific">کاربران مشخص</option>
             </select>
             {announcementAudience === 'specific' && <>
-              <label className="field-label">شناسه کاربران (UUID، با فاصله یا خط جدید جدا کنید)</label>
-              <textarea className="text-input" rows={3} value={announcementRecipients} onChange={(event) => setAnnouncementRecipients(event.target.value)} placeholder="UUID کاربران"/>
+              <label className="field-label">جست‌وجو و انتخاب کاربران ({announcementRecipients.split(/[\\n,;\\s]+/).filter(Boolean).length} انتخاب‌شده)</label>
+              <input className="text-input" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="نام، ایمیل یا نام کاربری را جست‌وجو کن…"/>
+              {usersLoading ? <small>در حال دریافت فهرست کاربران…</small> : <div style={{ maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 8, padding: 10, border: '1px solid var(--border, rgba(127,127,127,.25))', borderRadius: 12 }}>
+                {visibleManagedUsers.slice(0, 100).map((user) => {
+                  const selected = announcementRecipients.split(/[\\n,;\\s]+/).filter(Boolean).includes(user.id);
+                  return <label key={user.id} className="setting-choice"><input type="checkbox" checked={selected} onChange={(event) => setAnnouncementRecipients((current) => {
+                    const ids = current.split(/[\\n,;\\s]+/).filter(Boolean);
+                    return event.target.checked ? [...new Set([...ids, user.id])].join('\\n') : ids.filter((id) => id !== user.id).join('\\n');
+                  })}/><span>{user.display_name || 'کاربر کاوه'} · {user.username ? '@' + user.username : user.email ?? user.id.slice(0, 8)}</span></label>;
+                })}
+                {visibleManagedUsers.length === 0 && <small>کاربری با این عبارت پیدا نشد.</small>}
+              </div>}
+              <small>حداکثر ۱۰۰ نتیجه در این فهرست نمایش داده می‌شود؛ برای مخاطب عمومی همه کاربران را انتخاب کن.</small>
             </>}
             <label className="field-label">دستگاه مقصد</label>
             <select className="text-input" value={announcementPlatform} onChange={(event) => setAnnouncementPlatform(event.target.value as typeof announcementPlatform)}>
