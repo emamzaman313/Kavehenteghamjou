@@ -38,7 +38,7 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "delete_reel" | "set_audio_track_active" | "warn_user" | "ban_user" | "unban_user" | "mute_user" | "unmute_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
+    action: "moderate_post" | "delete_post" | "delete_reel" | "set_audio_track_active" | "register_audio_track" | "warn_user" | "ban_user" | "unban_user" | "mute_user" | "unmute_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
     targetId: string,
     details: Record<string, unknown> = {},
     targetType: "post" | "reel" | "audio_track" | "user" | "report" | "appearance" = "post",
@@ -649,11 +649,53 @@ Deno.serve(async (request: Request) => {
   if (body.action === "audio_tracks_list") {
     if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
     const { data, error } = await admin.from("audio_tracks")
-      .select("id,title,artist,audio_path,duration_seconds,is_active,created_at")
+      .select("id,title,artist,audio_path,cover_path,duration_seconds,is_active,created_at")
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) return respond({ ok: false, reason: "query_failed" }, 500, origin);
     return respond({ ok: true, tracks: data ?? [] }, 200, origin);
+  }
+
+  if (body.action === "register_audio_track") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    if (!validId(body.trackId)) return respond({ ok: false, reason: "invalid_track_id" }, 400, origin);
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const artist = typeof body.artist === "string" ? body.artist.trim() : "";
+    const audioPath = typeof body.audioPath === "string" ? body.audioPath : "";
+    const coverPath = body.coverPath == null ? null : typeof body.coverPath === "string" ? body.coverPath : "";
+    const ownedAudioPath = (value: string) =>
+      value.length > 0 &&
+      value.length <= 500 &&
+      value.startsWith(authData.user.id + "/audio/") &&
+      !value.split("/").includes("..") &&
+      value.split("/").length >= 3;
+    if (title.length < 1 || title.length > 120 || artist.length > 120) {
+      return respond({ ok: false, reason: "invalid_track_metadata" }, 400, origin);
+    }
+    if (!ownedAudioPath(audioPath) || (coverPath !== null && !ownedAudioPath(coverPath))) {
+      return respond({ ok: false, reason: "invalid_media_path" }, 400, origin);
+    }
+    const audit = await beginAudit("register_audio_track", body.trackId, {
+      title,
+      artist,
+      has_cover: coverPath !== null,
+    }, "audio_track");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const { data: track, error } = await admin.from("audio_tracks").insert({
+      id: body.trackId,
+      title,
+      artist,
+      audio_path: audioPath,
+      cover_path: coverPath,
+      created_by: authData.user.id,
+      is_active: true,
+    }).select("id,title,artist,audio_path,cover_path,duration_seconds,is_active,created_at").single();
+    if (error || !track) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "audio_track_register_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, track, auditRecorded }, 200, origin);
   }
 
   if (body.action === "set_audio_track_active") {
