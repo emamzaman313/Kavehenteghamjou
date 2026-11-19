@@ -29,7 +29,7 @@ The following versions were read from the live Supabase migration ledger. Filena
 | `20261118214550` | `kaveh_report_submission_hardening` | Included (`20261118214550_kaveh_report_submission_hardening.sql`) |
 | `20261119061151` | `platform_appearance_versioning` | Included (`20261119061151_platform_appearance_versioning.sql`) |
 | `20261119061219` | `platform_appearance_audit` | Included (`20261119061219_platform_appearance_audit.sql`) |
-| `20261119061607` | `platform_appearance_creator_index` | Included (`20261119061607_platform_appearance_creator_index.sql`) |\n| `20261119132000` | `kaveh_fk_covering_indexes` | Included (`20261119132000_kaveh_fk_covering_indexes.sql`) |
+| `20261119061607` | `platform_appearance_creator_index` | Included (`20261119061607_platform_appearance_creator_index.sql`) |\n| `20261119094914` | `kaveh_fk_covering_indexes` | Included (`20261119094914_kaveh_fk_covering_indexes.sql`) |
 
 **Important:** the live migration ledger is authoritative. The first four original SQL bodies have not yet been exported into this repository. An early local SQL draft is archived at `supabase/archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` and is explicitly non-deployable because it predates the final RLS and privilege fixes.
 
@@ -78,4 +78,4 @@ Migration `20261118214550_kaveh_report_submission_hardening` enforces report rea
 
 ## Foreign-key performance indexes
 
-Migration `20261119132000_kaveh_fk_covering_indexes` adds non-destructive indexes for the ten foreign-key columns flagged by the live Performance Advisor: audio track creator, community join requester/reviewer, daily title creator, playlist track, playlist owner, reel comment author, reel reaction user, reel view viewer, and scheduled notification creator. The live catalog query confirmed all ten indexes exist after migration. No existing index or user data was removed.
+Migration `20261119094914_kaveh_fk_covering_indexes` adds non-destructive indexes for the ten foreign-key columns flagged by the live Performance Advisor: audio track creator, community join requester/reviewer, daily title creator, playlist track, playlist owner, reel comment author, reel reaction user, reel view viewer, and scheduled notification creator. The live catalog query confirmed all ten indexes exist after migration. No existing index or user data was removed.
