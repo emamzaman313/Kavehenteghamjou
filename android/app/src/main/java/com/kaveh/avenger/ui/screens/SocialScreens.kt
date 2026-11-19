@@ -1291,8 +1291,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
     var publishing by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { selected ->
-        selectedMedia = (selectedMedia + selected).distinct().take(4)
-        if (selected.size > 4) message = "حداکثر ۴ فایل می‌توانی پیوست کنی."
+        val combined = (selectedMedia + selected).distinct()
+        if (combined.size > 4) message = "حداکثر ۴ فایل می‌توانی پیوست کنی."
+        selectedMedia = combined.take(4)
     }
     var message by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
