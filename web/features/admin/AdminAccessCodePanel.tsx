@@ -7,7 +7,7 @@ import type { Notify } from '@/lib/ui-types';
 import { SectionHeader } from '@/components/ui';
 import { isValidAccessCode, normalizeAccessCode } from '@/lib/access-code';
 
-export default function AdminAccessCodePanel({ supabase, notify }: { supabase: SupabaseClient; notify: Notify }) {
+export default function AdminAccessCodePanel({ supabase, notify, role }: { supabase: SupabaseClient; notify: Notify; role: 'owner' | 'admin' | 'moderator' }) {
   const [enabled, setEnabled] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [loading, setLoading] = useState(true);
@@ -388,14 +388,14 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
         </div>
         <div className="admin-tabs">
           <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>
-          <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}><Users size={15}/> کاربران</button>
+          {role !== 'moderator' && <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}><Users size={15}/> کاربران</button>}
           <button className={adminTab === 'posts' ? 'active' : ''} onClick={() => setAdminTab('posts')}><LayoutDashboard size={15}/> مدیریت پست‌ها</button>
           <button className={adminTab === 'reports' ? 'active' : ''} onClick={() => setAdminTab('reports')}><Flag size={15}/> گزارش تخلف‌ها</button>
-          <button className={adminTab === 'audit' ? 'active' : ''} onClick={() => setAdminTab('audit')}><ShieldCheck size={15}/> گزارش مدیریت</button>
-          <button className={adminTab === 'media' ? 'active' : ''} onClick={() => setAdminTab('media')}><Music2 size={15}/> کتابخانه رسانه</button>
-          <button className={adminTab === 'notifications' ? 'active' : ''} onClick={() => setAdminTab('notifications')}><Megaphone size={15}/> اعلان‌های زمان‌بندی‌شده</button>
-          <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>
-          <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
+          {role !== 'moderator' && <button className={adminTab === 'audit' ? 'active' : ''} onClick={() => setAdminTab('audit')}><ShieldCheck size={15}/> گزارش مدیریت</button>}
+          {role !== 'moderator' && <button className={adminTab === 'media' ? 'active' : ''} onClick={() => setAdminTab('media')}><Music2 size={15}/> کتابخانه رسانه</button>}
+          {role !== 'moderator' && <button className={adminTab === 'notifications' ? 'active' : ''} onClick={() => setAdminTab('notifications')}><Megaphone size={15}/> اعلان‌های زمان‌بندی‌شده</button>}
+          {role !== 'moderator' && <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>}
+          {role !== 'moderator' && <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>}
         </div>
         {overviewLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت اطلاعات پنل…</span></div> : null}
         {adminTab === 'overview' && !overviewLoading && <div className="admin-overview-grid">
@@ -459,7 +459,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
             </div>;
           })}
         </div>}
-        {adminTab === 'posts' && !overviewLoading && <div className="admin-console-card"><strong>مدیریت محتوا ({overview?.posts.length ?? 0} پست اخیر)</strong>{(overview?.posts ?? []).map((post) => <div className="admin-post-row" key={post.id}><div><b>{post.body || 'پست رسانه‌ای'}</b><small>{post.visibility === 'public' ? 'قابل مشاهده برای عموم' : 'محدود / مخفی'} · {new Date(post.created_at).toLocaleDateString('fa-IR')}</small></div><div className="admin-post-actions"><button className="icon-button" title={post.visibility === 'public' ? 'مخفی‌کردن' : 'عمومی‌کردن'} onClick={() => void moderatePost(post.id, post.visibility === 'public' ? 'private' : 'public')}>{post.visibility === 'public' ? <EyeOff size={16}/> : <Eye size={16}/>}</button><button className="icon-button admin-delete" title={deleteCandidate === post.id ? 'برای تأیید دوباره بزن' : 'حذف پست'} onClick={() => void deletePost(post.id)}><Trash2 size={16}/></button></div></div>)}</div>}
+        {adminTab === 'posts' && !overviewLoading && <div className="admin-console-card"><strong>مدیریت محتوا ({overview?.posts.length ?? 0} پست اخیر)</strong>{(overview?.posts ?? []).map((post) => <div className="admin-post-row" key={post.id}><div><b>{post.body || 'پست رسانه‌ای'}</b><small>{post.visibility === 'public' ? 'قابل مشاهده برای عموم' : 'محدود / مخفی'} · {new Date(post.created_at).toLocaleDateString('fa-IR')}</small></div><div className="admin-post-actions"><button className="icon-button" title={post.visibility === 'public' ? 'مخفی‌کردن' : 'عمومی‌کردن'} onClick={() => void moderatePost(post.id, post.visibility === 'public' ? 'private' : 'public')}>{post.visibility === 'public' ? <EyeOff size={16}/> : <Eye size={16}/>}</button>{role !== 'moderator' && <button className="icon-button admin-delete" title={deleteCandidate === post.id ? 'برای تأیید دوباره بزن' : 'حذف پست'} onClick={() => void deletePost(post.id)}><Trash2 size={16}/></button>}</div></div>)}</div>}
         {adminTab === 'reports' && <div className="admin-console-card">
           <div className="admin-audit-heading"><strong>صف بررسی گزارش‌ها ({reportRows.length})</strong><button className="button button-quiet" type="button" onClick={() => void refreshReports()}><Activity size={15}/> تازه‌سازی</button></div>
           {reportsLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت گزارش‌ها…</span></div> : reportRows.length === 0 ? <p>گزارش ثبت‌شده‌ای برای بررسی وجود ندارد.</p> : reportRows.map((report) => <div className="admin-report-row" key={report.id}>
