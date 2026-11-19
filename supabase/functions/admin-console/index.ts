@@ -71,7 +71,7 @@ Deno.serve(async (request: Request) => {
       .order("version", { ascending: false })
       .limit(30);
     if (error) return respond({ ok: false, reason: "appearance_history_failed" }, 500, origin);
-    return respond({ ok: true, versions: data ?? [] }, 200, origin);
+    return respond({ ok: true, versions: data ?? [], can_rollback: adminRow.role === "owner" }, 200, origin);
   }
 
   if (body.action === "appearance_publish" || body.action === "appearance_rollback") {
