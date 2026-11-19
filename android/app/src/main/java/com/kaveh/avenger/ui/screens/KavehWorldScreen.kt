@@ -2,6 +2,8 @@ package com.kaveh.avenger.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -200,6 +203,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
     val badges = remember { mutableStateListOf<WorldBadgeRow>() }
     val myBadgeCodes = remember { mutableStateListOf<String>() }
     var score by remember { mutableStateOf(0L) }
+    var selectedTab by remember { mutableStateOf("missions") }
     var rankTitle by remember { mutableStateOf("تازه‌وارد") }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -305,8 +309,28 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                 }
             }
         }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(selected = selectedTab == "missions", onClick = { selectedTab = "missions" }, label = { Text("مأموریت‌ها") })
+            FilterChip(selected = selectedTab == "events", onClick = { selectedTab = "events" }, label = { Text("رویدادها") })
+            FilterChip(selected = selectedTab == "leaderboard", onClick = { selectedTab = "leaderboard" }, label = { Text("برترین‌ها") })
+            FilterChip(selected = selectedTab == "honors", onClick = { selectedTab = "honors" }, label = { Text("تالار افتخار") })
+            if (isAdmin) FilterChip(selected = selectedTab == "admin", onClick = { selectedTab = "admin" }, label = { Text("مدیریت") })
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("مأموریت‌های فعال", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                when (selectedTab) {
+                    "events" -> "رویدادهای جامعه"
+                    "leaderboard" -> "جدول برترین‌های کاوه"
+                    "honors" -> "تالار افتخار"
+                    "admin" -> "کنترل مدیریتی جهان کاوه"
+                    else -> "مأموریت‌های فعال"
+                },
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
             OutlinedButton(onClick = { scope.launch { refresh() } }, enabled = !loading) { Text("به‌روزرسانی") }
         }
         if (loading) {
@@ -316,6 +340,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
             Button(onClick = { scope.launch { refresh() } }) { Text("تلاش دوباره") }
         } else {
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (selectedTab == "missions") {
                 items(missions, key = { it.id }) { mission ->
                     val state = progress.firstOrNull { it.missionId == mission.id }
                     val count = minOf(state?.progressCount ?: 0, mission.targetCount)
@@ -342,6 +367,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                             }
                         }
                     }
+                }
+                if (selectedTab == "events") {
                 }
                 item { Text("رویدادهای جامعه", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                 items(events, key = { it.id }) { event ->
@@ -389,6 +416,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
+                if (selectedTab == "honors") {
+                }
                 item { Text("تالار افتخار", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                 items(badges, key = { it.code }) { badge ->
                     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -401,7 +430,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
-                if (isAdmin) {
+                }
+                if (selectedTab == "admin" && isAdmin) {
                     item {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -492,6 +522,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
+                if (selectedTab == "leaderboard") {
                 item {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -515,6 +546,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                             Text("${row.score} XP", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
                         }
                     }
+                }
                 }
             }
         }
