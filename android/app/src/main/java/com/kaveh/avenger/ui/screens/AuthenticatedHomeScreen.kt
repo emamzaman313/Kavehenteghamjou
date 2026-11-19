@@ -140,7 +140,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 MainTab.Publish -> FileUploadScreen(userId = userId)
                 MainTab.Explore -> ExploreFeedScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Reels -> ReelsScreen(supabase = SupabaseClientProvider.client, userId = userId)
-                MainTab.Media -> AudioAndDailyScreen(supabase = SupabaseClientProvider.client)
+                MainTab.Media -> AudioAndDailyScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Communities -> CommunitiesScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Notifications -> NotificationsScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Profile -> EditableProfileScreen(supabase = SupabaseClientProvider.client, userId = userId, email = email)
