@@ -16,7 +16,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
-  const [profileVisibility, setProfileVisibility] = useState<'public'|'followers'|'private'>(profile?.profile_visibility ?? 'public');
+  const [profileVisibility, setProfileVisibility] = useState<'public'|'followers'|'private'>(profile?.profile_visibility === 'private' ? 'private' : profile?.profile_visibility === 'followers' ? 'followers' : 'public');
   const [profileTheme, setProfileTheme] = useState({accent:'#168bff',surface:'#101b2c',text:'#f4f1eb'});
   const [featuredBadges, setFeaturedBadges] = useState<string[]>([]);
   const [musicFile, setMusicFile] = useState<File | null>(null);
@@ -29,7 +29,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
   const [badges, setBadges] = useState<{ badge_code: string; awarded_at: string; title: string }[]>([]);
   const [followRequests, setFollowRequests] = useState<{ follower_id: string; display_name: string; username: string | null }[]>([]);
   const [requestBusy, setRequestBusy] = useState<string | null>(null);
-  useEffect(() => { setName(profile?.display_name ?? ''); setUsername(profile?.username ?? ''); setBio(profile?.bio ?? ''); const p = profile as (Profile & {profile_theme?:{accent?:string;surface?:string;text?:string};featured_badges?:string[];profile_music_title?:string|null}) | null; setProfileVisibility(p?.profile_visibility ?? 'public'); setProfileTheme({accent:p?.profile_theme?.accent ?? '#168bff',surface:p?.profile_theme?.surface ?? '#101b2c',text:p?.profile_theme?.text ?? '#f4f1eb'}); setFeaturedBadges(p?.featured_badges ?? []); setMusicTitle(p?.profile_music_title ?? ''); }, [profile]);
+  useEffect(() => { setName(profile?.display_name ?? ''); setUsername(profile?.username ?? ''); setBio(profile?.bio ?? ''); const p = profile as (Profile & {profile_theme?:{accent?:string;surface?:string;text?:string};featured_badges?:string[];profile_music_title?:string|null}) | null; setProfileVisibility(p?.profile_visibility === 'private' ? 'private' : p?.profile_visibility === 'followers' ? 'followers' : 'public'); setProfileTheme({accent:p?.profile_theme?.accent ?? '#168bff',surface:p?.profile_theme?.surface ?? '#101b2c',text:p?.profile_theme?.text ?? '#f4f1eb'}); setFeaturedBadges(p?.featured_badges ?? []); setMusicTitle(p?.profile_music_title ?? ''); }, [profile]);
   useEffect(() => {
     let alive = true;
     const load = async () => {
