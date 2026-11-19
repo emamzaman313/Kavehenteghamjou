@@ -87,8 +87,8 @@ fun EmailOtpScreen(
     }
 
     fun savePassword() {
-        if (password.length < 8) {
-            errorMessage = "رمز عبور باید حداقل ۸ نویسه داشته باشد."
+        if (password.length < 10 || !password.any { it in 'a'..'z' } || !password.any { it in 'A'..'Z' } || !password.any { it.isDigit() } || !password.any { !it.isLetterOrDigit() }) {
+            errorMessage = "رمز عبور باید حداقل ۱۰ نویسه و شامل حروف کوچک و بزرگ انگلیسی، عدد و نماد باشد."
             return
         }
         if (password != passwordConfirm) {
@@ -153,7 +153,7 @@ fun EmailOtpScreen(
                         onValueChange = { password = it; errorMessage = "" },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(if (setupPasswordMode) "انتخاب رمز عبور" else "رمز عبور") },
-                        placeholder = { Text(if (setupPasswordMode) "حداقل ۸ نویسه" else "رمز حساب شما") },
+                        placeholder = { Text(if (setupPasswordMode) "۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" else "رمز حساب شما") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                     )
