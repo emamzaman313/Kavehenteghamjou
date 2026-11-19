@@ -13,8 +13,11 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'access' | 'appearance'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'access' | 'appearance'>('overview');
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
+  const [audioTracks, setAudioTracks] = useState<{ id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null; is_active: boolean; created_at: string }[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+
   const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; is_banned: boolean; admin_role: string | null }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [canManageAdmins, setCanManageAdmins] = useState(false);
@@ -68,6 +71,24 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
     setReportRows(data.reports ?? []);
   }, [supabase, notify]);
 
+  const refreshAudioTracks = useCallback(async () => {
+    setMediaLoading(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'audio_tracks_list' } });
+    setMediaLoading(false);
+    if (error || data?.ok !== true) { notify('دریافت کتابخانه موسیقی ناموفق بود.', 'error'); return; }
+    setAudioTracks(data.tracks ?? []);
+  }, [supabase, notify]);
+
+  const setAudioTrackActive = async (trackId: string, isActive: boolean) => {
+    setUserBusy(trackId);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'set_audio_track_active', trackId, isActive } });
+    setUserBusy(null);
+    if (error || data?.ok !== true) { notify('تغییر وضعیت آهنگ انجام نشد.', 'error'); return; }
+    setAudioTracks((rows) => rows.map((track) => track.id === trackId ? { ...track, is_active: isActive } : track));
+    notify(isActive ? 'آهنگ دوباره در کتابخانه کاربران فعال شد.' : 'آهنگ از کتابخانه عمومی پنهان شد.');
+    await refreshAudit();
+  };
+
   const refreshUsers = useCallback(async () => {
     setUsersLoading(true);
     const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'users_list' } });
@@ -90,6 +111,9 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   useEffect(() => {
     if (adminTab === 'reports') void refreshReports();
   }, [adminTab, refreshReports]);
+  useEffect(() => {
+    if (adminTab === 'media') void refreshAudioTracks();
+  }, [adminTab, refreshAudioTracks]);
 
 
   const refreshAppearance = useCallback(async () => {
@@ -294,6 +318,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <button className={adminTab === 'posts' ? 'active' : ''} onClick={() => setAdminTab('posts')}><LayoutDashboard size={15}/> مدیریت پست‌ها</button>
           <button className={adminTab === 'reports' ? 'active' : ''} onClick={() => setAdminTab('reports')}><Flag size={15}/> گزارش تخلف‌ها</button>
           <button className={adminTab === 'audit' ? 'active' : ''} onClick={() => setAdminTab('audit')}><ShieldCheck size={15}/> گزارش مدیریت</button>
+          <button className={adminTab === 'media' ? 'active' : ''} onClick={() => setAdminTab('media')}><Music2 size={15}/> کتابخانه رسانه</button>
           <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>
           <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
         </div>
@@ -380,13 +405,21 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
             {userBusy === report.id && <small className="admin-user-busy">در حال ثبت نتیجه…</small>}
           </div>)}
         </div>}
+        {adminTab === 'media' && <div className="admin-console-card">
+          <div className="admin-audit-heading"><strong>کتابخانه مرکزی موسیقی ({audioTracks.length} آهنگ)</strong><button className="button button-quiet" type="button" onClick={() => void refreshAudioTracks()}><Activity size={15}/> تازه‌سازی</button></div>
+          <p className="admin-user-policy-note">آهنگ غیرفعال از فهرست عمومی و پخش کاربران عادی پنهان می‌شود؛ فایل و ارتباط آن با فهرست‌های پخش حذف نمی‌شود. فقط مالک و مدیر می‌توانند وضعیت انتشار را تغییر دهند.</p>
+          {mediaLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت کتابخانه موسیقی…</span></div> : audioTracks.length === 0 ? <p>هنوز آهنگی در کتابخانه ثبت نشده است.</p> : audioTracks.map((track) => <div className="admin-managed-user" key={track.id}>
+            <div className="admin-user-row"><span className="admin-user-avatar"><Music2 size={18}/></span><div className="admin-managed-user-info"><b>{track.title}</b><small>{track.artist} · {track.duration_seconds ? Math.floor(track.duration_seconds / 60) + ':' + String(track.duration_seconds % 60).padStart(2, '0') : 'مدت نامشخص'}</small><small>ثبت: {new Date(track.created_at).toLocaleDateString('fa-IR')} · {track.is_active ? 'در دسترس کاربران' : 'پنهان از کتابخانه عمومی'}</small></div></div>
+            <div className="admin-user-actions"><button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void setAudioTrackActive(track.id, !track.is_active)}>{userBusy === track.id ? 'در حال ذخیره…' : track.is_active ? 'غیرفعال‌کردن آهنگ' : 'فعال‌کردن آهنگ'}</button></div>
+          </div>)}
+        </div>}
         {adminTab === 'audit' && <div className="admin-console-card">
           <div className="admin-audit-heading"><strong>گزارش عملیات حساس (۱۰۰ مورد اخیر)</strong><button className="button button-quiet" type="button" onClick={() => void refreshAudit()}><Activity size={15}/> تازه‌سازی</button></div>
           {auditLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت گزارش‌ها…</span></div> : auditRows.length === 0 ? <p>هنوز عملیات مدیریتی ثبت نشده است.</p> : auditRows.map((entry) => <div className="admin-activity-row" key={entry.id}>
             <span className="admin-activity-dot"/>
             <div>
-              <b>{entry.action === 'delete_reel' ? 'حذف ریلز گزارش‌شده' : entry.action === 'delete_post' ? 'حذف پست' : entry.action === 'moderate_post' ? 'تغییر وضعیت پست' : entry.action === 'warn_user' ? 'اخطار به کاربر' : entry.action === 'ban_user' ? 'مسدودسازی کاربر' : entry.action === 'unban_user' ? 'رفع مسدودی کاربر' : entry.action === 'set_admin_role' ? 'تغییر نقش مدیریتی' : entry.action === 'remove_admin_role' ? 'لغو دسترسی مدیریتی' : entry.action === 'review_report' ? 'بررسی گزارش تخلف' : entry.action}</b>
-              <small>{entry.target_type === 'user' ? 'شناسه کاربر: ' : entry.target_type === 'report' ? 'شناسه گزارش: ' : 'شناسه محتوا: '}{entry.target_id.slice(0, 8)}… · مدیر: {entry.actor_id?.slice(0, 8) ?? 'نامشخص'} · {entry.status === 'succeeded' ? 'موفق' : entry.status === 'failed' ? 'ناموفق' : 'در حال اجرا'}</small>
+              <b>{entry.action === 'set_audio_track_active' ? 'تغییر وضعیت آهنگ' : entry.action === 'delete_reel' ? 'حذف ریلز گزارش‌شده' : entry.action === 'delete_post' ? 'حذف پست' : entry.action === 'moderate_post' ? 'تغییر وضعیت پست' : entry.action === 'warn_user' ? 'اخطار به کاربر' : entry.action === 'ban_user' ? 'مسدودسازی کاربر' : entry.action === 'unban_user' ? 'رفع مسدودی کاربر' : entry.action === 'set_admin_role' ? 'تغییر نقش مدیریتی' : entry.action === 'remove_admin_role' ? 'لغو دسترسی مدیریتی' : entry.action === 'review_report' ? 'بررسی گزارش تخلف' : entry.action}</b>
+              <small>{entry.target_type === 'user' ? 'شناسه کاربر: ' : entry.target_type === 'report' ? 'شناسه گزارش: ' : entry.target_type === 'audio_track' ? 'شناسه آهنگ: ' : 'شناسه محتوا: '}{entry.target_id.slice(0, 8)}… · مدیر: {entry.actor_id?.slice(0, 8) ?? 'نامشخص'} · {entry.status === 'succeeded' ? 'موفق' : entry.status === 'failed' ? 'ناموفق' : 'در حال اجرا'}</small>
               <small>{entry.details?.visibility ? 'وضعیت مقصد: ' + String(entry.details.visibility) + ' · ' : ''}{entry.details?.duration ? 'مدت محدودیت: ' + String(entry.details.duration) + ' · ' : ''}{entry.details?.role ? 'نقش: ' + String(entry.details.role) + ' · ' : ''}{entry.details?.previous_role ? 'نقش قبلی: ' + String(entry.details.previous_role) + ' · ' : ''}{entry.details?.reason ? 'دلیل: ' + String(entry.details.reason) + ' · ' : ''}{new Date(entry.created_at).toLocaleString('fa-IR')}</small>
             </div>
           </div>)}
