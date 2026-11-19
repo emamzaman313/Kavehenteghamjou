@@ -38,6 +38,22 @@ using (
   )
 );
 
+create or replace function private.touch_user_presence()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $
+begin
+  new.last_seen_at := now();
+  return new;
+end;
+$;
+
+drop trigger if exists trg_touch_user_presence on public.user_presence;
+create trigger trg_touch_user_presence
+before insert or update on public.user_presence
+for each row execute function private.touch_user_presence();
+
 grant select, insert, update on public.user_presence to authenticated;
 revoke all on public.user_presence from anon;
 
