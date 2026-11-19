@@ -360,39 +360,56 @@ Deno.serve(async (request: Request) => {
   if (body.action === "process_scheduled_notifications") {
     if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
     const { data: dueRows, error: dueError } = await admin.from("scheduled_notifications")
-      .select("id,title,body,audience,recipient_ids,scheduled_at")
+      .select("id,title,body,audience,recipient_ids,scheduled_at,created_by")
       .eq("status", "pending").lte("scheduled_at", new Date().toISOString())
       .order("scheduled_at", { ascending: true }).limit(50);
     if (dueError) return respond({ ok: false, reason: "scheduled_lookup_failed" }, 500, origin);
     let processed = 0;
+    let delivered = 0;
+    let failed = 0;
     for (const item of dueRows ?? []) {
       const { data: claimed, error: claimError } = await admin.from("scheduled_notifications")
         .update({ status: "processing", error_message: null }).eq("id", item.id).eq("status", "pending").select("id").maybeSingle();
       if (claimError || !claimed) continue;
-      let recipientIds: string[] = [];
-      if (item.audience === "admins") {
-        const { data } = await admin.from("site_access_admins").select("user_id").limit(1000);
-        recipientIds = (data ?? []).map((row) => row.user_id);
-      } else if (item.audience === "specific") {
-        recipientIds = Array.isArray(item.recipient_ids) ? item.recipient_ids.filter((id): id is string => validId(id)) : [];
+
+      const recipientIds: string[] = [];
+      let lookupFailed = false;
+      if (item.audience === "specific") {
+        recipientIds.push(...(Array.isArray(item.recipient_ids) ? item.recipient_ids.filter((id): id is string => validId(id)) : []));
       } else {
-        const { data } = await admin.from("profiles").select("id").limit(1000);
-        recipientIds = (data ?? []).map((row) => row.id);
+        const table = item.audience === "admins" ? "site_access_admins" : "profiles";
+        const column = item.audience === "admins" ? "user_id" : "id";
+        for (let offset = 0; ; offset += 1000) {
+          const { data, error } = await admin.from(table).select(column).order(column, { ascending: true }).range(offset, offset + 999);
+          if (error) { lookupFailed = true; break; }
+          const page = (data ?? []).map((row) => String((row as Record<string, unknown>)[column])).filter(validId);
+          recipientIds.push(...page);
+          if (page.length < 1000) break;
+        }
       }
-      const rows = [...new Set(recipientIds)].map((recipient_id) => ({
-        recipient_id, actor_id: authData.user.id, kind: "scheduled_announcement",
-        entity_type: "announcement", entity_id: item.id,
-        payload: { title: item.title, message: item.body },
-      }));
-      const { error: deliveryError } = rows.length ? await admin.from("notifications").insert(rows) : { error: null };
+
+      const uniqueRecipients = [...new Set(recipientIds)];
+      const actorId = validId(item.created_by) ? item.created_by : authData.user.id;
+      let deliveryError = lookupFailed;
+      for (let offset = 0; !deliveryError && offset < uniqueRecipients.length; offset += 500) {
+        const rows = uniqueRecipients.slice(offset, offset + 500).map((recipient_id) => ({
+          recipient_id, actor_id: actorId, kind: "scheduled_announcement",
+          entity_type: "announcement", entity_id: item.id,
+          payload: { title: item.title, message: item.body },
+        }));
+        const { error } = await admin.from("notifications").insert(rows);
+        if (error) deliveryError = true;
+      }
       if (deliveryError) {
-        await admin.from("scheduled_notifications").update({ status: "failed", error_message: "in_app_delivery_failed" }).eq("id", item.id);
+        await admin.from("scheduled_notifications").update({ status: "failed", error_message: lookupFailed ? "recipient_lookup_failed" : "in_app_delivery_failed" }).eq("id", item.id);
+        failed += 1;
       } else {
         await admin.from("scheduled_notifications").update({ status: "sent", sent_at: new Date().toISOString(), error_message: null }).eq("id", item.id);
+        delivered += uniqueRecipients.length;
       }
       processed += 1;
     }
-    return respond({ ok: true, processed }, 200, origin);
+    return respond({ ok: true, processed, delivered, failed }, 200, origin);
   }
 
   if (body.action === "overview") {
