@@ -167,7 +167,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
       notify('عنوان، متن و زمان معتبر (حداقل یک دقیقه بعد) وارد کنید.', 'error');
       return;
     }
-    const recipientIds = announcementRecipients.split(/[\\n,;\\s]+/).map((value) => value.trim()).filter(Boolean);
+    const recipientIds = announcementRecipients.split(/[\n,;\s]+/).map((value) => value.trim()).filter(Boolean);
     if (announcementAudience === 'specific' && (recipientIds.length === 0 || recipientIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))) {
       notify('برای مخاطبان مشخص، شناسه UUID معتبر کاربران را وارد کنید.', 'error');
       return;
