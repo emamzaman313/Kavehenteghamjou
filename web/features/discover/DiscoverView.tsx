@@ -18,9 +18,13 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   const loadCommunities = async () => {
     const { data, error } = await supabase.rpc('discover_communities');
     if (error) { notify('دریافت گروه‌ها و کانال‌ها ناموفق بود: ' + error.message, 'error'); return; }
-    const { data: mine } = await supabase.from('conversation_members').select('conversation_id').eq('user_id', userId);
+    const [{ data: mine }, { data: requests }] = await Promise.all([
+      supabase.from('conversation_members').select('conversation_id').eq('user_id', userId),
+      supabase.from('conversation_join_requests').select('conversation_id').eq('requester_id', userId).eq('status', 'pending'),
+    ]);
     const memberIds = new Set((mine ?? []).map((row) => row.conversation_id));
-    setCommunities((data ?? []).map((item: Omit<Community, 'membership'>) => ({ ...item, membership: memberIds.has(item.conversation_id) ? 'member' : 'none' })));
+    const pendingIds = new Set((requests ?? []).map((row) => row.conversation_id));
+    setCommunities((data ?? []).map((item: Omit<Community, 'membership'>) => ({ ...item, membership: memberIds.has(item.conversation_id) ? 'member' : pendingIds.has(item.conversation_id) ? 'pending' : 'none' })));
   };
 
   useEffect(() => { void loadCommunities(); }, [supabase, userId]);
