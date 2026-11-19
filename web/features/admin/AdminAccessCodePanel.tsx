@@ -495,7 +495,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
         </div>}
         {adminTab === 'notifications' && <div className="admin-console-card">
           <div className="admin-audit-heading"><strong>مرکز اعلان‌های مدیریتی</strong><button className="button button-quiet" type="button" onClick={() => void refreshScheduledNotifications()}><Activity size={15}/> تازه‌سازی</button></div>
-          <p className="admin-user-policy-note">اعلان‌ها در زمان تعیین‌شده به صندوق اعلان داخل سایت ارسال می‌شوند. برای اجرای اعلان‌های سررسیدشده، دکمه پردازش را بزنید؛ ارسال خودکار زمان‌بندی‌شده تا زمان اتصال Cron فعال نیست. ارسال پوش و ایمیل نیز به تنظیم کلیدهای سرویس نیاز دارد.</p>
+          <p className="admin-user-policy-note">اعلان‌ها با زمان‌بند فعال دیتابیس (Cron، هر دقیقه) در موعد مقرر به صندوق اعلان داخل سایت ارسال می‌شوند. دکمه پردازش دستی فقط برای اجرای فوری اعلان‌های سررسیدشده و بازیابی احتمالی است. ارسال پوش و ایمیل همچنان به تنظیم کلیدهای واقعی Firebase و Resend نیاز دارد.</p>
           <div className="admin-console-card" style={{ marginBottom: 16 }}>
             <strong>ساخت اعلان جدید</strong>
             <label className="field-label">عنوان اعلان</label>
