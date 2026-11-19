@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.R
 import com.kaveh.avenger.data.SupabaseClientProvider
+import com.kaveh.avenger.notifications.PushTokenRegistration
 import kotlinx.coroutines.launch
 
 private enum class MainTab(val title: String) {
@@ -69,6 +70,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = MainTab.entries
+    PushTokenRegistration(supabase = SupabaseClientProvider.client, userId = userId)
 
     Scaffold(
         contentWindowInsets = WindowInsets.navigationBars,
