@@ -27,17 +27,6 @@ create policy user_presence_select_own on public.user_presence
 for select to authenticated
 using (user_id = (select auth.uid()));
 
-drop policy if exists user_presence_select_admin on public.user_presence;
-create policy user_presence_select_admin on public.user_presence
-for select to authenticated
-using (
-  exists (
-    select 1 from public.site_access_admins a
-    where a.user_id = (select auth.uid())
-      and a.role in ('owner', 'admin')
-  )
-);
-
 create or replace function public.touch_user_presence()
 returns void
 language sql
