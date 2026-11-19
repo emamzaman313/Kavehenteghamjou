@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +42,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -58,10 +60,14 @@ import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.R
 import com.kaveh.avenger.data.SupabaseClientProvider
 import com.kaveh.avenger.notifications.PushTokenRegistration
+import io.github.jan.supabase.postgrest.rpc
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.launch
 
 private enum class MainTab(val title: String) {
-    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), Profile("پروفایل")
+    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), Admin("مدیریت"), Profile("پروفایل")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +75,14 @@ private enum class MainTab(val title: String) {
 fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = MainTab.entries
+    var adminRole by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(userId) {
+        adminRole = runCatching {
+            SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()
+                ["role"]?.jsonPrimitive?.contentOrNull
+        }.getOrNull()
+    }
+    val tabs = MainTab.entries.filter { it != MainTab.Admin || adminRole != null }
     PushTokenRegistration(supabase = SupabaseClientProvider.client, userId = userId)
 
     Scaffold(
@@ -113,6 +126,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         MainTab.Media -> Icons.Outlined.MusicNote
                         MainTab.Communities -> Icons.Outlined.ChatBubbleOutline
                         MainTab.Notifications -> Icons.Outlined.Notifications
+                        MainTab.Admin -> Icons.Outlined.Security
                         MainTab.Profile -> Icons.Outlined.PersonOutline
                     }
                     NavigationBarItem(
@@ -145,6 +159,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 MainTab.Media -> AudioAndDailyScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Communities -> CommunitiesScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Notifications -> NotificationsScreen(supabase = SupabaseClientProvider.client, userId = userId)
+                MainTab.Admin -> AdminConsoleScreen(supabase = SupabaseClientProvider.client, role = adminRole ?: "support")
                 MainTab.Profile -> EditableProfileScreen(supabase = SupabaseClientProvider.client, userId = userId, email = email)
             }
             Spacer(Modifier.height(18.dp))
