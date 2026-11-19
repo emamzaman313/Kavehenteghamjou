@@ -41,8 +41,9 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
       if (staff && rows.length) {
         const ids = [...new Set(rows.map(x=>x.requester_id))];
         const {data:profiles} = await supabase.from('profiles').select('id,display_name,username').in('id',ids);
-        const map = new Map((profiles ?? []).map((p:any)=>[p.id,p]));
-        rows.forEach(row=>{ row.requester = map.get(row.requester_id) ?? null; });
+        const map: Record<string,{display_name:string;username:string|null}> = {};
+        (profiles ?? []).forEach(p=>{ map[p.id] = p; });
+        rows.forEach(row=>{ row.requester = map[row.requester_id] ?? null; });
       }
       setTickets(rows);
       if (active && !rows.some(x=>x.id===active)) setActive(null);
