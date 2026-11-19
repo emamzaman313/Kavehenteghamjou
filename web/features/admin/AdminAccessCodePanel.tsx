@@ -271,26 +271,6 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <button className={adminTab === 'audit' ? 'active' : ''} onClick={() => setAdminTab('audit')}><ShieldCheck size={15}/> گزارش مدیریت</button>
           <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>
           <button className=
-{adminTab === 'appearance' && <section className="admin-console-card admin-appearance">
-  <div className="admin-audit-heading"><strong>مدیریت ظاهر و تنظیمات مرکزی</strong><button className="button button-quiet" type="button" onClick={() => void refreshAppearance()}><Activity size={15}/> تازه‌سازی</button></div>
-  <p className="admin-user-policy-note">تغییرات ابتدا در پیش‌نمایش محلی دیده می‌شوند. با انتشار، نسخه جدید در دیتابیس ثبت و برای تمام کاربران وب اعمال می‌شود. فایل‌ها و داده کاربران دست‌نخورده می‌مانند.</p>
-  {appearanceLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت نسخه‌های ظاهر…</span></div> : <>
-    <div className="admin-appearance-grid">
-      <label>رنگ اصلی <input aria-label="رنگ اصلی" type="color" value={appearanceDraft.accent} onChange={(event) => setAppearanceDraft((value) => ({ ...value, accent: event.target.value }))}/></label>
-      <label>پس‌زمینه تیره <input aria-label="رنگ پس‌زمینه" type="color" value={appearanceDraft.background} onChange={(event) => setAppearanceDraft((value) => ({ ...value, background: event.target.value }))}/></label>
-      <label>رنگ کارت‌ها <input aria-label="رنگ کارت‌ها" type="color" value={appearanceDraft.surface} onChange={(event) => setAppearanceDraft((value) => ({ ...value, surface: event.target.value }))}/></label>
-      <label className="admin-radius-control">گردی گوشه‌ها: {appearanceDraft.radius}px <input type="range" min="8" max="28" value={appearanceDraft.radius} onChange={(event) => setAppearanceDraft((value) => ({ ...value, radius: Number(event.target.value) }))}/></label>
-    </div>
-    <div className="admin-appearance-preview" style={{ background: appearanceDraft.background, borderRadius: appearanceDraft.radius }}>
-      <div style={{ background: appearanceDraft.surface, borderRadius: Math.max(6, appearanceDraft.radius - 4) }}>
-        <b style={{ color: appearanceDraft.accent }}>پیش‌نمایش کاوه انتقامجو</b><p>این نمونه قبل از انتشار قابل مشاهده است.</p>
-        <button type="button" style={{ background: appearanceDraft.accent, borderRadius: appearanceDraft.radius }}>دکمه نمونه</button>
-      </div>
-    </div>
-    <div className="admin-access-footer"><span>نسخه فعال: {appearanceRows.find((row) => row.is_published)?.version ?? '—'}</span><button className="button button-primary" type="button" disabled={appearanceSaving} onClick={() => void publishAppearance()}><Save size={15}/>{appearanceSaving ? 'در حال انتشار…' : 'انتشار تنظیمات'}</button></div>
-    <div className="admin-appearance-history"><strong>تاریخچه نسخه‌ها</strong>{appearanceRows.map((row) => <div className="admin-appearance-version" key={row.id}><span>نسخه {row.version} · {new Date(row.created_at).toLocaleString('fa-IR')} {row.is_published ? '· فعال' : ''}</span>{!row.is_published && <button className="button button-quiet" type="button" disabled={appearanceSaving} onClick={() => void rollbackAppearance(row.version)}><RotateCcw size={14}/> بازگردانی</button>}</div>)}</div>
-  </>}
-</section>}
 {adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
         </div>
         {overviewLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت اطلاعات پنل…</span></div> : null}
@@ -369,7 +349,27 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           </div>)}
         </div>}
       </section>
-      {adminTab === 'access' && <section className="settings-card admin-access-card">
+      {adminTab === 'appearance' && <section className="admin-console-card admin-appearance">
+  <div className="admin-audit-heading"><strong>مدیریت ظاهر و تنظیمات مرکزی</strong><button className="button button-quiet" type="button" onClick={() => void refreshAppearance()}><Activity size={15}/> تازه‌سازی</button></div>
+  <p className="admin-user-policy-note">تغییرات ابتدا در پیش‌نمایش محلی دیده می‌شوند. با انتشار، نسخه جدید در دیتابیس ثبت و برای تمام کاربران وب اعمال می‌شود. فایل‌ها و داده کاربران دست‌نخورده می‌مانند.</p>
+  {appearanceLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت نسخه‌های ظاهر…</span></div> : <>
+    <div className="admin-appearance-grid">
+      <label>رنگ اصلی <input aria-label="رنگ اصلی" type="color" value={appearanceDraft.accent} onChange={(event) => setAppearanceDraft((value) => ({ ...value, accent: event.target.value }))}/></label>
+      <label>پس‌زمینه تیره <input aria-label="رنگ پس‌زمینه" type="color" value={appearanceDraft.background} onChange={(event) => setAppearanceDraft((value) => ({ ...value, background: event.target.value }))}/></label>
+      <label>رنگ کارت‌ها <input aria-label="رنگ کارت‌ها" type="color" value={appearanceDraft.surface} onChange={(event) => setAppearanceDraft((value) => ({ ...value, surface: event.target.value }))}/></label>
+      <label className="admin-radius-control">گردی گوشه‌ها: {appearanceDraft.radius}px <input type="range" min="8" max="28" value={appearanceDraft.radius} onChange={(event) => setAppearanceDraft((value) => ({ ...value, radius: Number(event.target.value) }))}/></label>
+    </div>
+    <div className="admin-appearance-preview" style={{ background: appearanceDraft.background, borderRadius: appearanceDraft.radius }}>
+      <div style={{ background: appearanceDraft.surface, borderRadius: Math.max(6, appearanceDraft.radius - 4) }}>
+        <b style={{ color: appearanceDraft.accent }}>پیش‌نمایش کاوه انتقامجو</b><p>این نمونه قبل از انتشار قابل مشاهده است.</p>
+        <button type="button" style={{ background: appearanceDraft.accent, borderRadius: appearanceDraft.radius }}>دکمه نمونه</button>
+      </div>
+    </div>
+    <div className="admin-access-footer"><span>نسخه فعال: {appearanceRows.find((row) => row.is_published)?.version ?? '—'}</span><button className="button button-primary" type="button" disabled={appearanceSaving} onClick={() => void publishAppearance()}><Save size={15}/>{appearanceSaving ? 'در حال انتشار…' : 'انتشار تنظیمات'}</button></div>
+    <div className="admin-appearance-history"><strong>تاریخچه نسخه‌ها</strong>{appearanceRows.map((row) => <div className="admin-appearance-version" key={row.id}><span>نسخه {row.version} · {new Date(row.created_at).toLocaleString('fa-IR')} {row.is_published ? '· فعال' : ''}</span>{!row.is_published && <button className="button button-quiet" type="button" disabled={appearanceSaving} onClick={() => void rollbackAppearance(row.version)}><RotateCcw size={14}/> بازگردانی</button>}</div>)}</div>
+  </>}
+</section>}
+{adminTab === 'access' && <section className="settings-card admin-access-card">
         <div className="side-info-title"><ShieldCheck size={19}/><strong>تنظیمات دسترسی مهمان</strong></div>
         {loadError && <div className="notice notice-error" role="alert">{loadError}</div>}
         {loading ? (
