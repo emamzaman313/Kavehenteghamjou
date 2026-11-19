@@ -1064,7 +1064,27 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
 
     LaunchedEffect(userId) { refresh() }
 
+    val myReels = cards.filter { it.reel.authorId == userId }
+    val myReelViews = myReels.sumOf { it.reel.viewsCount }
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+            Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    Text(myReels.size.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("ویدئوهای من", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    Text(myReelViews.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("بازدید ویدئوهای من", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    Text(cards.size.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("ویدئوهای قابل مشاهده", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Text("استودیوی سازندگان · انتشار عمومی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("برای هر ویدئو به‌صورت خودکار تصویر جلد ساخته می‌شود؛ حداکثر ۵۰ مگابایت و ۱۰ دقیقه.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(value = caption, onValueChange = { caption = it.take(2200) }, label = { Text("توضیح ریلز") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { videoPicker.launch("video/*") }, enabled = !uploading) { Text(if (selectedVideo == null) "انتخاب ویدئو" else "تغییر ویدئو") }
@@ -1151,6 +1171,14 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(card.author, fontWeight = FontWeight.SemiBold)
                         val videoUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/post-media/" + card.reel.videoPath
+                        card.reel.coverPath?.let { coverPath ->
+                            AsyncImage(
+                                model = BuildConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/post-media/" + coverPath,
+                                contentDescription = "تصویر جلد ریلز",
+                                modifier = Modifier.fillMaxWidth().height(110.dp),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                         AndroidView(
                             modifier = Modifier.fillMaxWidth().height(250.dp),
                             factory = { viewContext ->
@@ -1183,6 +1211,7 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                             },
                             onRelease = { view -> view.stopPlayback() }
                         )
+                        card.reel.durationSeconds?.let { duration -> Text("مدت ویدئو: ${duration / 60}:${(duration % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         if (card.reel.caption.isNotBlank()) Text(card.reel.caption)
                         if (card.reel.allowComments) {
                             Text("دیدگاه‌ها (" + card.comments.size + ")", fontWeight = FontWeight.SemiBold)
