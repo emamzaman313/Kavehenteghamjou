@@ -1,0 +1,153 @@
+'use client';
+
+import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Film, Music2, Megaphone, Heart, MessageCircle, Plus, Upload, ListMusic, RefreshCw } from 'lucide-react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Notify } from '@/lib/ui-types';
+import { SectionHeader, EmptyState } from '@/components/ui';
+
+type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean };
+type Track = { id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null };
+type DailyTitle = { id: string; title: string; body: string; category: string; starts_at: string; ends_at: string | null };
+type Playlist = { id: string; title: string; description: string; is_public: boolean };
+
+export default function SocialHubView({ supabase, userId, isAdmin, notify }: { supabase: SupabaseClient; userId: string; isAdmin: boolean; notify: Notify }) {
+  const [tab, setTab] = useState<'reels' | 'music' | 'daily'>('reels');
+  const [reels, setReels] = useState<Reel[]>([]);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [titles, setTitles] = useState<DailyTitle[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [liked, setLiked] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [caption, setCaption] = useState('');
+  const [video, setVideo] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [trackTitle, setTrackTitle] = useState('');
+  const [trackArtist, setTrackArtist] = useState('');
+  const [audio, setAudio] = useState<File | null>(null);
+  const [playlistTitle, setPlaylistTitle] = useState('');
+  const [selectedPlaylist, setSelectedPlaylist] = useState('');
+  const [selectedTrack, setSelectedTrack] = useState('');
+  const [dailyTitle, setDailyTitle] = useState('');
+  const [dailyBody, setDailyBody] = useState('');
+  const [dailyCategory, setDailyCategory] = useState('announcement');
+  const [dailySaving, setDailySaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [r, t, d, p, likes] = await Promise.all([
+      supabase.from('reels').select('id,author_id,caption,video_path,cover_path,mime_type,published_at,allow_comments').order('published_at', { ascending: false }).limit(40),
+      supabase.from('audio_tracks').select('id,title,artist,audio_path,duration_seconds').eq('is_active', true).order('created_at', { ascending: false }),
+      supabase.from('daily_titles').select('id,title,body,category,starts_at,ends_at').eq('is_published', true).lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
+      supabase.from('playlists').select('id,title,description,is_public').eq('owner_id', userId).order('created_at', { ascending: false }),
+      supabase.from('reel_reactions').select('reel_id').eq('user_id', userId),
+    ]);
+    if (r.error) notify('دریافت ریلز ناموفق بود: ' + r.error.message, 'error'); else setReels((r.data ?? []) as Reel[]);
+    if (t.error) notify('دریافت موسیقی ناموفق بود: ' + t.error.message, 'error'); else setTracks((t.data ?? []) as Track[]);
+    if (d.error) notify('دریافت اطلاعیه‌ها ناموفق بود: ' + d.error.message, 'error'); else setTitles((d.data ?? []) as DailyTitle[]);
+    if (!p.error) setPlaylists((p.data ?? []) as Playlist[]);
+    if (!likes.error) setLiked(new Set((likes.data ?? []).map((x) => x.reel_id)));
+    setLoading(false);
+  }, [supabase, userId, notify]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const uploadReel = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!video || !video.type.startsWith('video/')) return notify('یک فایل ویدیویی معتبر انتخاب کنید.', 'error');
+    if (video.size > 50 * 1024 * 1024) return notify('حداکثر حجم ویدئو ۵۰ مگابایت است.', 'error');
+    setUploading(true);
+    const path = userId + '/reels/' + crypto.randomUUID() + '-' + video.name.replace(/[^\w.\-]/g, '_');
+    const uploaded = await supabase.storage.from('post-media').upload(path, video, { contentType: video.type, upsert: false });
+    if (uploaded.error) { setUploading(false); return notify('بارگذاری ویدئو ناموفق بود: ' + uploaded.error.message, 'error'); }
+    const inserted = await supabase.from('reels').insert({ author_id: userId, caption: caption.trim(), video_path: path, mime_type: video.type, visibility: 'public' });
+    setUploading(false);
+    if (inserted.error) {
+      await supabase.storage.from('post-media').remove([path]);
+      return notify('ثبت ریلز ناموفق بود: ' + inserted.error.message, 'error');
+    }
+    setCaption(''); setVideo(null); notify('ریلز منتشر شد.'); await load();
+  };
+
+  const toggleLike = async (reel: Reel) => {
+    if (liked.has(reel.id)) {
+      const { error } = await supabase.from('reel_reactions').delete().eq('reel_id', reel.id).eq('user_id', userId);
+      if (error) return notify(error.message, 'error');
+      setLiked((old) => { const next = new Set(old); next.delete(reel.id); return next; });
+    } else {
+      const { error } = await supabase.from('reel_reactions').insert({ reel_id: reel.id, user_id: userId, reaction: '❤️' });
+      if (error) return notify(error.message, 'error');
+      setLiked((old) => new Set(old).add(reel.id));
+    }
+  };
+
+  const createPlaylist = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!playlistTitle.trim()) return;
+    const { data, error } = await supabase.from('playlists').insert({ owner_id: userId, title: playlistTitle.trim() }).select('id,title,description,is_public').single();
+    if (error) return notify('ساخت فهرست پخش ناموفق بود: ' + error.message, 'error');
+    setPlaylists((old) => [data as Playlist, ...old]); setPlaylistTitle(''); setSelectedPlaylist(data.id); notify('فهرست پخش ساخته شد.');
+  };
+
+  const addTrackToPlaylist = async () => {
+    if (!selectedPlaylist || !selectedTrack) return;
+    const { error } = await supabase.from('playlist_tracks').insert({ playlist_id: selectedPlaylist, track_id: selectedTrack, position: 0 });
+    if (error) return notify('افزودن آهنگ ناموفق بود: ' + error.message, 'error');
+    notify('آهنگ به فهرست پخش اضافه شد.');
+  };
+
+  const uploadTrack = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAdmin) return;
+    if (!audio || !audio.type.startsWith('audio/')) return notify('یک فایل صوتی معتبر انتخاب کنید.', 'error');
+    if (audio.size > 50 * 1024 * 1024) return notify('حداکثر حجم فایل صوتی ۵۰ مگابایت است.', 'error');
+    setUploading(true);
+    const path = userId + '/audio/' + crypto.randomUUID() + '-' + audio.name.replace(/[^\w.\-]/g, '_');
+    const uploaded = await supabase.storage.from('post-media').upload(path, audio, { contentType: audio.type, upsert: false });
+    if (uploaded.error) { setUploading(false); return notify(uploaded.error.message, 'error'); }
+    const inserted = await supabase.from('audio_tracks').insert({ title: trackTitle.trim(), artist: trackArtist.trim(), audio_path: path, created_by: userId }).select('id,title,artist,audio_path,duration_seconds').single();
+    setUploading(false);
+    if (inserted.error) { await supabase.storage.from('post-media').remove([path]); return notify(inserted.error.message, 'error'); }
+    setTracks((old) => [inserted.data as Track, ...old]); setTrackTitle(''); setTrackArtist(''); setAudio(null); notify('آهنگ به کتابخانه موسیقی اضافه شد.');
+  };
+
+  const publishDailyTitle = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAdmin || !dailyTitle.trim()) return;
+    setDailySaving(true);
+    const { error } = await supabase.from('daily_titles').insert({ title: dailyTitle.trim(), body: dailyBody.trim(), category: dailyCategory, is_published: true, created_by: userId });
+    setDailySaving(false);
+    if (error) return notify('انتشار اطلاعیه ناموفق بود: ' + error.message, 'error');
+    setDailyTitle(''); setDailyBody(''); notify('اطلاعیه منتشر شد.'); await load();
+  };
+
+  const publicUrl = (path: string) => supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;
+
+  return <div className="page-stack">
+    <SectionHeader eyebrow="رسانه و جامعه" title="رسانه، ریلز و موسیقی" description="ویدئوهای کوتاه، کتابخانه موسیقی، فهرست‌های پخش و عنوان‌های روزانه." action={<button className="button button-quiet" onClick={() => void load()}><RefreshCw size={16}/> تازه‌سازی</button>}/>
+    <div className="admin-tabs">
+      <button className={tab === 'reels' ? 'active' : ''} onClick={() => setTab('reels')}><Film size={16}/> ریلز</button>
+      <button className={tab === 'music' ? 'active' : ''} onClick={() => setTab('music')}><Music2 size={16}/> موسیقی</button>
+      <button className={tab === 'daily' ? 'active' : ''} onClick={() => setTab('daily')}><Megaphone size={16}/> عنوان روزانه و اطلاعیه‌ها</button>
+    </div>
+    {loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : null}
+    {tab === 'reels' && <>
+      <form className="panel-card page-stack" onSubmit={uploadReel}>
+        <strong>انتشار ریلز جدید</strong>
+        <textarea className="field-input" rows={2} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="برای ویدئوی خود توضیح بنویس…"/>
+        <input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => setVideo(e.target.files?.[0] ?? null)}/>
+        <button className="button button-primary" disabled={uploading || !video}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
+      </form>
+      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="people-grid">{reels.map((reel) => <article className="person-card reel-card" key={reel.id}><video controls playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video"/><p>{reel.caption}</p><button className={liked.has(reel.id) ? 'button button-primary button-small' : 'button button-quiet button-small'} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button></article>)}</div>}
+    </>}
+    {tab === 'music' && <>
+      {isAdmin && <form className="panel-card page-stack" onSubmit={uploadTrack}><strong>افزودن آهنگ به کتابخانه (مدیر)</strong><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام آهنگ" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="هنرمند"/><input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/><button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Plus size={16}/> افزودن آهنگ</button></form>}
+      <section className="panel-card page-stack"><strong>ساخت فهرست پخش</strong><form onSubmit={createPlaylist} className="inline-form"><input className="field-input" value={playlistTitle} onChange={(e) => setPlaylistTitle(e.target.value)} placeholder="نام فهرست پخش" required/><button className="button button-primary"><Plus size={16}/> ساخت</button></form>{playlists.length > 0 && <><select className="field-input" value={selectedPlaylist} onChange={(e) => setSelectedPlaylist(e.target.value)}><option value="">فهرست پخش را انتخاب کن</option>{playlists.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select><div className="inline-form"><select className="field-input" value={selectedTrack} onChange={(e) => setSelectedTrack(e.target.value)}><option value="">آهنگ را انتخاب کن</option>{tracks.map((t) => <option key={t.id} value={t.id}>{t.title} — {t.artist}</option>)}</select><button className="button button-quiet" onClick={() => void addTrackToPlaylist()} disabled={!selectedPlaylist || !selectedTrack}>افزودن به فهرست</button></div></>}</section>
+      {tracks.length === 0 ? <EmptyState icon={<Music2/>} title="کتابخانه موسیقی خالی است" description="مدیر سایت می‌تواند آهنگ‌های مجاز را اضافه کند."/> : <div className="panel-card page-stack"><strong>کتابخانه موسیقی</strong>{tracks.map((track) => <div className="file-row" key={track.id}><div><strong>{track.title}</strong><small>{track.artist || 'هنرمند نامشخص'}</small></div><audio controls preload="none" src={publicUrl(track.audio_path)}/></div>)}</div>}
+    </>}
+    {tab === 'daily' && <>
+      {isAdmin && <form className="panel-card page-stack" onSubmit={publishDailyTitle}><strong>انتشار عنوان یا اطلاعیه جدید</strong><input className="field-input" value={dailyTitle} onChange={(e) => setDailyTitle(e.target.value)} maxLength={180} placeholder="عنوان" required/><textarea className="field-input" rows={3} value={dailyBody} onChange={(e) => setDailyBody(e.target.value)} maxLength={5000} placeholder="متن اطلاعیه"/><select className="field-input" value={dailyCategory} onChange={(e) => setDailyCategory(e.target.value)}><option value="announcement">اطلاعیه</option><option value="daily_title">عنوان روزانه</option><option value="maintenance">تعمیر و نگهداری</option><option value="event">رویداد</option></select><button className="button button-primary" disabled={dailySaving}><Megaphone size={16}/>{dailySaving ? 'در حال انتشار…' : 'انتشار'}</button></form>}
+      {titles.length === 0 ? <EmptyState icon={<Megaphone/>} title="اطلاعیه‌ای منتشر نشده" description="عنوان‌های روزانه و خبرهای مهم اینجا نمایش داده می‌شوند."/> : titles.map((item) => <article className="panel-card page-stack" key={item.id}><small>{item.category === 'daily_title' ? 'عنوان روزانه' : item.category === 'maintenance' ? 'تعمیر و نگهداری' : item.category === 'event' ? 'رویداد' : 'اطلاعیه'}</small><h3>{item.title}</h3>{item.body && <p>{item.body}</p>}<small>{new Date(item.starts_at).toLocaleString('fa-IR')}</small></article>)}
+    </>}
+  </div>;
+}
