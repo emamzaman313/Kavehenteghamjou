@@ -387,15 +387,36 @@ fun SupportCenterScreen(
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Text(ticket.subject, fontWeight = FontWeight.SemiBold)
                                 if (staff) Text("درخواست‌دهنده: ${ticket.requesterLabel ?: ticket.requesterId.take(8)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        shape = MaterialTheme.shapes.small
+                                    ) {
+                                        Text(
+                                            supportStatusLabel(ticket.status),
+                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                    Surface(
+                                        color = if (ticket.priority == "urgent" || ticket.priority == "high")
+                                            MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = MaterialTheme.shapes.small
+                                    ) {
+                                        Text(
+                                            "اولویت ${when (ticket.priority) { "urgent" -> "فوری"; "high" -> "بالا"; "low" -> "پایین"; else -> "عادی" }}",
+                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (ticket.priority == "urgent" || ticket.priority == "high")
+                                                MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                                 Text(
-                                    "${supportStatusLabel(ticket.status)} · ${supportCategories.firstOrNull { it.first == ticket.category }?.second ?: ticket.category}",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    supportCategories.firstOrNull { it.first == ticket.category }?.second ?: ticket.category,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    "اولویت: ${when (ticket.priority) { "urgent" -> "فوری"; "high" -> "بالا"; "low" -> "پایین"; else -> "عادی" }}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
