@@ -13,12 +13,21 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'access' | 'appearance'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance'>('overview');
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
   const [audioTracks, setAudioTracks] = useState<{ id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null; is_active: boolean; created_at: string }[]>([]);
   const [managedReels, setManagedReels] = useState<{ id: string; author_id: string; caption: string; visibility: string; views_count: number; published_at: string; created_at: string }[]>([]);
 
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [scheduledRows, setScheduledRows] = useState<{ id: string; title: string; body: string; audience: 'all' | 'admins' | 'specific'; recipient_ids: string[]; scheduled_at: string; status: string; sent_at: string | null; error_message: string | null; created_at: string }[]>([]);
+  const [scheduledLoading, setScheduledLoading] = useState(false);
+  const [scheduledSaving, setScheduledSaving] = useState(false);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementBody, setAnnouncementBody] = useState('');
+  const [announcementAudience, setAnnouncementAudience] = useState<'all' | 'admins' | 'specific'>('all');
+  const [announcementRecipients, setAnnouncementRecipients] = useState('');
+  const [announcementAt, setAnnouncementAt] = useState('');
+
 
   const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; is_banned: boolean; admin_role: string | null }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -136,6 +145,60 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
     const value = rows.find((row) => row.is_published)?.config?.appearance;
     if (value) setAppearanceDraft({ accent: value.accent ?? '#168bff', background: value.background ?? '#07111f', surface: value.surface ?? '#101b2c', radius: value.radius ?? 16 });
   }, [supabase, notify]);
+
+  const refreshScheduledNotifications = useCallback(async () => {
+    setScheduledLoading(true);
+    const { data, error } = await supabase.from('scheduled_notifications')
+      .select('id,title,body,audience,recipient_ids,scheduled_at,status,sent_at,error_message,created_at')
+      .order('scheduled_at', { ascending: false }).limit(100);
+    setScheduledLoading(false);
+    if (error) { notify('دریافت اعلان‌های زمان‌بندی‌شده ناموفق بود.', 'error'); return; }
+    setScheduledRows((data ?? []) as typeof scheduledRows);
+  }, [supabase, notify]);
+
+  useEffect(() => { if (adminTab === 'notifications') void refreshScheduledNotifications(); }, [adminTab, refreshScheduledNotifications]);
+
+  const createScheduledNotification = async () => {
+    if (scheduledSaving) return;
+    const title = announcementTitle.trim();
+    const body = announcementBody.trim();
+    const scheduledAt = new Date(announcementAt);
+    if (title.length < 1 || title.length > 180 || body.length < 1 || body.length > 5000 || !announcementAt || Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now() + 60_000) {
+      notify('عنوان، متن و زمان معتبر (حداقل یک دقیقه بعد) وارد کنید.', 'error');
+      return;
+    }
+    const recipientIds = announcementRecipients.split(/[\\n,;\\s]+/).map((value) => value.trim()).filter(Boolean);
+    if (announcementAudience === 'specific' && (recipientIds.length === 0 || recipientIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))) {
+      notify('برای مخاطبان مشخص، شناسه UUID معتبر کاربران را وارد کنید.', 'error');
+      return;
+    }
+    setScheduledSaving(true);
+    const { error } = await supabase.from('scheduled_notifications').insert({
+      title, body, audience: announcementAudience, recipient_ids: announcementAudience === 'specific' ? recipientIds : [],
+      scheduled_at: scheduledAt.toISOString(),
+    });
+    setScheduledSaving(false);
+    if (error) { notify('ثبت اعلان زمان‌بندی‌شده انجام نشد؛ سطح دسترسی مدیر را بررسی کنید.', 'error'); return; }
+    setAnnouncementTitle(''); setAnnouncementBody(''); setAnnouncementRecipients(''); setAnnouncementAt('');
+    notify('اعلان برای زمان انتخاب‌شده ثبت شد.');
+    await refreshScheduledNotifications();
+  };
+
+  const cancelScheduledNotification = async (id: string) => {
+    const { data, error } = await supabase.from('scheduled_notifications').update({ status: 'cancelled' }).eq('id', id).eq('status', 'pending').select('id').maybeSingle();
+    if (error || !data) { notify('لغو اعلان ممکن نشد؛ ممکن است قبلاً پردازش شده باشد.', 'error'); return; }
+    notify('اعلان زمان‌بندی‌شده لغو شد.');
+    await refreshScheduledNotifications();
+  };
+
+  const processDueNotifications = async () => {
+    setScheduledSaving(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'process_scheduled_notifications' } });
+    setScheduledSaving(false);
+    if (error || data?.ok !== true) { notify('پردازش اعلان‌های سررسیدشده ناموفق بود.', 'error'); return; }
+    notify(`${data.processed ?? 0} اعلان سررسیدشده پردازش شد.`);
+    await refreshScheduledNotifications();
+  };
 
   useEffect(() => { if (adminTab === 'appearance') void refreshAppearance(); }, [adminTab, refreshAppearance]);
 
@@ -328,6 +391,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <button className={adminTab === 'reports' ? 'active' : ''} onClick={() => setAdminTab('reports')}><Flag size={15}/> گزارش تخلف‌ها</button>
           <button className={adminTab === 'audit' ? 'active' : ''} onClick={() => setAdminTab('audit')}><ShieldCheck size={15}/> گزارش مدیریت</button>
           <button className={adminTab === 'media' ? 'active' : ''} onClick={() => setAdminTab('media')}><Music2 size={15}/> کتابخانه رسانه</button>
+          <button className={adminTab === 'notifications' ? 'active' : ''} onClick={() => setAdminTab('notifications')}><Megaphone size={15}/> اعلان‌های زمان‌بندی‌شده</button>
           <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>
           <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
         </div>
@@ -425,6 +489,33 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           {mediaLoading ? null : managedReels.length === 0 ? <p>هنوز ریلزی ثبت نشده است.</p> : managedReels.map((reel) => <div className="admin-managed-user" key={reel.id}>
             <div className="admin-user-row"><span className="admin-user-avatar"><Film size={18}/></span><div className="admin-managed-user-info"><b>{reel.caption || 'ریلز بدون توضیح'}</b><small>سازنده: {reel.author_id.slice(0, 8)}… · {reel.visibility === 'public' ? 'عمومی' : reel.visibility === 'followers' ? 'دنبال‌کنندگان' : 'خصوصی'}</small><small>{reel.views_count} بازدید · انتشار: {new Date(reel.published_at).toLocaleDateString('fa-IR')}</small></div></div>
             <div className="admin-user-actions"><button className="button button-quiet admin-ban-button" type="button" disabled={userBusy !== null} onClick={() => void deleteReel(reel.id)}><Trash2 size={14}/>{deleteCandidate === 'reel:' + reel.id ? 'برای تأیید دوباره بزن' : 'حذف ریلز'}</button></div>
+          </div>)}
+        </div>}
+        {adminTab === 'notifications' && <div className="admin-console-card">
+          <div className="admin-audit-heading"><strong>مرکز اعلان‌های مدیریتی</strong><button className="button button-quiet" type="button" onClick={() => void refreshScheduledNotifications()}><Activity size={15}/> تازه‌سازی</button></div>
+          <p className="admin-user-policy-note">اعلان‌ها در زمان تعیین‌شده به صندوق اعلان داخل سایت ارسال می‌شوند. برای اجرای اعلان‌های سررسیدشده، دکمه پردازش را بزنید؛ ارسال خودکار زمان‌بندی‌شده تا زمان اتصال Cron فعال نیست. ارسال پوش و ایمیل نیز به تنظیم کلیدهای سرویس نیاز دارد.</p>
+          <div className="admin-console-card" style={{ marginBottom: 16 }}>
+            <strong>ساخت اعلان جدید</strong>
+            <label className="field-label">عنوان اعلان</label>
+            <input className="text-input" maxLength={180} value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} placeholder="مثلاً اطلاعیه مهم سایت" />
+            <label className="field-label">متن اعلان</label>
+            <textarea className="text-input" rows={4} maxLength={5000} value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} placeholder="متن پیام برای کاربران…" />
+            <label className="field-label">مخاطبان</label>
+            <select className="text-input" value={announcementAudience} onChange={(event) => setAnnouncementAudience(event.target.value as typeof announcementAudience)}>
+              <option value="all">همه کاربران</option><option value="admins">فقط مدیران</option><option value="specific">کاربران مشخص</option>
+            </select>
+            {announcementAudience === 'specific' && <>
+              <label className="field-label">شناسه کاربران (UUID، با فاصله یا خط جدید جدا کنید)</label>
+              <textarea className="text-input" rows={3} value={announcementRecipients} onChange={(event) => setAnnouncementRecipients(event.target.value)} placeholder="UUID کاربران" />
+            </>}
+            <label className="field-label">زمان ارسال</label>
+            <input className="text-input" type="datetime-local" value={announcementAt} onChange={(event) => setAnnouncementAt(event.target.value)} />
+            <button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void createScheduledNotification()}><Megaphone size={15}/>{scheduledSaving ? 'در حال ثبت…' : 'ثبت اعلان زمان‌بندی‌شده'}</button>
+          </div>
+          <div className="admin-audit-heading"><strong>اعلان‌های اخیر ({scheduledRows.length})</strong><button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void processDueNotifications()}><Activity size={15}/> پردازش اعلان‌های سررسیدشده</button></div>
+          {scheduledLoading ? <div className="admin-loading"><span className="spinner"/>در حال دریافت…</div> : scheduledRows.length === 0 ? <p>هنوز اعلانی ثبت نشده است.</p> : scheduledRows.map((item) => <div className="admin-report-row" key={item.id}>
+            <div><strong>{item.title}</strong><p>{item.body}</p><small>{item.audience === 'all' ? 'همه کاربران' : item.audience === 'admins' ? 'مدیران' : 'کاربران مشخص'} · {new Date(item.scheduled_at).toLocaleString('fa-IR')} · وضعیت: {item.status === 'pending' ? 'در انتظار' : item.status === 'sent' ? 'ارسال‌شده' : item.status === 'failed' ? 'ناموفق' : item.status === 'cancelled' ? 'لغوشده' : 'در حال پردازش'}</small>{item.error_message && <small className="notice-error">{item.error_message}</small>}</div>
+            {item.status === 'pending' && <button className="button button-quiet" type="button" onClick={() => void cancelScheduledNotification(item.id)}>لغو</button>}
           </div>)}
         </div>}
         {adminTab === 'audit' && <div className="admin-console-card">
