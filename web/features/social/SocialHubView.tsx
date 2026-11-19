@@ -109,11 +109,11 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     const coverPath = cover ? userId + '/reel-covers/' + crypto.randomUUID() + '-' + safeName(cover) : null;
     const uploadedPaths: string[] = [];
     setReelUploadProgress(0);
-    const uploaded = await uploadWithProgress('post-media', path, video, setReelUploadProgress);
+    const uploaded = await uploadWithProgress('post-media', path, reelVideo, setReelUploadProgress);
     if (uploaded.error) { setUploading(false); return notify('بارگذاری ویدئو ناموفق بود: ' + uploaded.error.message, 'error'); }
     uploadedPaths.push(path);
-    if (cover && coverPath) {
-      const coverUpload = await uploadWithProgress('post-media', coverPath, cover, () => undefined);
+    if (reelCover && coverPath) {
+      const coverUpload = await uploadWithProgress('post-media', coverPath, reelCover, () => undefined);
       if (coverUpload.error) {
         await supabase.storage.from('post-media').remove(uploadedPaths);
         setUploading(false);
@@ -126,7 +126,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
       caption: caption.trim(),
       video_path: path,
       cover_path: coverPath,
-      mime_type: video.type,
+      mime_type: reelVideo.type,
       duration_seconds: reelDuration,
     });
     setUploading(false);
