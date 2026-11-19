@@ -610,7 +610,8 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
       />
       <section className="admin-dashboard">
         {role !== 'moderator' && <div className="admin-stat-grid">
-          <div className="admin-stat"><Users/><span>کاربران</span><strong>{overview?.stats.users ?? '—'}</strong></div>
+          <div className="admin-stat"><Users/><span>کل کاربران</span><strong>{overview?.stats.users ?? '—'}</strong></div>
+          <div className="admin-stat"><Activity/><span>کاربران آنلاین (۲ دقیقه اخیر)</span><strong>{overview?.stats.online_users ?? '—'}</strong></div>
           <div className="admin-stat"><LayoutDashboard/><span>پست‌ها</span><strong>{overview?.stats.posts ?? '—'}</strong></div>
           <div className="admin-stat"><MessageCircle/><span>دیدگاه‌ها</span><strong>{overview?.stats.comments ?? '—'}</strong></div>
           <div className="admin-stat"><Film/><span>رسانه‌ها</span><strong>{overview?.stats.media ?? '—'}</strong></div>
