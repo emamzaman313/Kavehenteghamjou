@@ -137,15 +137,18 @@ Deno.serve(async (request: Request) => {
     const postIds = [...new Set((data ?? []).filter((row) => row.target_type === "post").map((row) => row.target_id))];
     const userIds = [...new Set((data ?? []).filter((row) => row.target_type === "user").map((row) => row.target_id))];
     const commentIds = [...new Set((data ?? []).filter((row) => row.target_type === "comment").map((row) => row.target_id))];
-    const [postTargets, userTargets, commentTargets] = await Promise.all([
+    const reelIds = [...new Set((data ?? []).filter((row) => row.target_type === "reel").map((row) => row.target_id))];
+    const [postTargets, userTargets, commentTargets, reelTargets] = await Promise.all([
       postIds.length ? admin.from("posts").select("id,body,author_id,visibility").in("id", postIds) : Promise.resolve({ data: [], error: null }),
       userIds.length ? admin.from("profiles").select("id,display_name,username").in("id", userIds) : Promise.resolve({ data: [], error: null }),
       commentIds.length ? admin.from("comments").select("id,body,author_id").in("id", commentIds) : Promise.resolve({ data: [], error: null }),
+      reelIds.length ? admin.from("reels").select("id,caption,author_id").in("id", reelIds) : Promise.resolve({ data: [], error: null }),
     ]);
-    if (postTargets.error || userTargets.error || commentTargets.error) return respond({ ok: false, reason: "report_targets_query_failed" }, 500, origin);
+    if (postTargets.error || userTargets.error || commentTargets.error || reelTargets.error) return respond({ ok: false, reason: "report_targets_query_failed" }, 500, origin);
     const postById = new Map((postTargets.data ?? []).map((row) => [row.id, row]));
     const userById = new Map((userTargets.data ?? []).map((row) => [row.id, row]));
     const commentById = new Map((commentTargets.data ?? []).map((row) => [row.id, row]));
+    const reelById = new Map((reelTargets.data ?? []).map((row) => [row.id, row]));
     const reports = (data ?? []).map((row) => ({
       ...row,
       target_summary: row.target_type === "post"
@@ -154,10 +157,12 @@ Deno.serve(async (request: Request) => {
           ? (userById.get(row.target_id)?.display_name || userById.get(row.target_id)?.username || "کاربر")
           : row.target_type === "comment"
             ? (commentById.get(row.target_id)?.body || "دیدگاه حذف‌شده یا بدون متن")
-            : null,
+            : row.target_type === "reel"
+              ? (reelById.get(row.target_id)?.caption || "ریلز بدون توضیح")
+              : null,
       target_author_id: row.target_type === "post"
         ? postById.get(row.target_id)?.author_id ?? null
-        : row.target_type === "comment" ? commentById.get(row.target_id)?.author_id ?? null : null,
+        : row.target_type === "comment" ? commentById.get(row.target_id)?.author_id ?? null : row.target_type === "reel" ? reelById.get(row.target_id)?.author_id ?? null : null,
     }));
     return respond({ ok: true, reports }, 200, origin);
   }
