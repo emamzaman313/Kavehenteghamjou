@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Film, Music2, Megaphone, Heart, Plus, Upload, RefreshCw, Send } from 'lucide-react';
+import { Film, Music2, Megaphone, Heart, Plus, Upload, RefreshCw, Send, ImagePlus, Video } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader, EmptyState } from '@/components/ui';
