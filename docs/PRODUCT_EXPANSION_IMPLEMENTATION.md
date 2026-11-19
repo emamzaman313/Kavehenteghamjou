@@ -206,3 +206,12 @@ These require a dedicated migration, verified RLS policies, server-side authoriz
 - Extracted the web support inbox search/status/priority filtering into a pure helper so the filtering rules are independent of React rendering.
 - Added unit tests covering default results, case-insensitive requester/search matching, ticket ID/category lookup, combined status and staff-priority filtering, and the rule that non-staff views ignore staff-only priority filters.
 - Validation on implementation commit `71dc450c`: Web CI passed (TypeScript, ESLint, unit tests including the new support filter tests, Next.js production build, artifact upload); Android CI passed (unit tests, debug APK, AAB, artifact upload). Secret scanning and web dependency audit passed; Dependency Review remains blocked only by the disabled repository Dependency Graph setting.
+
+
+## 2026-11-20 implementation update — cross-platform support and Android audit filters
+
+- The web support inbox search/status/priority filters and their unit tests are included in the current feature branch.
+- Android support inbox filtering is retained, and the Android admin console now adds searchable audit-log filtering by operation, target type/ID, actor ID, and execution status (started/succeeded/failed), with Persian status labels and counts.
+- Validation on the current PR head `dd1fa8cf`: Web CI passed (TypeScript, ESLint, unit tests, Next.js production build and artifact upload); Android CI passed (unit tests, debug APK/AAB assembly and artifact upload).
+- Security workflow: Gitleaks secret scanning and the blocking production dependency audit passed. GitHub Dependency Review remains blocked because repository Dependency Graph is disabled; this is a repository configuration limitation, not a reported vulnerable dependency.
+- The PR remains a draft. These are branch/CI results, not a production release. No production schema migration, production data change, secret modification, or Vercel production promotion was performed.
