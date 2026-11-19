@@ -51,7 +51,10 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
   }, [supabase, userId, notify]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const channel = supabase.channel('public-feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => { void load(); }).subscribe();
+    const channel = supabase.channel('public-feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => { void load(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_attachments' }, () => { void load(); })
+      .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [supabase, load]);
 
