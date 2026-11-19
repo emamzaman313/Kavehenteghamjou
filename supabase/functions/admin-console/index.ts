@@ -396,9 +396,14 @@ Deno.serve(async (request: Request) => {
   }
 
   if (body.action === "overview") {
-    const [users, userCount, posts, comments, media, reels, audioTracks, playlists, dailyTitles, reelViews, latestPosts] = await Promise.all([
+    const sinceDate = new Date();
+    sinceDate.setUTCDate(sinceDate.getUTCDate() - 6);
+    sinceDate.setUTCHours(0, 0, 0, 0);
+    const since = sinceDate.toISOString();
+    const [users, userCount, newUsers, posts, comments, media, reels, audioTracks, playlists, dailyTitles, reelViews, latestPosts, recentPosts, recentComments, recentReels, pendingReports, recentNotifications] = await Promise.all([
       admin.from("profiles").select("id,display_name,username,created_at").order("created_at", { ascending: false }).limit(30),
       admin.from("profiles").select("id", { count: "exact", head: true }),
+      admin.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", since),
       admin.from("posts").select("id", { count: "exact", head: true }),
       admin.from("comments").select("id", { count: "exact", head: true }),
       admin.from("post_attachments").select("id", { count: "exact", head: true }),
@@ -408,10 +413,42 @@ Deno.serve(async (request: Request) => {
       admin.from("daily_titles").select("id", { count: "exact", head: true }),
       admin.from("reel_views").select("reel_id", { count: "exact", head: true }),
       admin.from("posts").select("id,author_id,body,visibility,created_at").order("created_at", { ascending: false }).limit(30),
+      admin.from("posts").select("created_at").gte("created_at", since).limit(10000),
+      admin.from("comments").select("created_at").gte("created_at", since).limit(10000),
+      admin.from("reels").select("created_at").gte("created_at", since).limit(10000),
+      admin.from("reports").select("id", { count: "exact", head: true }).in("status", ["open", "reviewing"]),
+      admin.from("notifications").select("id", { count: "exact", head: true }).gte("created_at", since),
     ]);
-    const firstError = users.error || userCount.error || posts.error || comments.error || media.error || reels.error || audioTracks.error || playlists.error || dailyTitles.error || reelViews.error || latestPosts.error;
+    const firstError = users.error || userCount.error || newUsers.error || posts.error || comments.error || media.error || reels.error || audioTracks.error || playlists.error || dailyTitles.error || reelViews.error || latestPosts.error || recentPosts.error || recentComments.error || recentReels.error || pendingReports.error || recentNotifications.error;
     if (firstError) return respond({ ok: false, reason: "query_failed" }, 500, origin);
-    return respond({ ok: true, stats: { users: userCount.count ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0, media: media.count ?? 0, reels: reels.count ?? 0, audio_tracks: audioTracks.count ?? 0, playlists: playlists.count ?? 0, daily_titles: dailyTitles.count ?? 0, reel_views: reelViews.count ?? 0 }, users: users.data ?? [], posts: latestPosts.data ?? [] }, 200, origin);
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(sinceDate);
+      date.setUTCDate(date.getUTCDate() + index);
+      return { date: date.toISOString().slice(0, 10), posts: 0, comments: 0, reels: 0 };
+    });
+    const dayIndex = new Map(days.map((day, index) => [day.date, index]));
+    const countByDay = (rows: { created_at: string }[] | null, key: "posts" | "comments" | "reels") => {
+      for (const row of rows ?? []) {
+        const index = dayIndex.get(String(row.created_at).slice(0, 10));
+        if (index !== undefined) days[index][key] += 1;
+      }
+    };
+    countByDay(recentPosts.data, "posts");
+    countByDay(recentComments.data, "comments");
+    countByDay(recentReels.data, "reels");
+    return respond({
+      ok: true,
+      stats: {
+        users: userCount.count ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0,
+        media: media.count ?? 0, reels: reels.count ?? 0, audio_tracks: audioTracks.count ?? 0,
+        playlists: playlists.count ?? 0, daily_titles: dailyTitles.count ?? 0, reel_views: reelViews.count ?? 0,
+        new_users_7d: newUsers.count ?? 0, pending_reports: pendingReports.count ?? 0,
+        notifications_7d: recentNotifications.count ?? 0,
+      },
+      daily_activity: days,
+      users: users.data ?? [],
+      posts: latestPosts.data ?? [],
+    }, 200, origin);
   }
 
   if (body.action === "moderate_post") {
