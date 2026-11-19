@@ -7,11 +7,13 @@ import type { Notify } from '@/lib/ui-types';
 import { Avatar, EmptyState, SectionHeader } from '@/components/ui';
 
 type Community = { conversation_id: string; title: string; description: string; kind: string; username: string | null; owner_id: string; join_approval_required: boolean; member_count: number; membership: string };
+type JoinRequest = { id: string; conversation_id: string; requester_id: string; requested_at: string; requester_name: string };
 
 export default function DiscoverView({ supabase, userId, initialSearch, notify, onOpenChat }: { supabase: SupabaseClient; userId: string; initialSearch: string; notify: Notify; onOpenChat: () => void }) {
   const [query, setQuery] = useState(initialSearch);
   const [people, setPeople] = useState<Profile[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([]);
   const [recommendations, setRecommendations] = useState<{ profile: Profile; score: number; rank: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [joining, setJoining] = useState<string | null>(null);
@@ -34,13 +36,24 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   const loadCommunities = async () => {
     const { data, error } = await supabase.rpc('discover_communities');
     if (error) { notify('دریافت گروه‌ها و کانال‌ها ناموفق بود: ' + error.message, 'error'); return; }
-    const [{ data: mine }, { data: requests }] = await Promise.all([
+    const [{ data: mine }, { data: requests }, { data: managerRequests }] = await Promise.all([
       supabase.from('conversation_members').select('conversation_id').eq('user_id', userId),
       supabase.from('conversation_join_requests').select('conversation_id').eq('requester_id', userId).eq('status', 'pending'),
+      supabase.from('conversation_join_requests').select('id,conversation_id,requester_id,requested_at').eq('status', 'pending').order('requested_at', { ascending: true }).limit(40),
     ]);
     const memberIds = new Set((mine ?? []).map((row) => row.conversation_id));
     const pendingIds = new Set((requests ?? []).map((row) => row.conversation_id));
     setCommunities((data ?? []).map((item: Omit<Community, 'membership'>) => ({ ...item, membership: memberIds.has(item.conversation_id) ? 'member' : pendingIds.has(item.conversation_id) ? 'pending' : 'none' })));
+    const requestRows = managerRequests ?? [];
+    const requesterIds = [...new Set(requestRows.map((row) => row.requester_id))];
+    const { data: requesterProfiles } = requesterIds.length
+      ? await supabase.from('profiles').select('id,display_name,username').in('id', requesterIds)
+      : { data: [] };
+    const requesterMap = new Map((requesterProfiles ?? []).map((profile) => [profile.id, profile]));
+    setPendingRequests(requestRows.map((row) => ({
+      ...row,
+      requester_name: requesterMap.get(row.requester_id)?.display_name || requesterMap.get(row.requester_id)?.username || 'کاربر کاوه',
+    })));
   };
 
   useEffect(() => { void loadCommunities(); }, [supabase, userId]);
@@ -81,6 +94,17 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     if (error) return notify('عضویت ناموفق بود: ' + error.message, 'error');
     setCommunities((old) => old.map((item) => item.conversation_id === id ? { ...item, membership: data === 'pending' ? 'pending' : 'member' } : item));
     notify(data === 'pending' ? 'درخواست عضویت برای مدیر گروه ارسال شد.' : data === 'member' ? 'از قبل عضو این فضا هستید.' : 'به کانال یا گروه پیوستید.');
+  };
+
+  const reviewJoinRequest = async (request: JoinRequest, status: 'approved' | 'rejected') => {
+    const { error } = await supabase.from('conversation_join_requests').update({
+      status,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: userId,
+    }).eq('id', request.id).eq('status', 'pending');
+    if (error) return notify('بررسی درخواست عضویت انجام نشد: ' + error.message, 'error');
+    notify(status === 'approved' ? 'درخواست عضویت تأیید شد.' : 'درخواست عضویت رد شد.');
+    await loadCommunities();
   };
 
   const search = async (event?: FormEvent) => {
@@ -172,6 +196,13 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
         <div><span className="eyebrow">KAVEH COMMUNITIES</span><h3><Users size={19}/> اجتماعات کاوه</h3><p>فضاهای موردعلاقه‌ات را پیدا کن، عضو شو و در گفتگوهای مشترک شرکت کن.</p></div>
         <button type="button" className="button button-quiet button-small" onClick={() => void refreshCommunities()} disabled={communitiesRefreshing}><span aria-hidden="true">{communitiesRefreshing ? '◌' : '↻'}</span> {communitiesRefreshing ? 'در حال همگام‌سازی' : 'تازه‌سازی'}</button>
       </div>
+      {pendingRequests.length > 0 && <section className="community-requests page-stack">
+        <div className="community-discovery-heading"><div><span className="eyebrow">COMMUNITY MODERATION</span><h3>درخواست‌های عضویت</h3><p>درخواست‌های گروه‌هایی که مدیریت آن‌ها را بر عهده داری.</p></div><span className="community-request-count">{pendingRequests.length.toLocaleString('fa-IR')} در انتظار</span></div>
+        <div className="community-request-list">{pendingRequests.map((request) => <article className="community-request-row" key={request.id}>
+          <div><strong>{request.requester_name}</strong><small>درخواست عضویت · {new Date(request.requested_at).toLocaleString('fa-IR')}</small><small className="community-request-id">فضا: {request.conversation_id.slice(0, 8)}…</small></div>
+          <div className="community-request-actions"><button type="button" className="button button-primary button-small" onClick={() => void reviewJoinRequest(request, 'approved')}>تأیید</button><button type="button" className="button button-danger button-small" onClick={() => void reviewJoinRequest(request, 'rejected')}>رد درخواست</button></div>
+        </article>)}</div>
+      </section>}
       <div className="community-discovery-tools">
         <label className="community-search"><Search size={17}/><input value={communityQuery} onChange={(event) => setCommunityQuery(event.target.value)} placeholder="جست‌وجوی نام، موضوع یا شناسه اجتماع…"/></label>
         <div className="community-filters" role="group" aria-label="فیلتر اجتماعات">
