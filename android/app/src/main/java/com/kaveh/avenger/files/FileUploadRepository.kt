@@ -35,6 +35,20 @@ data class UploadedFile(
 )
 
 @Serializable
+data class VaultFile(
+    val id: String,
+    val owner_id: String,
+    val bucket_id: String,
+    val object_path: String,
+    val original_name: String,
+    val mime_type: String? = null,
+    val byte_size: Long,
+    val sha256_hex: String,
+    val status: String,
+    val created_at: String
+)
+
+@Serializable
 private data class FileAssetIdRow(val id: String)
 
 class FileTooLargeException(maxBytes: Long) :
@@ -101,6 +115,23 @@ class FileUploadRepository(private val supabase: SupabaseClient) {
             objectPath = objectPath,
             sha256 = sha256
         )
+    }
+
+    suspend fun list(ownerId: String): List<VaultFile> {
+        require(ownerId.isNotBlank()) { "شناسه کاربر معتبر نیست." }
+        return supabase.postgrest["file_assets"].select {
+            eq("owner_id", ownerId)
+        }.decodeList<VaultFile>()
+    }
+
+    suspend fun downloadToUri(context: Context, file: VaultFile, destination: Uri) {
+        require(file.bucket_id == "user-files") { "مخزن فایل معتبر نیست." }
+        val bytes = supabase.storage.from("user-files").downloadAuthenticated(file.object_path)
+        require(bytes.size.toLong() == file.byte_size) { "حجم فایل دریافتی با اطلاعات ثبت‌شده مطابقت ندارد." }
+        context.contentResolver.openOutputStream(destination, "w")?.use { output ->
+            output.write(bytes)
+            output.flush()
+        } ?: throw IllegalStateException("ذخیره فایل در دستگاه ممکن نشد.")
     }
 
     private fun queryDisplayName(context: Context, uri: Uri): String {
