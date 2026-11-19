@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Ban, CheckCircle2, Eye, EyeOff, Film, Flag, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Activity, Ban, CheckCircle2, Eye, EyeOff, Film, Flag, KeyRound, LayoutDashboard, MessageCircle, Save, ShieldCheck, Trash2, Users, Palette, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
@@ -13,7 +13,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'access'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'access' | 'appearance'>('overview');
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
   const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; is_banned: boolean; admin_role: string | null }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -28,6 +28,11 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number }; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
+  const [appearanceRows, setAppearanceRows] = useState<{ id: string; version: number; config: { appearance?: { accent?: string; background?: string; surface?: string; radius?: number } }; is_published: boolean; created_at: string }[]>([]);
+  const [appearanceDraft, setAppearanceDraft] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
+  const [appearanceLoading, setAppearanceLoading] = useState(false);
+  const [appearanceSaving, setAppearanceSaving] = useState(false);
+
 
   const refreshOverview = useCallback(async () => {
     setOverviewLoading(true);
@@ -84,6 +89,40 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   useEffect(() => {
     if (adminTab === 'reports') void refreshReports();
   }, [adminTab, refreshReports]);
+
+
+  const refreshAppearance = useCallback(async () => {
+    setAppearanceLoading(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'appearance_history' } });
+    setAppearanceLoading(false);
+    if (error || data?.ok !== true) { notify('دریافت تنظیمات ظاهری ناموفق بود.', 'error'); return; }
+    const rows = (data.versions ?? []) as typeof appearanceRows;
+    setAppearanceRows(rows);
+    const value = rows.find((row) => row.is_published)?.config?.appearance;
+    if (value) setAppearanceDraft({ accent: value.accent ?? '#168bff', background: value.background ?? '#07111f', surface: value.surface ?? '#101b2c', radius: value.radius ?? 16 });
+  }, [supabase, notify]);
+
+  useEffect(() => { if (adminTab === 'appearance') void refreshAppearance(); }, [adminTab, refreshAppearance]);
+
+  const publishAppearance = async () => {
+    if (appearanceSaving) return;
+    setAppearanceSaving(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'appearance_publish', config: { appearance: appearanceDraft } } });
+    setAppearanceSaving(false);
+    if (error || data?.ok !== true) { notify('انتشار تنظیمات ظاهری انجام نشد.', 'error'); return; }
+    notify(`نسخه ${data.appearance.version} از ظاهر سایت منتشر شد.`);
+    await refreshAppearance();
+  };
+
+  const rollbackAppearance = async (version: number) => {
+    if (appearanceSaving || !window.confirm(`ظاهر سایت به تنظیمات نسخه ${version} برگردد؟ یک نسخه جدید نیز در تاریخچه ثبت می‌شود.`)) return;
+    setAppearanceSaving(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'appearance_rollback', version } });
+    setAppearanceSaving(false);
+    if (error || data?.ok !== true) { notify(data?.reason === 'owner_only_rollback' ? 'بازگردانی فقط برای مالک اصلی مجاز است.' : 'بازگردانی نسخه انجام نشد.', 'error'); return; }
+    notify(`تنظیمات نسخه ${version} به‌عنوان نسخه جدید منتشر شد.`);
+    await refreshAppearance();
+  };
 
   const reviewReport = async (reportId: string, status: 'reviewing' | 'resolved' | 'rejected') => {
     if (userBusy) return;
@@ -230,7 +269,29 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <button className={adminTab === 'posts' ? 'active' : ''} onClick={() => setAdminTab('posts')}><LayoutDashboard size={15}/> مدیریت پست‌ها</button>
           <button className={adminTab === 'reports' ? 'active' : ''} onClick={() => setAdminTab('reports')}><Flag size={15}/> گزارش تخلف‌ها</button>
           <button className={adminTab === 'audit' ? 'active' : ''} onClick={() => setAdminTab('audit')}><ShieldCheck size={15}/> گزارش مدیریت</button>
-          <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
+          <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>
+          <button className=
+{adminTab === 'appearance' && <section className="admin-console-card admin-appearance">
+  <div className="admin-audit-heading"><strong>مدیریت ظاهر و تنظیمات مرکزی</strong><button className="button button-quiet" type="button" onClick={() => void refreshAppearance()}><Activity size={15}/> تازه‌سازی</button></div>
+  <p className="admin-user-policy-note">تغییرات ابتدا در پیش‌نمایش محلی دیده می‌شوند. با انتشار، نسخه جدید در دیتابیس ثبت و برای تمام کاربران وب اعمال می‌شود. فایل‌ها و داده کاربران دست‌نخورده می‌مانند.</p>
+  {appearanceLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت نسخه‌های ظاهر…</span></div> : <>
+    <div className="admin-appearance-grid">
+      <label>رنگ اصلی <input aria-label="رنگ اصلی" type="color" value={appearanceDraft.accent} onChange={(event) => setAppearanceDraft((value) => ({ ...value, accent: event.target.value }))}/></label>
+      <label>پس‌زمینه تیره <input aria-label="رنگ پس‌زمینه" type="color" value={appearanceDraft.background} onChange={(event) => setAppearanceDraft((value) => ({ ...value, background: event.target.value }))}/></label>
+      <label>رنگ کارت‌ها <input aria-label="رنگ کارت‌ها" type="color" value={appearanceDraft.surface} onChange={(event) => setAppearanceDraft((value) => ({ ...value, surface: event.target.value }))}/></label>
+      <label className="admin-radius-control">گردی گوشه‌ها: {appearanceDraft.radius}px <input type="range" min="8" max="28" value={appearanceDraft.radius} onChange={(event) => setAppearanceDraft((value) => ({ ...value, radius: Number(event.target.value) }))}/></label>
+    </div>
+    <div className="admin-appearance-preview" style={{ background: appearanceDraft.background, borderRadius: appearanceDraft.radius }}>
+      <div style={{ background: appearanceDraft.surface, borderRadius: Math.max(6, appearanceDraft.radius - 4) }}>
+        <b style={{ color: appearanceDraft.accent }}>پیش‌نمایش کاوه انتقامجو</b><p>این نمونه قبل از انتشار قابل مشاهده است.</p>
+        <button type="button" style={{ background: appearanceDraft.accent, borderRadius: appearanceDraft.radius }}>دکمه نمونه</button>
+      </div>
+    </div>
+    <div className="admin-access-footer"><span>نسخه فعال: {appearanceRows.find((row) => row.is_published)?.version ?? '—'}</span><button className="button button-primary" type="button" disabled={appearanceSaving} onClick={() => void publishAppearance()}><Save size={15}/>{appearanceSaving ? 'در حال انتشار…' : 'انتشار تنظیمات'}</button></div>
+    <div className="admin-appearance-history"><strong>تاریخچه نسخه‌ها</strong>{appearanceRows.map((row) => <div className="admin-appearance-version" key={row.id}><span>نسخه {row.version} · {new Date(row.created_at).toLocaleString('fa-IR')} {row.is_published ? '· فعال' : ''}</span>{!row.is_published && <button className="button button-quiet" type="button" disabled={appearanceSaving} onClick={() => void rollbackAppearance(row.version)}><RotateCcw size={14}/> بازگردانی</button>}</div>)}</div>
+  </>}
+</section>}
+{adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>
         </div>
         {overviewLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت اطلاعات پنل…</span></div> : null}
         {adminTab === 'overview' && !overviewLoading && <div className="admin-overview-grid">
