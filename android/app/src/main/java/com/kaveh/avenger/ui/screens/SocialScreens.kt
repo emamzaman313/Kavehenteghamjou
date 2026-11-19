@@ -729,6 +729,9 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                     OutlinedButton(onClick={musicPicker.launch("audio/*")},modifier=Modifier.fillMaxWidth()) { Text(if(selectedMusic==null) "انتخاب فایل موسیقی" else "فایل موسیقی انتخاب شد") }
                     Text("ویترین دستاوردها (حداکثر ۶ نشان)", color = MaterialTheme.colorScheme.primary)
                     if(availableBadges.isEmpty()) Text("هنوز نشانی برای نمایش دریافت نکرده‌ای.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (featuredBadges.isNotEmpty()) {
+                        Text("ویترین فعلی: " + availableBadges.filter { featuredBadges.contains(it.first) }.joinToString(" · ") { it.second }, style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.primary)
+                    }
                     availableBadges.forEach { (code,title) ->
                         Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                             Checkbox(checked=featuredBadges.contains(code),onCheckedChange={checked->featuredBadges=if(checked&&featuredBadges.size<6) featuredBadges+code else featuredBadges-code})
