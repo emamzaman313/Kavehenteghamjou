@@ -26,7 +26,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [managedReels, setManagedReels] = useState<{ id: string; author_id: string; caption: string; visibility: string; views_count: number; published_at: string; created_at: string }[]>([]);
 
   const [mediaLoading, setMediaLoading] = useState(false);
-  const [scheduledRows, setScheduledRows] = useState<{ id: string; title: string; body: string; audience: 'all' | 'admins' | 'specific'; recipient_ids: string[]; scheduled_at: string; status: string; sent_at: string | null; error_message: string | null; created_at: string }[]>([]);
+  const [scheduledRows, setScheduledRows] = useState<{ id: string; title: string; body: string; audience: 'all' | 'admins' | 'specific'; recipient_ids: string[]; scheduled_at: string; status: string; sent_at: string | null; error_message: string | null; created_at: string; category?: string; image_path?: string | null; priority?: string; channels?: { in_app?: boolean; push?: boolean; email?: boolean }; platform_target?: string; push_sent?: number; in_app_sent?: number }[]>([]);
   const [scheduledLoading, setScheduledLoading] = useState(false);
   const [scheduledSaving, setScheduledSaving] = useState(false);
   const [announcementTitle, setAnnouncementTitle] = useState('');
@@ -34,6 +34,13 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [announcementAudience, setAnnouncementAudience] = useState<'all' | 'admins' | 'specific'>('all');
   const [announcementRecipients, setAnnouncementRecipients] = useState('');
   const [announcementAt, setAnnouncementAt] = useState('');
+  const [announcementCategory, setAnnouncementCategory] = useState('general');
+  const [announcementPriority, setAnnouncementPriority] = useState<'normal' | 'high'>('normal');
+  const [announcementPlatform, setAnnouncementPlatform] = useState<'all' | 'android'>('all');
+  const [announcementImage, setAnnouncementImage] = useState<File | null>(null);
+  const [announcementInApp, setAnnouncementInApp] = useState(true);
+  const [announcementPush, setAnnouncementPush] = useState(true);
+  const [announcementEmail, setAnnouncementEmail] = useState(false);
 
 
   const [managedUsers, setManagedUsers] = useState<{
@@ -268,7 +275,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const refreshScheduledNotifications = useCallback(async () => {
     setScheduledLoading(true);
     const { data, error } = await supabase.from('scheduled_notifications')
-      .select('id,title,body,audience,recipient_ids,scheduled_at,status,sent_at,error_message,created_at')
+      .select('id,title,body,audience,recipient_ids,scheduled_at,status,sent_at,error_message,created_at,category,image_path,priority,channels,platform_target,push_sent,in_app_sent')
       .order('scheduled_at', { ascending: false }).limit(100);
     setScheduledLoading(false);
     if (error) { notify('دریافت اعلان‌های زمان‌بندی‌شده ناموفق بود.', 'error'); return; }
@@ -294,14 +301,32 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     setScheduledSaving(true);
     const { data: authResult } = await supabase.auth.getUser();
     if (!authResult.user) { setScheduledSaving(false); notify('برای ثبت اعلان باید دوباره وارد حساب مدیر شوید.', 'error'); return; }
+    if (!announcementInApp && !announcementPush && !announcementEmail) {
+      setScheduledSaving(false); notify('حداقل یک روش ارسال را فعال کنید.', 'error'); return;
+    }
+    let imagePath: string | null = null;
+    if (announcementImage) {
+      if (!announcementImage.type.startsWith('image/') || announcementImage.size > 5 * 1024 * 1024) {
+        setScheduledSaving(false); notify('تصویر اعلان باید معتبر و حداکثر ۵ مگابایت باشد.', 'error'); return;
+      }
+      imagePath = authResult.user.id + '/notifications/' + crypto.randomUUID() + '-' + announcementImage.name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80);
+      const uploaded = await supabase.storage.from('post-media').upload(imagePath, announcementImage, { contentType: announcementImage.type, cacheControl: '3600', upsert: false });
+      if (uploaded.error) { setScheduledSaving(false); notify('بارگذاری تصویر اعلان ناموفق بود: ' + uploaded.error.message, 'error'); return; }
+    }
     const { error } = await supabase.from('scheduled_notifications').insert({
       title, body, audience: announcementAudience, recipient_ids: announcementAudience === 'specific' ? recipientIds : [],
       scheduled_at: scheduledAt.toISOString(), created_by: authResult.user.id,
+      category: announcementCategory, image_path: imagePath, priority: announcementPriority,
+      platform_target: announcementPlatform,
+      channels: { in_app: announcementInApp, push: announcementPush, email: announcementEmail },
     });
     setScheduledSaving(false);
-    if (error) { notify('ثبت اعلان زمان‌بندی‌شده انجام نشد؛ سطح دسترسی مدیر را بررسی کنید.', 'error'); return; }
-    setAnnouncementTitle(''); setAnnouncementBody(''); setAnnouncementRecipients(''); setAnnouncementAt('');
-    notify('اعلان برای زمان انتخاب‌شده ثبت شد.');
+    if (error) {
+      if (imagePath) await supabase.storage.from('post-media').remove([imagePath]);
+      notify('ثبت اعلان زمان‌بندی‌شده انجام نشد؛ سطح دسترسی مدیر را بررسی کنید.', 'error'); return;
+    }
+    setAnnouncementTitle(''); setAnnouncementBody(''); setAnnouncementRecipients(''); setAnnouncementAt(''); setAnnouncementImage(null);
+    notify('اعلان با تنظیمات انتخاب‌شده ثبت شد؛ ارسال در زمان مقرر انجام می‌شود.');
     await refreshScheduledNotifications();
   };
 
@@ -703,29 +728,48 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           </div>)}
         </div>}
         {adminTab === 'notifications' && <div className="admin-console-card">
-          <div className="admin-audit-heading"><strong>مرکز اعلان‌های مدیریتی</strong><button className="button button-quiet" type="button" onClick={() => void refreshScheduledNotifications()}><Activity size={15}/> تازه‌سازی</button></div>
-          <p className="admin-user-policy-note">اعلان‌ها با زمان‌بند فعال دیتابیس (Cron، هر دقیقه) در موعد مقرر به صندوق اعلان داخل سایت ارسال می‌شوند. دکمه پردازش دستی فقط برای اجرای فوری اعلان‌های سررسیدشده و بازیابی احتمالی است. ارسال پوش و ایمیل همچنان به تنظیم کلیدهای واقعی Firebase و Resend نیاز دارد.</p>
+          <div className="admin-audit-heading"><strong>مرکز اعلان‌های مدیریتی و Push</strong><button className="button button-quiet" type="button" onClick={() => void refreshScheduledNotifications()}><Activity size={15}/> تازه‌سازی</button></div>
+          <p className="admin-user-policy-note">از اینجا می‌توانی اعلان تصویری با موضوع، اولویت، مخاطب و کانال ارسال بسازی. اعلان داخل برنامه مستقل است؛ Push اندروید پس از افزودن تنظیمات Firebase و کلید امن FCM فعال می‌شود. زمان‌بند فعلی دیتابیس اعلان‌های سررسیدشده را هر دقیقه پردازش می‌کند.</p>
           <div className="admin-console-card" style={{ marginBottom: 16 }}>
-            <strong>ساخت اعلان جدید</strong>
+            <strong>ساخت و زمان‌بندی اعلان</strong>
+            <label className="field-label">موضوع اعلان</label>
+            <select className="text-input" value={announcementCategory} onChange={(event) => setAnnouncementCategory(event.target.value)}>
+              <option value="general">عمومی و اطلاعیه</option><option value="news">خبر و به‌روزرسانی</option><option value="maintenance">تعمیرات و قطعی</option><option value="security">امنیتی و هشدار</option><option value="event">رویداد و مناسبت</option><option value="promotion">ویژه و تبلیغاتی</option><option value="message">پیام مدیر</option>
+            </select>
             <label className="field-label">عنوان اعلان</label>
-            <input className="text-input" maxLength={180} value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} placeholder="مثلاً اطلاعیه مهم سایت" />
+            <input className="text-input" maxLength={180} value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} placeholder="عنوان کوتاه و واضح برای اعلان"/>
             <label className="field-label">متن اعلان</label>
-            <textarea className="text-input" rows={4} maxLength={5000} value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} placeholder="متن پیام برای کاربران…" />
+            <textarea className="text-input" rows={4} maxLength={5000} value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} placeholder="متن کامل پیام برای کاربران…"/>
+            <label className="field-label">تصویر اعلان (اختیاری، حداکثر ۵ مگابایت)</label>
+            <input className="text-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setAnnouncementImage(event.target.files?.[0] ?? null)}/>
+            {announcementImage && <div className="admin-user-row"><img src={URL.createObjectURL(announcementImage)} alt="پیش‌نمایش تصویر اعلان" style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 12 }}/><small>{announcementImage.name} · {(announcementImage.size / 1024 / 1024).toFixed(2)} MB</small></div>}
             <label className="field-label">مخاطبان</label>
             <select className="text-input" value={announcementAudience} onChange={(event) => setAnnouncementAudience(event.target.value as typeof announcementAudience)}>
               <option value="all">همه کاربران</option><option value="admins">فقط مدیران</option><option value="specific">کاربران مشخص</option>
             </select>
             {announcementAudience === 'specific' && <>
               <label className="field-label">شناسه کاربران (UUID، با فاصله یا خط جدید جدا کنید)</label>
-              <textarea className="text-input" rows={3} value={announcementRecipients} onChange={(event) => setAnnouncementRecipients(event.target.value)} placeholder="UUID کاربران" />
+              <textarea className="text-input" rows={3} value={announcementRecipients} onChange={(event) => setAnnouncementRecipients(event.target.value)} placeholder="UUID کاربران"/>
             </>}
+            <label className="field-label">دستگاه مقصد</label>
+            <select className="text-input" value={announcementPlatform} onChange={(event) => setAnnouncementPlatform(event.target.value as typeof announcementPlatform)}>
+              <option value="all">همه دستگاه‌های ثبت‌شده (فعلاً اندروید برای Push)</option><option value="android">فقط اندروید</option>
+            </select>
+            <label className="field-label">اولویت اعلان</label>
+            <select className="text-input" value={announcementPriority} onChange={(event) => setAnnouncementPriority(event.target.value as typeof announcementPriority)}>
+              <option value="normal">عادی</option><option value="high">بالا و فوری</option>
+            </select>
+            <label className="field-label">روش‌های ارسال</label>
+            <label className="setting-choice"><input type="checkbox" checked={announcementInApp} onChange={(event) => setAnnouncementInApp(event.target.checked)}/> صندوق اعلان داخل برنامه</label>
+            <label className="setting-choice"><input type="checkbox" checked={announcementPush} onChange={(event) => setAnnouncementPush(event.target.checked)}/> اعلان سیستمی گوشی (Push / FCM)</label>
+            <label className="setting-choice"><input type="checkbox" checked={announcementEmail} onChange={(event) => setAnnouncementEmail(event.target.checked)}/> ایمیل (پس از اتصال سرویس ایمیل)</label>
             <label className="field-label">زمان ارسال</label>
-            <input className="text-input" type="datetime-local" value={announcementAt} onChange={(event) => setAnnouncementAt(event.target.value)} />
-            <button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void createScheduledNotification()}><Megaphone size={15}/>{scheduledSaving ? 'در حال ثبت…' : 'ثبت اعلان زمان‌بندی‌شده'}</button>
+            <input className="text-input" type="datetime-local" value={announcementAt} onChange={(event) => setAnnouncementAt(event.target.value)}/>
+            <button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void createScheduledNotification()}><Megaphone size={15}/>{scheduledSaving ? 'در حال ثبت…' : 'ثبت و زمان‌بندی اعلان'}</button>
           </div>
-          <div className="admin-audit-heading"><strong>اعلان‌های اخیر ({scheduledRows.length})</strong><button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void processDueNotifications()}><Activity size={15}/> پردازش اعلان‌های سررسیدشده</button></div>
+          <div className="admin-audit-heading"><strong>تاریخچه اعلان‌ها ({scheduledRows.length})</strong><button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void processDueNotifications()}><Activity size={15}/> پردازش اعلان‌های سررسیدشده</button></div>
           {scheduledLoading ? <div className="admin-loading"><span className="spinner"/>در حال دریافت…</div> : scheduledRows.length === 0 ? <p>هنوز اعلانی ثبت نشده است.</p> : scheduledRows.map((item) => <div className="admin-report-row" key={item.id}>
-            <div><strong>{item.title}</strong><p>{item.body}</p><small>{item.audience === 'all' ? 'همه کاربران' : item.audience === 'admins' ? 'مدیران' : 'کاربران مشخص'} · {new Date(item.scheduled_at).toLocaleString('fa-IR')} · وضعیت: {item.status === 'pending' ? 'در انتظار' : item.status === 'sent' ? 'ارسال‌شده' : item.status === 'failed' ? 'ناموفق' : item.status === 'cancelled' ? 'لغوشده' : 'در حال پردازش'}</small>{item.error_message && <small className="notice-error">{item.error_message}</small>}</div>
+            <div><strong>{item.title}</strong><p>{item.body}</p><small>موضوع: {item.category ?? 'عمومی'} · مخاطب: {item.audience === 'all' ? 'همه کاربران' : item.audience === 'admins' ? 'مدیران' : 'کاربران مشخص'} · اولویت: {item.priority === 'high' ? 'بالا' : 'عادی'}</small><small>{new Date(item.scheduled_at).toLocaleString('fa-IR')} · وضعیت: {item.status === 'pending' ? 'در انتظار' : item.status === 'sent' ? 'پردازش‌شده' : item.status === 'failed' ? 'ناموفق' : item.status === 'cancelled' ? 'لغوشده' : 'در حال پردازش'} · داخل برنامه: {item.in_app_sent ?? 0} · Push: {item.push_sent ?? 0}</small>{item.image_path && <img src={supabase.storage.from('post-media').getPublicUrl(item.image_path).data.publicUrl} alt="" style={{ maxWidth: 180, maxHeight: 110, objectFit: 'cover', borderRadius: 10, marginTop: 8 }}/ >}{item.error_message && <small className="notice-error">{item.error_message}</small>}</div>
             {item.status === 'pending' && <button className="button button-quiet" type="button" onClick={() => void cancelScheduledNotification(item.id)}>لغو</button>}
           </div>)}
         </div>}
