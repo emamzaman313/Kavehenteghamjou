@@ -60,10 +60,10 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
+import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import java.util.UUID
 import java.io.File
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.takeWhile
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -1424,11 +1424,31 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                     val tempFile = copyUriToBoundedCacheFile(context, uri, mime)
                                     try {
                                         val path = "$userId/$postId/${UUID.randomUUID()}"
-                                        val resumableUpload = supabase.storage["post-media"].resumable.createOrContinueUpload(path, tempFile)
+                                        val resumableUpload = supabase.storage["post-media"].resumable.createOrContinueUpload(
+                                            channel = { offset ->
+                                                val input = tempFile.inputStream()
+                                                var remaining = offset
+                                                while (remaining > 0L) {
+                                                    val skipped = input.skip(remaining)
+                                                    if (skipped > 0L) {
+                                                        remaining -= skipped
+                                                    } else {
+                                                        if (input.read() < 0) break
+                                                        remaining -= 1L
+                                                    }
+                                                }
+                                                input.toByteReadChannel()
+                                            },
+                                            source = uri.toString(),
+                                            size = tempFile.length(),
+                                            path = path
+                                        ) {
+                                            contentType = ContentType.parse(mime)
+                                        }
                                         val progressMonitor = scope.launch {
-                                            resumableUpload.stateFlow
-                                                .takeWhile { !it.isDone }
-                                                .collect { state -> uploadProgress = state.progress }
+                                            resumableUpload.stateFlow.collect { state ->
+                                                uploadProgress = state.progress
+                                            }
                                         }
                                         try {
                                             resumableUpload.startOrResumeUploading()
