@@ -36,6 +36,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -102,6 +103,9 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     var showDurationMenu by remember { mutableStateOf(false) }
     var featureFlags by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var overviewStats by remember { mutableStateOf<JsonObject?>(null) }
+    var overviewActivity by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var overviewUsers by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var overviewPosts by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
 
     val muteRestrictions = listOf(
         "message_send" to "ارسال همه پیام‌ها",
@@ -124,6 +128,9 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
         try {
             val result = callAdminConsole(supabase, AdminActionRequest(action = "overview"))
             overviewStats = result["stats"]?.jsonObject
+            overviewActivity = result["daily_activity"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+            overviewUsers = result["users"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+            overviewPosts = result["posts"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
         } catch (exception: Exception) { error = exception.message ?: "دریافت آمار ناموفق بود." }
         finally { loading = false }
     }
@@ -173,6 +180,14 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     LaunchedEffect(role) {
         if (role in listOf("owner", "admin", "moderator")) loadReports()
         else { loading = false; error = "نقش فعلی فقط به بخش‌های محدود مدیریتی دسترسی دارد." }
+    }
+    LaunchedEffect(section, role) {
+        if (section == "overview" && role in listOf("owner", "admin")) {
+            while (true) {
+                loadOverview()
+                delay(30_000)
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
