@@ -390,7 +390,7 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                             ?: throw IllegalStateException("خواندن ویدئو ناموفق بود.")
                         require(bytes.size <= 50_000_000) { "حداکثر حجم ویدئو ۵۰ مگابایت است." }
                         val path = "$userId/reels/${UUID.randomUUID()}"
-                        supabase.storage["post-media"].upload(path, bytes) {
+                        supabase.storage.from("post-media").upload(path, bytes) {
                             contentType = ContentType.parse(mime)
                             upsert = false
                         }
