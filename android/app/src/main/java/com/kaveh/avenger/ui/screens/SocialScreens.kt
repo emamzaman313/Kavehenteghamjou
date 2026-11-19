@@ -6,6 +6,8 @@ import android.content.Intent
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import android.media.MediaPlayer
+import android.media.MediaMetadataRetriever
+import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.MediaController
@@ -72,6 +74,7 @@ import io.ktor.http.ContentType
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import java.util.UUID
 import java.io.File
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -947,7 +950,9 @@ private data class ReelRow(
     @SerialName("video_path") val videoPath: String,
     @SerialName("views_count") val viewsCount: Long = 0,
     @SerialName("allow_comments") val allowComments: Boolean = true,
-    @SerialName("published_at") val publishedAt: String
+    @SerialName("published_at") val publishedAt: String,
+    @SerialName("cover_path") val coverPath: String? = null,
+    @SerialName("duration_seconds") val durationSeconds: Int? = null
 )
 
 @Serializable
@@ -956,7 +961,9 @@ private data class ReelInsertRow(
     val caption: String,
     @SerialName("video_path") val videoPath: String,
     @SerialName("mime_type") val mimeType: String,
-    val visibility: String = "public"
+    val visibility: String = "public",
+    @SerialName("cover_path") val coverPath: String? = null,
+    @SerialName("duration_seconds") val durationSeconds: Int? = null
 )
 
 @Serializable
@@ -1072,15 +1079,51 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                             ?: throw IllegalStateException("خواندن ویدئو ناموفق بود.")
                         require(bytes.size <= 50_000_000) { "حداکثر حجم ویدئو ۵۰ مگابایت است." }
-                        val path = "$userId/reels/${UUID.randomUUID()}"
-                        supabase.storage.from("post-media").upload(path, bytes) {
-                            contentType = ContentType.parse(mime)
-                            upsert = false
+                        var durationSeconds: Int? = null
+                        var coverBytes: ByteArray? = null
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(context, uri)
+                            durationSeconds = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                ?.toLongOrNull()?.div(1000)?.toInt()
+                            if (durationSeconds != null) require(durationSeconds in 1..600) { "مدت ریلز باید حداکثر ۱۰ دقیقه باشد." }
+                            retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { frame ->
+                                val output = ByteArrayOutputStream()
+                                frame.compress(Bitmap.CompressFormat.JPEG, 82, output)
+                                coverBytes = output.toByteArray()
+                                frame.recycle()
+                            }
+                        } finally {
+                            retriever.release()
                         }
-                        supabase.postgrest["reels"].insert(ReelInsertRow(userId, caption.trim(), path, mime))
-                        selectedVideo = null
-                        caption = ""
-                        refresh()
+                        val path = "$userId/reels/${UUID.randomUUID()}"
+                        val uploadedPaths = mutableListOf<String>()
+                        try {
+                            supabase.storage.from("post-media").upload(path, bytes) {
+                                contentType = ContentType.parse(mime)
+                                upsert = false
+                            }
+                            uploadedPaths.add(path)
+                            val coverPath = if (coverBytes != null) "$userId/reel-covers/${UUID.randomUUID()}.jpg" else null
+                            if (coverPath != null && coverBytes != null) {
+                                supabase.storage.from("post-media").upload(coverPath, coverBytes!!) {
+                                    contentType = ContentType.parse("image/jpeg")
+                                    upsert = false
+                                }
+                                uploadedPaths.add(coverPath)
+                            }
+                            supabase.postgrest["reels"].insert(
+                                ReelInsertRow(userId, caption.trim(), path, mime, "public", coverPath, durationSeconds)
+                            )
+                            selectedVideo = null
+                            caption = ""
+                            refresh()
+                        } catch (exception: Exception) {
+                            if (uploadedPaths.isNotEmpty()) {
+                                runCatching { supabase.storage["post-media"].delete(*uploadedPaths.toTypedArray()) }
+                            }
+                            throw exception
+                        }
                     } catch (exception: Exception) {
                         error = exception.message ?: "انتشار ریلز ناموفق بود."
                     } finally {
