@@ -1095,50 +1095,6 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
             }
         }
-        if (pendingRequests.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("درخواست‌های عضویت برای فضاهای تحت مدیریت", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    pendingRequests.forEach { request ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text("درخواست عضویت جدید", fontWeight = FontWeight.SemiBold)
-                                Text("شناسه کاربر: ${request.requesterId.take(8)}…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            OutlinedButton(enabled = busyId != request.id, onClick = {
-                                scope.launch {
-                                    busyId = request.id
-                                    try {
-                                        supabase.postgrest["conversation_join_requests"].update({
-                                            set("status", "approved")
-                                            set("reviewed_at", java.time.Instant.now().toString())
-                                            set("reviewed_by", userId)
-                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
-                                        pendingRequests.removeAll { it.id == request.id }
-                                        refresh()
-                                    } catch (exception: Exception) { error = exception.message ?: "تأیید درخواست ناموفق بود." }
-                                    finally { busyId = null }
-                                }
-                            }) { Text("تأیید") }
-                            TextButton(enabled = busyId != request.id, onClick = {
-                                scope.launch {
-                                    busyId = request.id
-                                    try {
-                                        supabase.postgrest["conversation_join_requests"].update({
-                                            set("status", "rejected")
-                                            set("reviewed_at", java.time.Instant.now().toString())
-                                            set("reviewed_by", userId)
-                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
-                                        pendingRequests.removeAll { it.id == request.id }
-                                    } catch (exception: Exception) { error = exception.message ?: "رد درخواست ناموفق بود." }
-                                    finally { busyId = null }
-                                }
-                            }) { Text("رد") }
-                        }
-                    }
-                }
-            }
-        }
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (!loading && cards.isEmpty() && error == null) Text("هنوز ریلزی منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1704,6 +1660,50 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
                 else -> true
             }
             matchesQuery && matchesFilter
+        }
+        if (pendingRequests.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("درخواست‌های عضویت برای فضاهای تحت مدیریت", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    pendingRequests.forEach { request ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("درخواست عضویت جدید", fontWeight = FontWeight.SemiBold)
+                                Text("شناسه کاربر: ${request.requesterId.take(8)}…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            OutlinedButton(enabled = busyId != request.id, onClick = {
+                                scope.launch {
+                                    busyId = request.id
+                                    try {
+                                        supabase.postgrest["conversation_join_requests"].update({
+                                            set("status", "approved")
+                                            set("reviewed_at", java.time.Instant.now().toString())
+                                            set("reviewed_by", userId)
+                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                        pendingRequests.removeAll { it.id == request.id }
+                                        refresh()
+                                    } catch (exception: Exception) { error = exception.message ?: "تأیید درخواست ناموفق بود." }
+                                    finally { busyId = null }
+                                }
+                            }) { Text("تأیید") }
+                            TextButton(enabled = busyId != request.id, onClick = {
+                                scope.launch {
+                                    busyId = request.id
+                                    try {
+                                        supabase.postgrest["conversation_join_requests"].update({
+                                            set("status", "rejected")
+                                            set("reviewed_at", java.time.Instant.now().toString())
+                                            set("reviewed_by", userId)
+                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                        pendingRequests.removeAll { it.id == request.id }
+                                    } catch (exception: Exception) { error = exception.message ?: "رد درخواست ناموفق بود." }
+                                    finally { busyId = null }
+                                }
+                            }) { Text("رد") }
+                        }
+                    }
+                }
+            }
         }
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
