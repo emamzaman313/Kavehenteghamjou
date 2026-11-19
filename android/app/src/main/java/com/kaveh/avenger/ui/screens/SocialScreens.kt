@@ -151,6 +151,7 @@ private data class FeedCardState(
 @Composable
 fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val cards = remember { mutableStateListOf<FeedCardState>() }
     var loading by remember { mutableStateOf(true) }
     var busyPost by remember { mutableStateOf<String?>(null) }
@@ -301,7 +302,7 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                                                     setDataAndType(Uri.parse(mediaUrl), mimeType.ifBlank { "*/*" })
                                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                 }
-                                                LocalContext.current.startActivity(intent)
+                                                context.startActivity(intent)
                                             } catch (exception: Exception) {
                                                 error = exception.message ?: "باز کردن فایل ناموفق بود."
                                             }
