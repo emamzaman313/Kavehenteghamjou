@@ -133,6 +133,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     val icon = when (tab) {
                         MainTab.Home -> Icons.Outlined.Home
                         MainTab.Chats -> Icons.Outlined.ChatBubbleOutline
+                        MainTab.Support -> Icons.Outlined.SupportAgent
                         MainTab.Publish -> Icons.Outlined.AddCircleOutline
                         MainTab.Explore -> Icons.Outlined.Explore
                         MainTab.Reels -> Icons.Outlined.PlayCircleOutline
@@ -174,6 +175,11 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
+                )
+                MainTab.Support -> SupportCenterScreen(
+                    supabase = SupabaseClientProvider.client,
+                    userId = userId,
+                    staff = adminRole in setOf("owner", "admin", "support")
                 )
                 MainTab.Publish -> PublishPostScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Explore -> ExploreFeedScreen(supabase = SupabaseClientProvider.client, userId = userId)
