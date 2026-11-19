@@ -86,7 +86,7 @@ private suspend fun callAdminConsole(supabase: SupabaseClient, request: AdminAct
 }
 
 @Composable
-fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
+fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChanged: (String, Boolean) -> Unit = { _, _ -> }) {
     val scope = rememberCoroutineScope()
     var section by remember { mutableStateOf("reports") }
     var reports by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
@@ -141,6 +141,7 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
         busyId = key; error = null
         try {
             callAdminConsole(supabase, AdminActionRequest(action = "feature_flag_set", key = key, enabled = enabled))
+            onFeatureFlagChanged(key, enabled)
             notice = if (enabled) "امکان فعال شد." else "امکان غیرفعال شد."
             loadFeatureFlags()
         } catch (exception: Exception) { error = exception.message ?: "تغییر امکان ناموفق بود." }
