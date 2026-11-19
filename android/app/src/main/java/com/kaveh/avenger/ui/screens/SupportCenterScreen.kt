@@ -1,6 +1,7 @@
 package com.kaveh.avenger.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,9 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +46,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
 
 @Serializable
 private data class SupportTicketRow(
@@ -141,7 +141,11 @@ fun SupportCenterScreen(
         try {
             val ticketId = supabase.postgrest.rpc(
                 "create_support_ticket",
-                CreateSupportTicketParams(cleanSubject, category, cleanBody)
+                buildJsonObject {
+                    put("p_subject", cleanSubject)
+                    put("p_category", category)
+                    put("p_body", cleanBody)
+                }
             ).decodeAs<String>()
             subject = ""
             body = ""
@@ -214,19 +218,14 @@ fun SupportCenterScreen(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
-                        ExposedDropdownMenuBox(
-                            expanded = categoryExpanded,
-                            onExpandedChange = { categoryExpanded = it }
-                        ) {
-                            OutlinedTextField(
-                                value = supportCategories.first { it.first == category }.second,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("دسته‌بندی") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
-                            )
-                            ExposedDropdownMenu(
+                        Box {
+                            OutlinedButton(
+                                onClick = { categoryExpanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("دسته‌بندی: ${supportCategories.first { it.first == category }.second}")
+                            }
+                            DropdownMenu(
                                 expanded = categoryExpanded,
                                 onDismissRequest = { categoryExpanded = false }
                             ) {
