@@ -1,5 +1,6 @@
 package com.kaveh.avenger.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +64,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.launch
@@ -91,6 +93,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
     PushTokenRegistration(supabase = SupabaseClientProvider.client, userId = userId)
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.navigationBars,
         topBar = {
             TopAppBar(
@@ -117,11 +120,14 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     if (adminRole != null) TextButton(onClick = { selectedTab = MainTab.Admin }) { Text("مدیریت") }
                     TextButton(onClick = { scope.launch { onSignOut() } }) { Text("خروج") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface
+                )
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 10.dp) {
                 tabs.forEachIndexed { index, tab ->
                     val icon = when (tab) {
                         MainTab.Home -> Icons.Outlined.Home
@@ -148,7 +154,15 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
                 .padding(padding)
                 .padding(horizontal = 20.dp)
         ) {
@@ -180,16 +194,18 @@ private fun HomeOverview(email: String?, rankNames: List<String>) {
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(30.dp),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 3.dp
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.36f)),
+            tonalElevation = 6.dp,
+            shadowElevation = 13.dp
         ) {
             Box(
                 modifier = Modifier
                     .background(
                         Brush.linearGradient(
                             listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                MaterialTheme.colorScheme.surface,
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.13f)
                             )
                         )
                     )
@@ -199,7 +215,7 @@ private fun HomeOverview(email: String?, rankNames: List<String>) {
                     Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), shape = CircleShape) {
                         Text("فضای اختصاصی شما", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     }
-                    Text("خوش آمدی", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("خوش آمدی", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
                         email ?: "حساب Google متصل است",
                         style = MaterialTheme.typography.bodyMedium,
@@ -255,18 +271,26 @@ private fun StatusCard(title: String, subtitle: String, badge: String, complete:
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f))
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(42.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                modifier = Modifier.size(46.dp).clip(RoundedCornerShape(15.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.11f)
+                            )
+                        )
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(if (complete) "✓" else "…", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(if (complete) "✓" else "…", color = if (complete) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.ExtraBold)
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -274,7 +298,7 @@ private fun StatusCard(title: String, subtitle: String, badge: String, complete:
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.width(8.dp))
-            Badge(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), contentColor = MaterialTheme.colorScheme.primary) {
+            Badge(containerColor = (if (complete) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary).copy(alpha = 0.15f), contentColor = if (complete) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary) {
                 Text(badge, modifier = Modifier.padding(horizontal = 3.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall)
             }
         }
