@@ -122,7 +122,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         profile?.cover_path && profile.cover_path !== coverPath ? { bucket: 'profile-media', path: profile.cover_path } : null,
         (profile as Profile & {profile_music_path?:string|null} | null)?.profile_music_path && (profile as Profile & {profile_music_path?:string|null}).profile_music_path !== profileMusicPath ? { bucket: 'post-media', path: (profile as Profile & {profile_music_path:string}).profile_music_path } : null,
       ].filter((asset): asset is {bucket:string;path:string} => Boolean(asset && asset.path.startsWith(userId + '/')));
-      await Promise.all(obsoleteAssets.map(asset => supabase.storage.from(asset.bucket).remove([asset.path])));
+      await Promise.allSettled(obsoleteAssets.map(asset => supabase.storage.from(asset.bucket).remove([asset.path])));
       setAvatarFile(null); setAvatarPreview(null); setCoverFile(null); setCoverPreview(null); setMusicFile(null); setRemoveProfileMusic(false);
       notify('پروفایل به‌روزرسانی شد.'); await onSaved();
     } catch (error) {
