@@ -221,7 +221,7 @@ fun EmailOtpScreen(
                         }
                     },
                     enabled = !isLoading && when {
-                        setupPasswordMode -> password.length >= 8 && password == passwordConfirm
+                        setupPasswordMode -> password.length >= 10 && password == passwordConfirm
                         passwordLoginMode -> email.contains("@") && password.isNotBlank()
                         codeSent -> code.isNotBlank()
                         else -> email.contains("@") && email.substringAfter("@").contains(".")
