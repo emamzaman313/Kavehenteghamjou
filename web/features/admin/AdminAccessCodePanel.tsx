@@ -30,12 +30,20 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [announcementAt, setAnnouncementAt] = useState('');
 
 
-  const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; is_banned: boolean; admin_role: string | null }[]>([]);
+  const [managedUsers, setManagedUsers] = useState<{
+    id: string; email: string | null; is_anonymous: boolean; display_name: string;
+    username: string | null; created_at: string; last_sign_in_at: string | null;
+    banned_until: string | null; is_banned: boolean; admin_role: string | null;
+    warning_count?: number;
+    active_mutes?: { id: string; restriction: string; reason: string; created_at: string; expires_at: string | null }[];
+  }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [adminRoleDrafts, setAdminRoleDrafts] = useState<Record<string, string>>({});
   const [userReasons, setUserReasons] = useState<Record<string, string>>({});
   const [userDurations, setUserDurations] = useState<Record<string, string>>({});
+  const [userMuteRestrictions, setUserMuteRestrictions] = useState<Record<string, string>>({});
+  const [userMuteDurations, setUserMuteDurations] = useState<Record<string, string>>({});
   const [userBusy, setUserBusy] = useState<string | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
   const [reportRows, setReportRows] = useState<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: string; target_summary: string | null; target_author_id: string | null }[]>([]);
@@ -289,6 +297,41 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     await Promise.all([refreshUsers(), refreshAudit()]);
   };
 
+  const moderateMute = async (action: 'mute_user' | 'unmute_user', userId: string, muteId?: string) => {
+    if (userBusy) return;
+    const reason = (userReasons[userId] ?? '').trim() || (action === 'unmute_user' ? 'لغو محدودیت توسط مدیر' : '');
+    if (reason.length < 3 || reason.length > 500) {
+      notify('برای ثبت یا لغو محدودیت، دلیل ۳ تا ۵۰۰ حرفی وارد کنید.', 'error');
+      return;
+    }
+    setUserBusy(userId);
+    const { data, error } = await supabase.functions.invoke('admin-console', {
+      body: action === 'mute_user'
+        ? {
+            action,
+            userId,
+            reason,
+            restriction: userMuteRestrictions[userId] ?? 'message_send',
+            duration: userMuteDurations[userId] ?? '24h',
+          }
+        : { action, userId, muteId, reason },
+    });
+    setUserBusy(null);
+    if (error || data?.ok !== true) {
+      const messages: Record<string, string> = {
+        cannot_moderate_admin: 'حساب‌های مدیریتی از این عملیات محافظت شده‌اند.',
+        cannot_moderate_self: 'نمی‌توانید حساب خودتان را محدود کنید.',
+        invalid_mute_restriction: 'نوع محدودیت انتخاب‌شده معتبر نیست.',
+        invalid_mute_duration: 'مدت محدودیت انتخاب‌شده معتبر نیست.',
+      };
+      notify(messages[data?.reason] ?? 'مدیریت میوت انجام نشد.', 'error');
+      return;
+    }
+    notify(action === 'mute_user' ? 'محدودیت عملکردی ثبت شد.' : 'محدودیت عملکردی لغو شد.');
+    if (action === 'mute_user') setUserReasons((current) => ({ ...current, [userId]: '' }));
+    await Promise.all([refreshUsers(), refreshAudit()]);
+  };
+
   const moderatePost = async (postId: string, visibility: 'public' | 'private') => {
     const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'moderate_post', postId, visibility } });
     if (error || data?.ok !== true) return notify('تغییر وضعیت پست انجام نشد.', 'error');
@@ -436,6 +479,16 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
                   <small>{user.email || (user.is_anonymous ? 'حساب مهمان' : 'ایمیل ثبت نشده')} · {user.username ? '@' + user.username : 'نام کاربری ثبت نشده'}</small>
                   <small>عضویت: {new Date(user.created_at).toLocaleDateString('fa-IR')} · آخرین ورود: {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString('fa-IR') : 'ثبت نشده'}</small>
                   {roleLabel ? <small className="admin-protected-label">حساب مدیریتی: {roleLabel} — محافظت‌شده</small> : isBanned ? <small className="admin-banned-label">محدود تا {new Date(user.banned_until!).toLocaleString('fa-IR')}</small> : <small>وضعیت حساب: عادی</small>}
+                  <small>اخطارهای ثبت‌شده: {user.warning_count ?? 0}</small>
+                  {(user.active_mutes ?? []).map((mute) => (
+                    <div className="admin-user-row" key={mute.id}>
+                      <small>
+                        میوت فعال: {mute.restriction === 'message_send' ? 'ارسال پیام' : mute.restriction === 'group_message_send' ? 'پیام گروهی' : mute.restriction === 'comment' ? 'دیدگاه' : mute.restriction === 'post_publish' ? 'انتشار پست' : mute.restriction === 'reel_publish' ? 'انتشار ریلز' : mute.restriction === 'file_upload' ? 'بارگذاری فایل' : mute.restriction}
+                        {' · '}{mute.expires_at ? 'تا ' + new Date(mute.expires_at).toLocaleString('fa-IR') : 'دائمی'}
+                      </small>
+                      <button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void moderateMute('unmute_user', user.id, mute.id)}>رفع میوت</button>
+                    </div>
+                  ))}
                 </div>
               </div>
               {canManageAdmins && user.admin_role !== 'owner' && <div className="admin-role-management">
@@ -455,6 +508,18 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
                     </select>
                     <button className="button button-quiet admin-ban-button" type="button" disabled={userBusy !== null} onClick={() => void moderateUser('ban_user', user.id)}><Ban size={14}/> مسدودسازی</button>
                   </>}
+                  <select className="auth-input admin-ban-duration" value={userMuteRestrictions[user.id] ?? 'message_send'} onChange={(event) => setUserMuteRestrictions((current) => ({ ...current, [user.id]: event.target.value }))} disabled={userBusy !== null}>
+                    <option value="message_send">محدودیت همه پیام‌ها</option>
+                    <option value="group_message_send">محدودیت پیام گروه</option>
+                    <option value="comment">محدودیت دیدگاه</option>
+                    <option value="post_publish">محدودیت انتشار پست</option>
+                    <option value="reel_publish">محدودیت انتشار ریلز</option>
+                    <option value="file_upload">محدودیت بارگذاری فایل</option>
+                  </select>
+                  <select className="auth-input admin-ban-duration" value={userMuteDurations[user.id] ?? '24h'} onChange={(event) => setUserMuteDurations((current) => ({ ...current, [user.id]: event.target.value }))} disabled={userBusy !== null}>
+                    <option value="1h">میوت ۱ ساعت</option><option value="24h">میوت ۲۴ ساعت</option><option value="168h">میوت ۷ روز</option><option value="720h">میوت ۳۰ روز</option><option value="permanent">میوت دائمی</option>
+                  </select>
+                  <button className="button button-quiet admin-ban-button" type="button" disabled={userBusy !== null} onClick={() => void moderateMute('mute_user', user.id)}><Ban size={14}/> اعمال میوت</button>
                 </div>
               </div>}
               {userBusy === user.id && <small className="admin-user-busy">در حال اجرای عملیات…</small>}
