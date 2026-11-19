@@ -71,6 +71,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private enum class MainTab(val title: String) {
     Home("خانه"), Chats("گفتگوها"), Support("پشتیبانی"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), World("جهان"), Admin("مدیریت"), Profile("پروفایل")
@@ -96,6 +97,15 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
             SupabaseClientProvider.client.postgrest.rpc("my_kaveh_ranks").decodeAs<kotlinx.serialization.json.JsonArray>()
                 .mapNotNull { item -> item.jsonObject["name_fa"]?.jsonPrimitive?.contentOrNull }
         }.getOrDefault(emptyList())
+        while (true) {
+            delay(30_000)
+            adminRole = runCatching {
+                SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()["role"]?.jsonPrimitive?.contentOrNull
+            }.getOrNull()
+            runCatching {
+                SupabaseClientProvider.client.postgrest["platform_feature_flags"].select().decodeList<MobileFeatureFlagRow>().associate { it.key to it.enabled }
+            }.getOrNull()?.let { featureFlags = it }
+        }
     }
     val isAdmin = adminRole in setOf("owner","admin","moderator")
     fun featureOn(key:String)=isAdmin || featureFlags[key] != false
