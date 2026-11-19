@@ -225,7 +225,7 @@ const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).j
 
   const selected = tickets.find(x=>x.id===active);
   return <section className="support-center" style={{display:'grid',gap:16,minWidth:0}}>
-    <div className="panel-card" style={{padding:18}}>
+    <div className="panel-card support-header" style={{padding:18}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}><LifeBuoy size={24}/><div><strong>{staff?'صندوق پشتیبانی کاربران':'پشتیبانی و ارتباط با مدیریت'}</strong><p style={{margin:'5px 0 0',color:'var(--muted)',fontSize:11}}>{staff?'درخواست‌های کاربران را مشاهده و پاسخ دهید.':'درخواست خود را ثبت کنید و پاسخ مدیریت را همین‌جا دریافت کنید.'}</p></div></div>
         <div style={{display:'flex',gap:8}}><button className="button button-quiet" type="button" onClick={()=>void refresh()}><RefreshCw size={15}/> تازه‌سازی</button>{!staff && <button className="button button-primary" type="button" onClick={()=>setShowNew(x=>!x)}><Plus size={15}/> درخواست جدید</button>}</div>
@@ -239,17 +239,17 @@ const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).j
       <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><button className="button button-quiet" type="button" onClick={()=>setShowNew(false)}>انصراف</button><button className="button button-primary" disabled={creating} type="submit">{creating?'در حال ثبت…':'ثبت درخواست'}</button></div>
     </form>}
     <div className="support-center-layout">
-      <div className="panel-card" style={{padding:12,minWidth:0}}>
+      <div className="panel-card support-ticket-list" style={{padding:12,minWidth:0}}>
         <strong style={{display:'block',padding:8,marginBottom:6}}>درخواست‌ها ({tickets.length})</strong>
-        {loading ? <p>در حال دریافت…</p> : tickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>هنوز درخواستی ثبت نشده است.</p> : tickets.map(ticket=><button key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
+        {loading ? <p>در حال دریافت…</p> : tickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>هنوز درخواستی ثبت نشده است.</p> : tickets.map(ticket=><button className="support-ticket-item" key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
           <span style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><strong style={{fontSize:12}}>{ticket.subject}</strong>{unreadTickets[ticket.id] && <span aria-label="پیام خوانده‌نشده" style={{fontSize:9,background:'var(--accent)',color:'#fff',borderRadius:999,padding:'3px 7px',whiteSpace:'nowrap'}}>جدید</span>}</span>
           {staff && <small style={{color:'var(--muted)'}}>{ticket.requester?.display_name ?? ticket.requester_id.slice(0,8)}{ticket.requester?.username?' · @'+ticket.requester.username:''}</small>}
           <span style={{fontSize:10,color:'var(--muted)'}}>{categoryLabels[ticket.category]??ticket.category} · {statusLabels[ticket.status]??ticket.status} · اولویت {ticket.priority==='urgent'?'فوری':ticket.priority==='high'?'بالا':ticket.priority==='low'?'پایین':'عادی'}</span>
           <small style={{color:'var(--muted)'}}>{new Date(ticket.last_message_at).toLocaleString('fa-IR')}</small>
         </button>)}
       </div>
-      <div className="panel-card" style={{padding:16,minWidth:0}}>
-        {!selected ? <div style={{minHeight:220,display:'grid',placeItems:'center',color:'var(--muted)',textAlign:'center'}}><div><MessageCircle size={30}/><p>برای مشاهده گفتگو، یک درخواست را انتخاب کنید.</p></div></div> : <>
+      <div className="panel-card support-thread" style={{padding:16,minWidth:0}}>
+        {!selected ? <div className="support-empty" style={{minHeight:220,display:'grid',placeItems:'center',color:'var(--muted)',textAlign:'center'}}><div><MessageCircle size={30}/><p>برای مشاهده گفتگو، یک درخواست را انتخاب کنید.</p></div></div> : <>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',borderBottom:'1px solid var(--line)',paddingBottom:12}}>
             <div><strong>{selected.subject}</strong><p style={{fontSize:10,color:'var(--muted)',margin:'5px 0 0'}}>وضعیت: {statusLabels[selected.status]??selected.status} · {categoryLabels[selected.category]??selected.category}</p></div>
             {staff && <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
@@ -258,14 +258,14 @@ const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).j
             </div>}
           </div>
           <div style={{display:'grid',gap:9,padding:'14px 0',maxHeight:430,overflowY:'auto'}}>
-            {messages.map(message=><div key={message.id} style={{justifySelf:message.sender_id===userId?'end':'start',maxWidth:'88%',padding:'10px 12px',borderRadius:13,background:message.sender_id===userId?'rgba(22,139,255,.14)':'var(--surface-2,rgba(127,127,127,.12))',border:'1px solid var(--line)'}}>
+            {messages.map(message=><div className="support-message" key={message.id} style={{justifySelf:message.sender_id===userId?'end':'start',maxWidth:'88%',padding:'10px 12px',borderRadius:13,background:message.sender_id===userId?'rgba(22,139,255,.14)':'var(--surface-2,rgba(127,127,127,.12))',border:'1px solid var(--line)'}}>
               <p style={{margin:0,fontSize:12,lineHeight:1.9,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{message.body}</p>
               {(attachments[message.id]??[]).map(({file,url})=><a key={file.id} href={url} target="_blank" rel="noopener noreferrer" download={file.original_name} style={{display:'flex',alignItems:'center',gap:7,marginTop:8,padding:8,borderRadius:9,background:'var(--surface-2,rgba(127,127,127,.12))',color:'var(--accent)',fontSize:11,textDecoration:'none',overflowWrap:'anywhere'}}><Download size={14}/><span>{file.original_name} · {(file.byte_size/1024/1024).toFixed(2)} MB</span></a>)}
               <small style={{display:'block',marginTop:5,color:'var(--muted)',fontSize:9}}>{message.sender_id===userId?'شما':staff?'کاربر':'پشتیبانی'} · {new Date(message.created_at).toLocaleString('fa-IR')}</small>
             </div>)}
           </div>
           {selected.status!=='closed' && <div style={{display:'grid',gap:8,borderTop:'1px solid var(--line)',paddingTop:12}}>
-            <form onSubmit={sendReply} style={{display:'flex',gap:8}}>
+            <form className="support-composer" onSubmit={sendReply} style={{display:'flex',gap:8}}>
               <input value={reply} onChange={e=>setReply(e.target.value)} maxLength={10000} placeholder="پیام خود را بنویسید…" aria-label="پیام پاسخ" />
               <button className="button button-primary" type="submit" disabled={sending||!reply.trim()}><Send size={15}/>{sending?'ارسال…':'ارسال'}</button>
             </form>
