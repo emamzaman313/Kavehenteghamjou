@@ -102,6 +102,20 @@ private data class WorldRankRow(
 )
 
 @Serializable
+private data class WorldProfileRow(
+    val id: String,
+    @SerialName("display_name") val displayName: String? = null,
+    val username: String? = null
+)
+
+private data class WorldLeaderboardEntry(
+    val userId: String,
+    val displayName: String,
+    val username: String?,
+    val score: Long,
+    val rankTitle: String
+)
+@Serializable
 private data class WorldRankLevelRow(
     val code: String,
     val title: String,
@@ -181,7 +195,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
     val events = remember { mutableStateListOf<WorldEventRow>() }
     val progress = remember { mutableStateListOf<WorldProgressRow>() }
     val joined = remember { mutableStateListOf<String>() }
-    val ranking = remember { mutableStateListOf<WorldRankRow>() }
+    val ranking = remember { mutableStateListOf<WorldLeaderboardEntry>() }
     val rankLevels = remember { mutableStateListOf<WorldRankLevelRow>() }
     val badges = remember { mutableStateListOf<WorldBadgeRow>() }
     val myBadgeCodes = remember { mutableStateListOf<String>() }
@@ -211,7 +225,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
         error = null
         try {
             val missionRows = supabase.postgrest["daily_missions"].select {
-                filter { eq("active", true) }
+                if (!isAdmin) filter { eq("active", true) }
             }.decodeList<WorldMissionRow>()
             val progressRows = supabase.postgrest["mission_progress"].select {
                 filter { eq("user_id", userId) }
@@ -229,6 +243,19 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
             val levelRows = supabase.postgrest["rank_levels"].select().decodeList<WorldRankLevelRow>()
             val badgeRows = supabase.postgrest["badges"].select().decodeList<WorldBadgeRow>()
             val ownBadges = supabase.postgrest["user_badges"].select { filter { eq("user_id", userId) } }.decodeList<WorldUserBadgeRow>()
+            val profileRows = rankRows.map { row ->
+                val profile = supabase.postgrest["profiles"].select {
+                    filter { eq("id", row.userId) }
+                }.decodeList<WorldProfileRow>().firstOrNull()
+                val level = levelRows.filter { it.minScore <= row.score }.maxByOrNull { it.minScore }
+                WorldLeaderboardEntry(
+                    userId = row.userId,
+                    displayName = profile?.displayName?.takeIf { it.isNotBlank() } ?: profile?.username?.takeIf { it.isNotBlank() } ?: "کاربر کاوه",
+                    username = profile?.username,
+                    score = row.score,
+                    rankTitle = level?.title ?: "تازه‌وارد"
+                )
+            }
             val ownRank = rankRows.firstOrNull { it.userId == userId }
                 ?: supabase.postgrest["user_rank_state"].select {
                     filter { eq("user_id", userId) }
@@ -239,7 +266,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
             progress.clear(); progress.addAll(progressRows)
             events.clear(); events.addAll(eventRows)
             joined.clear(); joined.addAll(participantRows.map { it.eventId })
-            ranking.clear(); ranking.addAll(rankRows)
+            ranking.clear(); ranking.addAll(profileRows)
             rankLevels.clear(); rankLevels.addAll(levelRows)
             badges.clear(); badges.addAll(badgeRows)
             myBadgeCodes.clear(); myBadgeCodes.addAll(ownBadges.map { it.badgeCode })
@@ -465,12 +492,27 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
-                item { Text("برترین امتیازها", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+                item {
+                    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("🏆 جدول برترین‌های کاوه", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                            Text("رتبه‌بندی بر اساس امتیازهای واقعی مشارکت", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                if (ranking.isEmpty()) { item { Text("هنوز امتیازی برای رتبه‌بندی ثبت نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                 items(ranking, key = { it.userId }) { row ->
-                    Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(row.rankCode, fontWeight = FontWeight.SemiBold)
-                            Text("${row.score} XP", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    val isMe = row.userId == userId
+                    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .12f)) {
+                                Text("#" + (ranking.indexOf(row) + 1), modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(row.displayName + if (isMe) " · شما" else "", fontWeight = FontWeight.Bold)
+                                Text((row.username?.let { "@$it · " } ?: "") + row.rankTitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text("${row.score} XP", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
                         }
                     }
                 }
