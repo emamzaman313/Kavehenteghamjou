@@ -52,6 +52,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.rpc
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -104,6 +105,9 @@ private data class MessageInsert(
 
 @Serializable
 private data class MessageIdRow(val id: String)
+
+@Serializable
+private data class NotificationDispatchArgs(@SerialName("message_id") val messageId: String)
 
 @Serializable
 private data class MessageAttachmentRow(
@@ -403,6 +407,9 @@ fun ChatScreen(
             ) {
                 select()
             }.decodeList<MessageIdRow>().single()
+            runCatching {
+                supabase.functions("notification-dispatch", body = NotificationDispatchArgs(message.id))
+            }
             supabase.postgrest.from("message_attachments").insert(
                 MessageAttachmentInsert(
                     messageId = message.id,
@@ -847,13 +854,16 @@ private suspend fun sendChatMessage(
     setSending(true)
     setError(null)
     try {
-        supabase.postgrest["messages"].insert(
+        val created = supabase.postgrest["messages"].insert(
             MessageInsert(
                 conversationId = conversationId,
                 senderId = userId,
                 body = text
             )
-        )
+        ) { select() }.decodeList<MessageIdRow>().single()
+        runCatching {
+            supabase.functions("notification-dispatch", body = NotificationDispatchArgs(created.id))
+        }
         refresh()
     } catch (exception: Exception) {
         restoreDraft(text)
