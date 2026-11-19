@@ -24,6 +24,8 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
   const [reportReason, setReportReason] = useState('محتوای نامناسب');
   const [reportDetails, setReportDetails] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportingComment, setReportingComment] = useState<string | null>(null);
+  const [commentReportDetails, setCommentReportDetails] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,6 +112,26 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     notify('گزارش شما برای بررسی مدیران ارسال شد.');
   };
 
+  const submitCommentReport = async (commentId: string) => {
+    if (reportSubmitting) return;
+    const details = commentReportDetails.trim();
+    if (details.length > 500) return notify('توضیحات گزارش نباید بیشتر از ۵۰۰ حرف باشد.', 'error');
+    setReportSubmitting(true);
+    const { data: existing, error: lookupError } = await supabase.from('reports')
+      .select('id').eq('reporter_id', userId).eq('target_type', 'comment').eq('target_id', commentId)
+      .in('status', ['open', 'reviewing']).limit(1).maybeSingle();
+    if (lookupError) { setReportSubmitting(false); return notify('بررسی گزارش‌های قبلی ناموفق بود.', 'error'); }
+    if (existing) { setReportSubmitting(false); setReportingComment(null); return notify('برای این دیدگاه یک گزارش باز از طرف شما وجود دارد.', 'error'); }
+    const { error } = await supabase.from('reports').insert({
+      reporter_id: userId, target_type: 'comment', target_id: commentId,
+      reason: 'گزارش دیدگاه نامناسب', details: details || null, status: 'open',
+    });
+    setReportSubmitting(false);
+    if (error) return notify('ارسال گزارش دیدگاه ناموفق بود.', 'error');
+    setReportingComment(null); setCommentReportDetails('');
+    notify('گزارش دیدگاه برای بررسی مدیران ارسال شد.');
+  };
+
   const copyPostLink = async (postId: string) => {
     try {
       if (!navigator.clipboard) throw new Error('مرورگر اجازهٔ کپی در کلیپ‌بورد را نمی‌دهد.');
@@ -128,6 +150,6 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
   <label>توضیحات تکمیلی (اختیاری)<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={500} rows={3} placeholder="اگر لازم است جزئیات بیشتری بنویسید…" disabled={reportSubmitting}/></label>
   <div><button className="button button-quiet" type="button" onClick={() => setReportingPost(null)} disabled={reportSubmitting}>انصراف</button><button className="button button-primary" type="button" onClick={() => void submitPostReport(post.id)} disabled={reportSubmitting}><Flag size={15}/>{reportSubmitting ? 'در حال ارسال…' : 'ارسال گزارش'}</button></div>
 </div>}
-{commentsFor === post.id && <div className="comments-box">{(commentRows[post.id] ?? []).map((comment) => <div className="comment-row" key={comment.id}><Avatar profile={authors[comment.author_id]} size="sm"/><p>{comment.body}</p></div>)}<div className="comment-compose"><input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="دیدگاهت را بنویس…" onKeyDown={(e) => { if (e.key === 'Enter') void addComment(post.id); }}/><button className="icon-button" onClick={() => void addComment(post.id)} title="ارسال دیدگاه"><Send size={17}/></button></div></div>}</article>)}
+{commentsFor === post.id && <div className="comments-box">{(commentRows[post.id] ?? []).map((comment) => <div className="comment-row" key={comment.id}><Avatar profile={authors[comment.author_id]} size="sm"/><p>{comment.body}</p><button type="button" className="button button-quiet" onClick={() => { setReportingComment(reportingComment === comment.id ? null : comment.id); setCommentReportDetails(''); }}>گزارش</button>{reportingComment === comment.id && <div className="post-report-form"><label>توضیحات گزارش (اختیاری)<textarea value={commentReportDetails} onChange={(event) => setCommentReportDetails(event.target.value)} maxLength={500} rows={2} placeholder="دلیل گزارش این دیدگاه…" disabled={reportSubmitting}/></label><div><button className="button button-quiet" type="button" onClick={() => setReportingComment(null)} disabled={reportSubmitting}>انصراف</button><button className="button button-primary" type="button" onClick={() => void submitCommentReport(comment.id)} disabled={reportSubmitting}>{reportSubmitting ? 'در حال ارسال…' : 'ارسال گزارش'}</button></div></div>}</div>)}<div className="comment-compose"><input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="دیدگاهت را بنویس…" onKeyDown={(e) => { if (e.key === 'Enter') void addComment(post.id); }}/><button className="icon-button" onClick={() => void addComment(post.id)} title="ارسال دیدگاه"><Send size={17}/></button></div></div>}</article>)}
   </div><aside className="feed-aside"><div className="welcome-card"><div className="welcome-icon"><Zap size={21}/></div><span className="eyebrow">به کاوه خوش آمدی</span><h3>فضای تو،<br/>قوانین تو.</h3><p>گفتگو کن، محتوای ارزشمند بساز و فایل‌هایت را در فضای خصوصی نگه دار.</p><div className="welcome-stats"><span><strong>۵۰ MB</strong><small>سقف هر فایل</small></span><span><strong>خصوصی</strong><small>فضای ذخیره‌سازی</small></span></div></div><div className="side-info-card"><div className="side-info-title"><ShieldCheck size={17}/><strong>امنیت حساب</strong></div><p>دسترسی به پیام‌ها و فایل‌ها بر اساس نشست و سیاست‌های دیتابیس کنترل می‌شود.</p><span className="status-line"><i/> نشست احرازشده</span></div><div className="side-info-card"><div className="side-info-title"><CircleHelp size={17}/><strong>راهنمای سریع</strong></div><p>برای شروع گفتگو، از بخش اکتشاف یک کاربر را پیدا کن. فایل‌ها از بخش فایل‌های من قابل بارگذاری‌اند.</p></div></aside></div>;
 }
