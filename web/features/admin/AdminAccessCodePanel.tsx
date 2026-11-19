@@ -332,7 +332,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   };
 
   const cancelScheduledNotification = async (id: string) => {
-    const { data, error } = await supabase.from('scheduled_notifications').update({ status: 'cancelled' }).eq('id', id).eq('status', 'pending').select('id').maybeSingle();
+    const { data, error } = await supabase.from('scheduled_notifications').update({ status: 'cancelled' }).eq('id', id).in('status', ['pending', 'awaiting_push']).select('id').maybeSingle();
     if (error || !data) { notify('لغو اعلان ممکن نشد؛ ممکن است قبلاً پردازش شده باشد.', 'error'); return; }
     notify('اعلان زمان‌بندی‌شده لغو شد.');
     await refreshScheduledNotifications();
@@ -780,8 +780,8 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           </div>
           <div className="admin-audit-heading"><strong>تاریخچه اعلان‌ها ({scheduledRows.length})</strong><button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void processDueNotifications()}><Activity size={15}/> پردازش اعلان‌های سررسیدشده</button></div>
           {scheduledLoading ? <div className="admin-loading"><span className="spinner"/>در حال دریافت…</div> : scheduledRows.length === 0 ? <p>هنوز اعلانی ثبت نشده است.</p> : scheduledRows.map((item) => <div className="admin-report-row" key={item.id}>
-            <div><strong>{item.title}</strong><p>{item.body}</p><small>موضوع: {item.category ?? 'عمومی'} · مخاطب: {item.audience === 'all' ? 'همه کاربران' : item.audience === 'admins' ? 'مدیران' : 'کاربران مشخص'} · اولویت: {item.priority === 'high' ? 'بالا' : 'عادی'}</small><small>{new Date(item.scheduled_at).toLocaleString('fa-IR')} · وضعیت: {item.status === 'pending' ? 'در انتظار' : item.status === 'sent' ? 'پردازش‌شده' : item.status === 'failed' ? 'ناموفق' : item.status === 'cancelled' ? 'لغوشده' : 'در حال پردازش'} · داخل برنامه: {item.in_app_sent ?? 0} · Push: {item.push_sent ?? 0}</small>{item.image_path && <img src={supabase.storage.from('post-media').getPublicUrl(item.image_path).data.publicUrl} alt="" style={{ maxWidth: 180, maxHeight: 110, objectFit: 'cover', borderRadius: 10, marginTop: 8 }}/ >}{item.error_message && <small className="notice-error">{item.error_message}</small>}</div>
-            {item.status === 'pending' && <button className="button button-quiet" type="button" onClick={() => void cancelScheduledNotification(item.id)}>لغو</button>}
+            <div><strong>{item.title}</strong><p>{item.body}</p><small>موضوع: {item.category ?? 'عمومی'} · مخاطب: {item.audience === 'all' ? 'همه کاربران' : item.audience === 'admins' ? 'مدیران' : 'کاربران مشخص'} · اولویت: {item.priority === 'high' ? 'بالا' : 'عادی'}</small><small>{new Date(item.scheduled_at).toLocaleString('fa-IR')} · وضعیت: {item.status === 'pending' ? 'در انتظار زمان' : item.status === 'awaiting_push' ? 'در انتظار اتصال Push' : item.status === 'sent' ? 'ارسال‌شده' : item.status === 'failed' ? 'ناموفق' : item.status === 'cancelled' ? 'لغوشده' : 'در حال پردازش'} · داخل برنامه: {item.in_app_sent ?? 0} · Push: {item.push_sent ?? 0}</small>{item.image_path && <img src={supabase.storage.from('post-media').getPublicUrl(item.image_path).data.publicUrl} alt="" style={{ maxWidth: 180, maxHeight: 110, objectFit: 'cover', borderRadius: 10, marginTop: 8 }}/ >}{item.error_message && <small className="notice-error">{item.error_message}</small>}</div>
+            {(item.status === 'pending' || item.status === 'awaiting_push') && <button className="button button-quiet" type="button" onClick={() => void cancelScheduledNotification(item.id)}>لغو</button>}
           </div>)}
         </div>}
         {adminTab === 'audit' && <div className="admin-console-card">
