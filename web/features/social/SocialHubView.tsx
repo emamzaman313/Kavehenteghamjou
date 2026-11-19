@@ -332,6 +332,11 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
 
   return <div className="page-stack">
     <SectionHeader eyebrow="رسانه و جامعه" title="رسانه، ریلز و موسیقی" description="ویدئوهای کوتاه، کتابخانه موسیقی، فهرست‌های پخش و عنوان‌های روزانه." action={<button className="button button-quiet" onClick={() => void load()}><RefreshCw size={16}/> تازه‌سازی</button>}/>
+    {tab === 'reels' && <div className="creator-studio-stats">
+      <div><span>ویدئوهای من</span><strong>{reels.filter((reel) => reel.author_id === userId).length.toLocaleString('fa-IR')}</strong></div>
+      <div><span>بازدید ویدئوهای من</span><strong>{reels.filter((reel) => reel.author_id === userId).reduce((total, reel) => total + Number(reel.views_count || 0), 0).toLocaleString('fa-IR')}</strong></div>
+      <div><span>ویدئوهای قابل مشاهده</span><strong>{reels.length.toLocaleString('fa-IR')}</strong></div>
+    </div>}
     <div className="admin-tabs">
       <button className={tab === 'reels' ? 'active' : ''} onClick={() => setTab('reels')}><Film size={16}/> ریلز</button>
       <button className={tab === 'music' ? 'active' : ''} onClick={() => setTab('music')}><Music2 size={16}/> موسیقی</button>
