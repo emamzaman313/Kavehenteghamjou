@@ -278,11 +278,11 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       {step === 'setup' && <form className="auth-form" onSubmit={(event) => void finishRegistration(event)}>
         <p className="auth-code-hint">ایمیل <b dir="ltr">{email}</b> تأیید شده است. یک رمز امن بسازید تا دفعات بعد بدون کد ایمیل وارد شوید.</p>
         <label className="auth-label" htmlFor="signup-password">انتخاب رمز عبور</label>
-        <input id="signup-password" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={8} placeholder="حداقل ۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/>
+        <input id="signup-password" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={10} placeholder="حداقل ۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/>
         <label className="auth-label" htmlFor="signup-password-confirm">تکرار رمز عبور</label>
-        <input id="signup-password-confirm" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={8} placeholder="دقیقاً همان رمز را دوباره وارد کنید" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} required disabled={busy}/>
+        <input id="signup-password-confirm" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={10} placeholder="دقیقاً همان رمز را دوباره وارد کنید" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} required disabled={busy}/>
         {passwordConfirm && password !== passwordConfirm && <p className="auth-code-hint">دو رمز با هم یکسان نیستند.</p>}
-        <button className="google-button" type="submit" disabled={busy || password.length < 8 || password !== passwordConfirm}>
+        <button className="google-button" type="submit" disabled={busy || password.length < 10 || password !== passwordConfirm}>
           {busy ? <span className="spinner small"/> : <ShieldCheck size={18}/>}
           <span>{busy ? 'در حال ساخت حساب…' : 'تکمیل ثبت‌نام و ساخت حساب'}</span><ArrowLeft size={17}/>
         </button>
