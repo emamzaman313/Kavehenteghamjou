@@ -76,12 +76,6 @@ private data class SocialFollowRow(
     @SerialName("following_id") val followingId: String
 )
 
-@Serializable
-private data class SocialProfileUpdate(
-    @SerialName("display_name") val displayName: String,
-    val bio: String
-)
-
 private data class FeedCardState(
     val post: SocialPostRow,
     val author: String,
@@ -262,7 +256,10 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                         message = null
                         error = null
                         try {
-                            supabase.postgrest["profiles"].update(SocialProfileUpdate(displayName.trim(), bio.trim())) {
+                            supabase.postgrest["profiles"].update({
+                                set("display_name", displayName.trim())
+                                set("bio", bio.trim())
+                            }) {
                                 filter { eq("id", userId) }
                             }
                             message = "پروفایل ذخیره شد."
