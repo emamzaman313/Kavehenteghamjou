@@ -1655,7 +1655,7 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
                 filter { eq("status", "pending") }
                 order(column = "requested_at", order = io.github.jan.supabase.postgrest.query.Order.ASCENDING)
                 limit(40)
-            }.decodeList<CommunityJoinRequestRow>()
+            }.decodeList<CommunityJoinRequestRow>().filter { it.requesterId != userId }
             communities.clear()
             communities.addAll(found)
             pendingRequests.clear()
