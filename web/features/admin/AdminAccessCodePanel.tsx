@@ -107,6 +107,17 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
 
   useEffect(() => { if(adminTab==='features') void refreshFeatureFlags(); },[adminTab,refreshFeatureFlags]);
 
+  const refreshAudit = useCallback(async () => {
+    setAuditLoading(true);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'audit_logs' } });
+    setAuditLoading(false);
+    if (error || data?.ok !== true) {
+      notify('دریافت گزارش عملیات مدیریتی ناموفق بود.', 'error');
+      return;
+    }
+    setAuditRows(data.events ?? []);
+  }, [supabase, notify]);
+
   useEffect(() => {
     if(adminTab!=='overview') return;
     const channel=supabase.channel('admin-live-overview')
@@ -119,17 +130,6 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     const fallback=window.setInterval(()=>{void refreshOverview();},30000);
     return ()=>{window.clearInterval(fallback);setLiveStatsConnected(false);void supabase.removeChannel(channel);};
   },[adminTab,supabase,refreshOverview,refreshAudit]);
-
-  const refreshAudit = useCallback(async () => {
-    setAuditLoading(true);
-    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'audit_logs' } });
-    setAuditLoading(false);
-    if (error || data?.ok !== true) {
-      notify('دریافت گزارش عملیات مدیریتی ناموفق بود.', 'error');
-      return;
-    }
-    setAuditRows(data.events ?? []);
-  }, [supabase, notify]);
 
   const refreshReports = useCallback(async () => {
     setReportsLoading(true);
