@@ -76,7 +76,8 @@ import java.time.format.DateTimeFormatter
 private data class ConversationMemberRow(
     @SerialName("conversation_id") val conversationId: String,
     @SerialName("user_id") val userId: String = "",
-    @SerialName("last_read_at") val lastReadAt: String? = null
+    @SerialName("last_read_at") val lastReadAt: String? = null,
+    @SerialName("muted_until") val mutedUntil: String? = null
 )
 
 @Serializable
@@ -155,7 +156,8 @@ private data class ChatConversation(
     val lastMessageAt: String?,
     val peerReadAt: String?,
     val lastMessagePreview: String? = null,
-    val unreadCount: Int = 0
+    val unreadCount: Int = 0,
+    val mutedUntil: String? = null
 )
 
 @Composable
@@ -236,7 +238,8 @@ fun ChatScreen(
                     lastMessageAt = conversation.lastMessageAt,
                     peerReadAt = otherMember?.lastReadAt,
                     lastMessagePreview = lastMessage?.body?.take(90),
-                    unreadCount = unreadCount
+                    unreadCount = unreadCount,
+                    mutedUntil = membership.mutedUntil
                 )
             }.sortedByDescending { it.lastMessageAt ?: "" }
 
@@ -295,7 +298,8 @@ fun ChatScreen(
                     title = profile.displayName.ifBlank { profile.username?.let { "@$it" } ?: "گفتگوی خصوصی" },
                     kind = "direct",
                     lastMessageAt = null,
-                    peerReadAt = null
+                    peerReadAt = null,
+                    mutedUntil = null
                 )
             showNewConversation = false
             searchQuery = ""
@@ -588,6 +592,26 @@ fun ChatScreen(
                 IconButton(onClick = { showNewConversation = !showNewConversation }) {
                     Icon(Icons.Outlined.Add, contentDescription = "گفتگوی جدید")
                 }
+            } else {
+                val isMuted = activeConversation?.mutedUntil?.let {
+                    runCatching { Instant.parse(it).isAfter(Instant.now()) }.getOrDefault(false)
+                } == true
+                TextButton(onClick = {
+                    val conversationId = activeConversation?.id ?: return@TextButton
+                    scope.launch {
+                        try {
+                            val newMutedUntil: String? = if (isMuted) null else Instant.now().plusSeconds(8 * 60 * 60).toString()
+                            supabase.postgrest["conversation_members"].update({
+                                set("muted_until", newMutedUntil)
+                            }) {
+                                filter { eq("conversation_id", conversationId); eq("user_id", userId) }
+                            }
+                            loadConversations()
+                        } catch (exception: Exception) {
+                            errorText = exception.message ?: "تغییر وضعیت بی‌صدا ناموفق بود."
+                        }
+                    }
+                }) { Text(if (isMuted) "فعال‌کردن اعلان" else "بی‌صدا ۸ ساعت") }
             }
             IconButton(
                 onClick = {
