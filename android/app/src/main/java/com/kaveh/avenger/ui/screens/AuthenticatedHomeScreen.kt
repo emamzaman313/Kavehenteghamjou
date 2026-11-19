@@ -26,7 +26,6 @@ import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,7 +43,6 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,14 +74,14 @@ private enum class MainTab(val title: String) {
 @Composable
 fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var adminRole by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(userId) {
         adminRole = runCatching {
             SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()["role"]?.jsonPrimitive?.contentOrNull
         }.getOrNull()
     }
-    val tabs = MainTab.entries.filter { it != MainTab.Admin || adminRole != null }
+    val tabs = MainTab.entries.filter { it != MainTab.Admin }
     PushTokenRegistration(supabase = SupabaseClientProvider.client, userId = userId)
 
     Scaffold(
@@ -110,6 +108,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     }
                 },
                 actions = {
+                    if (adminRole != null) TextButton(onClick = { selectedTab = MainTab.Admin }) { Text("مدیریت") }
                     TextButton(onClick = { scope.launch { onSignOut() } }) { Text("خروج") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -127,12 +126,11 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         MainTab.Media -> Icons.Outlined.MusicNote
                         MainTab.Communities -> Icons.Outlined.ChatBubbleOutline
                         MainTab.Notifications -> Icons.Outlined.Notifications
-                        MainTab.Admin -> Icons.Outlined.Security
                         MainTab.Profile -> Icons.Outlined.PersonOutline
                     }
                     NavigationBarItem(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        selected = selectedTab == tab,
+                        onClick = { selectedTab = tab },
                         icon = { Icon(icon, contentDescription = tab.title) },
                         label = { Text(tab.title, maxLines = 1) }
                     )
@@ -148,7 +146,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(14.dp))
-            when (tabs[selectedTab]) {
+            when (selectedTab) {
                 MainTab.Home -> HomeOverview(email)
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
