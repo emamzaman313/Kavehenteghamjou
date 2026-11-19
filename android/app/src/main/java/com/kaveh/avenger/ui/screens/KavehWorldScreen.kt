@@ -290,6 +290,18 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                             }
                             Text(mission.description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             Text("$count از ${mission.targetCount} · ${mission.actionKey}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            if (isAdmin) {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        busy = true
+                                        try {
+                                            supabase.postgrest["daily_missions"].update({ set("active", !mission.active) }) { filter { eq("id", mission.id) } }
+                                            refresh()
+                                        } catch (exception: Exception) { error = exception.message ?: "تغییر وضعیت مأموریت ناموفق بود." }
+                                        finally { busy = false }
+                                    }
+                                }, enabled = !busy) { Text(if (mission.active) "توقف مأموریت" else "فعال‌سازی مأموریت") }
+                            }
                         }
                     }
                 }
@@ -323,6 +335,18 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                     },
                                     enabled = !busy
                                 ) { Text(if (joined.contains(event.id)) "خروج از رویداد" else "شرکت در رویداد") }
+                            }
+                            if (isAdmin && event.status == "published") {
+                                OutlinedButton(onClick = {
+                                    scope.launch {
+                                        busy = true
+                                        try {
+                                            supabase.postgrest["platform_events"].update({ set("status", "archived") }) { filter { eq("id", event.id) } }
+                                            refresh()
+                                        } catch (exception: Exception) { error = exception.message ?: "پایان رویداد ناموفق بود." }
+                                        finally { busy = false }
+                                    }
+                                }, enabled = !busy) { Text("پایان رویداد و توزیع جایزه") }
                             }
                         }
                     }
