@@ -64,16 +64,6 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   }, [supabase, userId, isAdmin, notify]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => {
-    if (!isAdmin) return;
-    void supabase.functions.invoke('admin-console', { body: { action: 'process_scheduled_notifications' } }).then(({ data, error }) => {
-      if (error || data?.ok !== true) return;
-      if (Number(data.processed) > 0) {
-        notify('اعلان‌های زمان‌رسیده به اعلان‌های درون‌برنامه‌ای کاربران ارسال شدند.');
-        void load();
-      }
-    });
-  }, [isAdmin, supabase, load, notify]);
 
   const uploadReel = async (event: FormEvent) => {
     event.preventDefault();
@@ -177,7 +167,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (error) return notify('ثبت اعلان زمان‌بندی‌شده ناموفق بود: ' + error.message, 'error');
     setScheduled((old) => [...old, data as ScheduledNotice].sort((a,b) => a.scheduled_at.localeCompare(b.scheduled_at)));
     setScheduleTitle(''); setScheduleBody(''); setScheduleAt('');
-    notify('اعلان در صف زمان‌بندی ثبت شد. در نخستین بازدید مدیر پس از موعد، به کاربران اعلان درون‌برنامه‌ای ارسال می‌شود.');
+    notify('اعلان در صف ثبت شد و زمان‌بند دیتابیس آن را پس از موعد به‌صورت خودکار ارسال می‌کند.');
   };
   const cancelScheduledNotice = async (id: string) => {
     const { error } = await supabase.from('scheduled_notifications').update({ status: 'cancelled' }).eq('id', id).eq('status', 'pending');
@@ -210,7 +200,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     </>}
     {tab === 'daily' && <>
       {isAdmin && <form className="panel-card page-stack" onSubmit={publishDailyTitle}><strong>انتشار عنوان یا اطلاعیه جدید</strong><input className="field-input" value={dailyTitle} onChange={(e) => setDailyTitle(e.target.value)} maxLength={180} placeholder="عنوان" required/><textarea className="field-input" rows={3} value={dailyBody} onChange={(e) => setDailyBody(e.target.value)} maxLength={5000} placeholder="متن اطلاعیه"/><select className="field-input" value={dailyCategory} onChange={(e) => setDailyCategory(e.target.value)}><option value="announcement">اطلاعیه</option><option value="daily_title">عنوان روزانه</option><option value="maintenance">تعمیر و نگهداری</option><option value="event">رویداد</option></select><button className="button button-primary" disabled={dailySaving}><Megaphone size={16}/>{dailySaving ? 'در حال انتشار…' : 'انتشار'}</button></form>}
-      {isAdmin && <section className="panel-card page-stack"><strong>اعلان زمان‌بندی‌شده</strong><form className="page-stack" onSubmit={queueScheduledNotice}><input className="field-input" value={scheduleTitle} onChange={(e) => setScheduleTitle(e.target.value)} placeholder="عنوان اعلان" maxLength={180} required/><textarea className="field-input" rows={2} value={scheduleBody} onChange={(e) => setScheduleBody(e.target.value)} placeholder="متن اعلان" maxLength={5000} required/><label>زمان ارسال <input className="field-input" type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} required/></label><button className="button button-primary"><Megaphone size={16}/> ثبت در صف</button></form><small>اعلان پس از رسیدن زمان، در نخستین بازدید مدیر از این بخش به‌صورت درون‌برنامه‌ای پردازش می‌شود؛ ارسال دقیق خودکار در زمان مقرر به Cron سرور نیاز دارد.</small>{scheduled.map((item) => <div className="file-row" key={item.id}><div><strong>{item.title}</strong><small>{new Date(item.scheduled_at).toLocaleString('fa-IR')} · {item.status}</small></div>{item.status === 'pending' && <button className="button button-quiet button-small" onClick={() => void cancelScheduledNotice(item.id)}>لغو</button>}</div>)}</section>}
+      {isAdmin && <section className="panel-card page-stack"><strong>اعلان زمان‌بندی‌شده</strong><form className="page-stack" onSubmit={queueScheduledNotice}><input className="field-input" value={scheduleTitle} onChange={(e) => setScheduleTitle(e.target.value)} placeholder="عنوان اعلان" maxLength={180} required/><textarea className="field-input" rows={2} value={scheduleBody} onChange={(e) => setScheduleBody(e.target.value)} placeholder="متن اعلان" maxLength={5000} required/><label>زمان ارسال <input className="field-input" type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} required/></label><button className="button button-primary"><Megaphone size={16}/> ثبت در صف</button></form><small>صف هر دقیقه توسط زمان‌بند دیتابیس پردازش می‌شود و اعلان درون‌برنامه‌ای خودکار است؛ Push و ایمیل به سرویس و کلیدهای جداگانه نیاز دارند.</small>{scheduled.map((item) => <div className="file-row" key={item.id}><div><strong>{item.title}</strong><small>{new Date(item.scheduled_at).toLocaleString('fa-IR')} · {item.status}</small></div>{item.status === 'pending' && <button className="button button-quiet button-small" onClick={() => void cancelScheduledNotice(item.id)}>لغو</button>}</div>)}</section>}
       {titles.length === 0 ? <EmptyState icon={<Megaphone/>} title="اطلاعیه‌ای منتشر نشده" description="عنوان‌های روزانه و خبرهای مهم اینجا نمایش داده می‌شوند."/> : titles.map((item) => <article className="panel-card page-stack" key={item.id}><small>{item.category === 'daily_title' ? 'عنوان روزانه' : item.category === 'maintenance' ? 'تعمیر و نگهداری' : item.category === 'event' ? 'رویداد' : 'اطلاعیه'}</small><h3>{item.title}</h3>{item.body && <p>{item.body}</p>}<small>{new Date(item.starts_at).toLocaleString('fa-IR')}</small></article>)}
     </>}
   </div>;
