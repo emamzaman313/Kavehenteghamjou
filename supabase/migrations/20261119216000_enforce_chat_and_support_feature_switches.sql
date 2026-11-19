@@ -16,3 +16,4 @@ end;
 $$;
 drop trigger if exists trg_guard_message_feature_flag on public.messages;
 create trigger trg_guard_message_feature_flag before insert on public.messages for each row execute function private.guard_platform_feature_flag();
+revoke all on function private.guard_platform_feature_flag() from public, anon, authenticated;
