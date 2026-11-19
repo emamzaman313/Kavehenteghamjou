@@ -170,11 +170,11 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (audio.size > 50 * 1024 * 1024) return notify('حداکثر حجم فایل صوتی ۵۰ مگابایت است.', 'error');
     setUploading(true);
     const path = userId + '/audio/' + crypto.randomUUID() + '-' + audio.name.replace(/[^\w.\-]/g, '_');
-    const uploaded = await supabase.storage.from('post-media').upload(path, audio, { contentType: audio.type, upsert: false });
+    const uploaded = await supabase.storage.from('music-library').upload(path, audio, { contentType: audio.type, upsert: false });
     if (uploaded.error) { setUploading(false); return notify(uploaded.error.message, 'error'); }
     const inserted = await supabase.from('audio_tracks').insert({ title: trackTitle.trim(), artist: trackArtist.trim(), audio_path: path, created_by: userId }).select('id,title,artist,audio_path,duration_seconds').single();
     setUploading(false);
-    if (inserted.error) { await supabase.storage.from('post-media').remove([path]); return notify(inserted.error.message, 'error'); }
+    if (inserted.error) { await supabase.storage.from('music-library').remove([path]); return notify(inserted.error.message, 'error'); }
     setTracks((old) => [inserted.data as Track, ...old]); setTrackTitle(''); setTrackArtist(''); setAudio(null); notify('آهنگ به کتابخانه موسیقی اضافه شد.');
   };
 
@@ -256,7 +256,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (error) return notify('لغو اعلان ناموفق بود: ' + error.message, 'error');
     setScheduled((old) => old.map((item) => item.id === id ? {...item, status:'cancelled'} : item));
   };
-  const publicUrl = (path: string) => supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;
+  const publicUrl = (path: string) => supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;\n  const audioPublicUrl = (path: string) => supabase.storage.from('music-library').getPublicUrl(path).data.publicUrl;
 
   return <div className="page-stack">
     <SectionHeader eyebrow="رسانه و جامعه" title="رسانه، ریلز و موسیقی" description="ویدئوهای کوتاه، کتابخانه موسیقی، فهرست‌های پخش و عنوان‌های روزانه." action={<button className="button button-quiet" onClick={() => void load()}><RefreshCw size={16}/> تازه‌سازی</button>}/>
@@ -304,13 +304,13 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
             <strong>آهنگ‌های این فهرست ({selectedPlaylistTracks.length})</strong>
             {selectedPlaylistTracks.length === 0 ? <p>هنوز آهنگی به این فهرست اضافه نشده است.</p> : selectedPlaylistTracks.map((item) => <div className="file-row" key={item.track.id}>
               <div><strong>{item.track.title}</strong><small>{item.track.artist || 'هنرمند نامشخص'}</small></div>
-              <audio controls preload="none" src={publicUrl(item.track.audio_path)}/>
+              <audio controls preload="none" src={audioPublicUrl(item.track.audio_path)}/>
               {playlists.find((p) => p.id === selectedPlaylist)?.owner_id === userId && <button type="button" className="button button-quiet" onClick={() => void removeTrackFromPlaylist(item.track.id)}>حذف از فهرست</button>}
             </div>)}
           </div>}
         </>}
       </section>
-      {tracks.length === 0 ? <EmptyState icon={<Music2/>} title="کتابخانه موسیقی خالی است" description="مدیر سایت می‌تواند آهنگ‌های مجاز را اضافه کند."/> : <div className="panel-card page-stack"><strong>کتابخانه موسیقی</strong>{tracks.map((track) => <div className="file-row" key={track.id}><div><strong>{track.title}</strong><small>{track.artist || 'هنرمند نامشخص'}</small></div><audio controls preload="none" src={publicUrl(track.audio_path)}/></div>)}</div>}
+      {tracks.length === 0 ? <EmptyState icon={<Music2/>} title="کتابخانه موسیقی خالی است" description="مدیر سایت می‌تواند آهنگ‌های مجاز را اضافه کند."/> : <div className="panel-card page-stack"><strong>کتابخانه موسیقی</strong>{tracks.map((track) => <div className="file-row" key={track.id}><div><strong>{track.title}</strong><small>{track.artist || 'هنرمند نامشخص'}</small></div><audio controls preload="none" src={audioPublicUrl(track.audio_path)}/></div>)}</div>}
     </>}
     {tab === 'daily' && <>
       {isAdmin && <form className="panel-card page-stack" onSubmit={publishDailyTitle}><strong>انتشار عنوان یا اطلاعیه جدید</strong><input className="field-input" value={dailyTitle} onChange={(e) => setDailyTitle(e.target.value)} maxLength={180} placeholder="عنوان" required/><textarea className="field-input" rows={3} value={dailyBody} onChange={(e) => setDailyBody(e.target.value)} maxLength={5000} placeholder="متن اطلاعیه"/><select className="field-input" value={dailyCategory} onChange={(e) => setDailyCategory(e.target.value)}><option value="announcement">اطلاعیه</option><option value="daily_title">عنوان روزانه</option><option value="maintenance">تعمیر و نگهداری</option><option value="event">رویداد</option></select><button className="button button-primary" disabled={dailySaving}><Megaphone size={16}/>{dailySaving ? 'در حال انتشار…' : 'انتشار'}</button></form>}
