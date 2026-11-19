@@ -112,6 +112,9 @@ fun SupportCenterScreen(
     var body by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("general") }
     var categoryExpanded by remember { mutableStateOf(false) }
+    var statusExpanded by remember { mutableStateOf(false) }
+    var priorityExpanded by remember { mutableStateOf(false) }
+    var updatingTicket by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     suspend fun refreshTickets() {
@@ -155,6 +158,24 @@ fun SupportCenterScreen(
 
     LaunchedEffect(userId, staff) { refreshTickets() }
 
+    suspend fun updateTicketField(ticket: SupportTicketRow, field: String, value: String) {
+        if (!staff || updatingTicket) return
+        updatingTicket = true
+        error = null
+        try {
+            supabase.postgrest["support_tickets"].update({
+                set(field, value)
+            }) {
+                filter { eq("id", ticket.id) }
+            }
+            refreshTickets()
+        } catch (exception: Exception) {
+            error = exception.message ?: "به‌روزرسانی درخواست ناموفق بود."
+        } finally {
+            updatingTicket = false
+        }
+    }
+
     suspend fun createTicket() {
         val cleanSubject = subject.trim()
         val cleanBody = body.trim()
@@ -197,6 +218,32 @@ fun SupportCenterScreen(
                     Column {
                         Text(selected!!.subject, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("وضعیت: ${supportStatusLabel(selected!!.status)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (staff) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Box {
+                                    TextButton(onClick = { statusExpanded = true }, enabled = !updatingTicket) { Text("تغییر وضعیت") }
+                                    DropdownMenu(expanded = statusExpanded, onDismissRequest = { statusExpanded = false }) {
+                                        listOf("open" to "جدید", "in_progress" to "در حال بررسی", "waiting_user" to "منتظر پاسخ کاربر", "resolved" to "حل‌شده", "closed" to "بسته‌شده").forEach { (value, label) ->
+                                            DropdownMenuItem(text = { Text(label) }, onClick = {
+                                                statusExpanded = false
+                                                scope.launch { updateTicketField(selected!!, "status", value) }
+                                            })
+                                        }
+                                    }
+                                }
+                                Box {
+                                    TextButton(onClick = { priorityExpanded = true }, enabled = !updatingTicket) { Text("تغییر اولویت") }
+                                    DropdownMenu(expanded = priorityExpanded, onDismissRequest = { priorityExpanded = false }) {
+                                        listOf("low" to "پایین", "normal" to "عادی", "high" to "بالا", "urgent" to "فوری").forEach { (value, label) ->
+                                            DropdownMenuItem(text = { Text(label) }, onClick = {
+                                                priorityExpanded = false
+                                                scope.launch { updateTicketField(selected!!, "priority", value) }
+                                            })
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 IconButton(onClick = { scope.launch { refreshTickets() } }) {
