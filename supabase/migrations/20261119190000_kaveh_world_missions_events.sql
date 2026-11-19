@@ -99,3 +99,6 @@ create policy badges_admin_update on public.badges for update to authenticated u
 create policy badges_admin_delete on public.badges for delete to authenticated using(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin')));
 create policy user_badges_admin_insert on public.user_badges for insert to authenticated with check(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin')));
 create policy user_badges_admin_delete on public.user_badges for delete to authenticated using(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin')));
+
+create index if not exists daily_missions_created_by_idx on public.daily_missions(created_by) where created_by is not null;
+create index if not exists platform_events_created_by_idx on public.platform_events(created_by) where created_by is not null;
