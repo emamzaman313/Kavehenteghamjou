@@ -81,9 +81,12 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
       if (!token) return resolve({ error: new Error('نشست ورود معتبر نیست؛ دوباره وارد شوید.') });
       const xhr = new XMLHttpRequest();
       const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');
-      xhr.open('POST', supabase.supabaseUrl + '/storage/v1/object/' + bucket + '/' + encodedPath);
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+      if (!supabaseUrl || !supabaseKey) return resolve({ error: new Error('تنظیمات اتصال به فضای ذخیره‌سازی در دسترس نیست.') });
+      xhr.open('POST', supabaseUrl + '/storage/v1/object/' + bucket + '/' + encodedPath);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-      xhr.setRequestHeader('apikey', supabase.supabaseKey);
+      xhr.setRequestHeader('apikey', supabaseKey);
       xhr.setRequestHeader('x-upsert', 'false');
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
       xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(Math.min(100, Math.round(event.loaded / event.total * 100))); };
