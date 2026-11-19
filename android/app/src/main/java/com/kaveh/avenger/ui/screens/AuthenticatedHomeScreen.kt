@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,7 +59,7 @@ import com.kaveh.avenger.data.SupabaseClientProvider
 import kotlinx.coroutines.launch
 
 private enum class MainTab(val title: String) {
-    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Profile("پروفایل")
+    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Profile("پروفایل")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,6 +107,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         MainTab.Publish -> Icons.Outlined.AddCircleOutline
                         MainTab.Explore -> Icons.Outlined.Explore
                         MainTab.Reels -> Icons.Outlined.PlayCircleOutline
+                        MainTab.Media -> Icons.Outlined.MusicNote
                         MainTab.Profile -> Icons.Outlined.PersonOutline
                     }
                     NavigationBarItem(
@@ -135,6 +137,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 MainTab.Publish -> FileUploadScreen(userId = userId)
                 MainTab.Explore -> ExploreFeedScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Reels -> ReelsScreen(supabase = SupabaseClientProvider.client, userId = userId)
+                MainTab.Media -> AudioAndDailyScreen(supabase = SupabaseClientProvider.client)
                 MainTab.Profile -> EditableProfileScreen(supabase = SupabaseClientProvider.client, userId = userId, email = email)
             }
             Spacer(Modifier.height(18.dp))
