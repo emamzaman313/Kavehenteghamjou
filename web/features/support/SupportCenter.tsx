@@ -62,6 +62,12 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
 
   useEffect(()=>{ void refresh(); },[refresh]);
   useEffect(()=>{
+    const channel = supabase.channel('support-inbox:'+userId)
+      .on('postgres_changes',{event:'*',schema:'public',table:'support_tickets'},()=>{ void refresh(); })
+      .subscribe();
+    return ()=>{ void supabase.removeChannel(channel); };
+  },[supabase,userId,refresh]);
+  useEffect(()=>{
     if (!active) { setMessages([]); return; }
     void loadMessages(active);
     const ticket = tickets.find(x=>x.id===active);
@@ -121,13 +127,13 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
       <textarea required maxLength={10000} rows={4} value={body} onChange={e=>setBody(e.target.value)} placeholder="مشکل یا درخواست خود را با جزئیات بنویسید…"/>
       <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}><button className="button button-quiet" type="button" onClick={()=>setShowNew(false)}>انصراف</button><button className="button button-primary" disabled={creating} type="submit">{creating?'در حال ثبت…':'ثبت درخواست'}</button></div>
     </form>}
-    <div style={{display:'grid',gridTemplateColumns:'minmax(230px,.75fr) minmax(0,1.5fr)',gap:14,alignItems:'start'}}>
+    <div className="support-center-layout">
       <div className="panel-card" style={{padding:12,minWidth:0}}>
         <strong style={{display:'block',padding:8,marginBottom:6}}>درخواست‌ها ({tickets.length})</strong>
         {loading ? <p>در حال دریافت…</p> : tickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>هنوز درخواستی ثبت نشده است.</p> : tickets.map(ticket=><button key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
           <strong style={{fontSize:12}}>{ticket.subject}</strong>
           {staff && <small style={{color:'var(--muted)'}}>{ticket.requester?.display_name ?? ticket.requester_id.slice(0,8)}{ticket.requester?.username?' · @'+ticket.requester.username:''}</small>}
-          <span style={{fontSize:10,color:'var(--muted)'}}>{categoryLabels[ticket.category]??ticket.category} · {statusLabels[ticket.status]??ticket.status}</span>
+          <span style={{fontSize:10,color:'var(--muted)'}}>{categoryLabels[ticket.category]??ticket.category} · {statusLabels[ticket.status]??ticket.status} · اولویت {ticket.priority==='urgent'?'فوری':ticket.priority==='high'?'بالا':ticket.priority==='low'?'پایین':'عادی'}</span>
           <small style={{color:'var(--muted)'}}>{new Date(ticket.last_message_at).toLocaleString('fa-IR')}</small>
         </button>)}
       </div>
