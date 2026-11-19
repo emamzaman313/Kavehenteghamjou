@@ -42,6 +42,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,6 +93,24 @@ private data class SocialReactionRow(
 )
 
 @Serializable
+private data class SocialCommentRow(
+    val id: String,
+    @SerialName("post_id") val postId: String,
+    @SerialName("author_id") val authorId: String,
+    @SerialName("parent_comment_id") val parentCommentId: String? = null,
+    val body: String,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Serializable
+private data class SocialCommentInsert(
+    @SerialName("post_id") val postId: String,
+    @SerialName("author_id") val authorId: String,
+    val body: String,
+    @SerialName("parent_comment_id") val parentCommentId: String? = null
+)
+
+@Serializable
 private data class SocialFollowRow(
     @SerialName("follower_id") val followerId: String,
     @SerialName("following_id") val followingId: String,
@@ -113,6 +132,10 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     var loading by remember { mutableStateOf(true) }
     var busyPost by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val commentsByPost = remember { mutableStateMapOf<String, List<SocialCommentRow>>() }
+    val commentDrafts = remember { mutableStateMapOf<String, String>() }
+    val expandedComments = remember { mutableStateMapOf<String, Boolean>() }
+    val commentBusyByPost = remember { mutableStateMapOf<String, Boolean>() }
     suspend fun refresh() {
         loading = true
         error = null
@@ -143,6 +166,18 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
             error = exception.message ?: "دریافت فید ناموفق بود."
         } finally {
             loading = false
+        }
+    }
+
+    suspend fun loadPostComments(postId: String) {
+        try {
+            commentsByPost[postId] = supabase.postgrest["comments"].select {
+                filter { eq("post_id", postId) }
+                order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                limit(100)
+            }.decodeList<SocialCommentRow>()
+        } catch (exception: Exception) {
+            error = exception.message ?: "دریافت دیدگاه‌ها ناموفق بود."
         }
     }
 
@@ -234,6 +269,45 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                                     Icon(Icons.Outlined.Favorite, contentDescription = "پسندیدن", tint = if (card.likedByMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Text("${card.likeCount} پسند", modifier = Modifier.padding(top = 12.dp))
+                            }
+                            TextButton(onClick = {
+                                val wasExpanded = expandedComments[card.post.id] == true
+                                expandedComments[card.post.id] = !wasExpanded
+                                if (!wasExpanded && commentsByPost[card.post.id] == null) scope.launch { loadPostComments(card.post.id) }
+                            }) { Text(if (expandedComments[card.post.id] == true) "بستن دیدگاه‌ها" else "دیدگاه‌ها") }
+                            if (expandedComments[card.post.id] == true) {
+                                commentsByPost[card.post.id].orEmpty().forEach { comment ->
+                                    Column(Modifier.fillMaxWidth().padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(if (comment.parentCommentId == null) comment.body else "↳ ${comment.body}", style = MaterialTheme.typography.bodyMedium)
+                                        Text(if (comment.authorId == userId) "شما" else "کاربر", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                OutlinedTextField(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    value = commentDrafts[card.post.id].orEmpty(),
+                                    onValueChange = { commentDrafts[card.post.id] = it.take(10000) },
+                                    label = { Text("نوشتن دیدگاه") },
+                                    minLines = 1,
+                                    maxLines = 3
+                                )
+                                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                                    Button(
+                                        enabled = commentDrafts[card.post.id].orEmpty().isNotBlank() && commentBusyByPost[card.post.id] != true,
+                                        onClick = {
+                                            val body = commentDrafts[card.post.id].orEmpty().trim()
+                                            if (body.isNotEmpty()) scope.launch {
+                                                commentBusyByPost[card.post.id] = true
+                                                try {
+                                                    supabase.postgrest["comments"].insert(SocialCommentInsert(card.post.id, userId, body))
+                                                    commentDrafts[card.post.id] = ""
+                                                    loadPostComments(card.post.id)
+                                                } catch (exception: Exception) {
+                                                    error = exception.message ?: "ارسال دیدگاه ناموفق بود."
+                                                } finally { commentBusyByPost[card.post.id] = false }
+                                            }
+                                        }
+                                    ) { Text(if (commentBusyByPost[card.post.id] == true) "در حال ارسال…" else "ارسال دیدگاه") }
+                                }
                             }
                         }
                     }
