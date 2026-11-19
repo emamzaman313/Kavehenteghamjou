@@ -16,7 +16,13 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [loadError, setLoadError] = useState('');
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance' | 'ranks'>('overview');
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
-  const [audioTracks, setAudioTracks] = useState<{ id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null; is_active: boolean; created_at: string }[]>([]);
+  const [audioTracks, setAudioTracks] = useState<{ id: string; title: string; artist: string; audio_path: string; cover_path: string | null; duration_seconds: number | null; is_active: boolean; created_at: string }[]>([]);
+  const [newTrackTitle, setNewTrackTitle] = useState('');
+  const [newTrackArtist, setNewTrackArtist] = useState('');
+  const [newTrackAudio, setNewTrackAudio] = useState<File | null>(null);
+  const [newTrackCover, setNewTrackCover] = useState<File | null>(null);
+  const [trackSaving, setTrackSaving] = useState(false);
+  const [musicRightsConfirmed, setMusicRightsConfirmed] = useState(false);
   const [managedReels, setManagedReels] = useState<{ id: string; author_id: string; caption: string; visibility: string; views_count: number; published_at: string; created_at: string }[]>([]);
 
   const [mediaLoading, setMediaLoading] = useState(false);
@@ -105,6 +111,106 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     setAudioTracks(tracksResult.data.tracks ?? []);
     setManagedReels(reelsResult.data.reels ?? []);
   }, [supabase, notify]);
+
+  const uploadCentralTrack = async () => {
+    if (trackSaving) return;
+    const title = newTrackTitle.trim();
+    const artist = newTrackArtist.trim();
+    if (title.length < 1 || title.length > 120 || artist.length > 120) {
+      notify('نام آهنگ باید ۱ تا ۱۲۰ نویسه و نام هنرمند حداکثر ۱۲۰ نویسه باشد.', 'error');
+      return;
+    }
+    if (!newTrackAudio || !newTrackAudio.type.startsWith('audio/')) {
+      notify('یک فایل صوتی معتبر انتخاب کنید.', 'error');
+      return;
+    }
+    if (newTrackAudio.size < 1 || newTrackAudio.size > 50 * 1024 * 1024) {
+      notify('حجم فایل صوتی باید بیشتر از صفر و حداکثر ۵۰ مگابایت باشد.', 'error');
+      return;
+    }
+    if (newTrackCover && (!newTrackCover.type.startsWith('image/') || newTrackCover.size > 5 * 1024 * 1024)) {
+      notify('کاور باید تصویر معتبر و حداکثر ۵ مگابایت باشد.', 'error');
+      return;
+    }
+    if (!musicRightsConfirmed) {
+      notify('برای انتشار آهنگ باید تأیید کنید که مجوز استفاده از آن را دارید.', 'error');
+      return;
+    }
+
+    setTrackSaving(true);
+    const { data: authResult, error: authError } = await supabase.auth.getUser();
+    if (authError || !authResult.user) {
+      setTrackSaving(false);
+      notify('نشست مدیر معتبر نیست؛ دوباره وارد شوید.', 'error');
+      return;
+    }
+
+    const trackId = crypto.randomUUID();
+    const ownerPath = authResult.user.id + '/audio/';
+    const safeFileName = (name: string) => name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(-90) || 'media';
+    const audioPath = ownerPath + trackId + '-' + safeFileName(newTrackAudio.name);
+    const uploadedPaths: string[] = [];
+    let coverPath: string | null = null;
+
+    try {
+      const audioUpload = await supabase.storage.from('post-media').upload(audioPath, newTrackAudio, {
+        contentType: newTrackAudio.type,
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (audioUpload.error) throw new Error('بارگذاری آهنگ ناموفق بود: ' + audioUpload.error.message);
+      uploadedPaths.push(audioPath);
+
+      if (newTrackCover) {
+        coverPath = ownerPath + 'covers/' + trackId + '-' + safeFileName(newTrackCover.name);
+        const coverUpload = await supabase.storage.from('post-media').upload(coverPath, newTrackCover, {
+          contentType: newTrackCover.type,
+          cacheControl: '3600',
+          upsert: false,
+        });
+        if (coverUpload.error) throw new Error('بارگذاری کاور ناموفق بود: ' + coverUpload.error.message);
+        uploadedPaths.push(coverPath);
+      }
+
+      const { data, error } = await supabase.functions.invoke('admin-console', {
+        body: {
+          action: 'register_audio_track',
+          trackId,
+          title,
+          artist,
+          audioPath,
+          coverPath,
+        },
+      });
+      if (error || data?.ok !== true) {
+        const reason = data?.reason === 'invalid_media_path' ? 'مسیر فایل رسانه معتبر نیست.' :
+          data?.reason === 'insufficient_role' ? 'نقش شما اجازه افزودن آهنگ را ندارد.' :
+          'ثبت آهنگ در کتابخانه مرکزی ناموفق بود.';
+        throw new Error(reason);
+      }
+
+      setNewTrackTitle('');
+      setNewTrackArtist('');
+      setNewTrackAudio(null);
+      setNewTrackCover(null);
+      setMusicRightsConfirmed(false);
+      notify('آهنگ با موفقیت در کتابخانه مرکزی ثبت شد.');
+      await Promise.all([refreshAudioTracks(), refreshAudit()]);
+    } catch (error) {
+      if (uploadedPaths.length) {
+        const cleanup = await supabase.storage.from('post-media').remove(uploadedPaths);
+        if (cleanup.error) {
+          notify('ثبت آهنگ ناموفق بود و پاک‌سازی فایل‌های بارگذاری‌شده کامل نشد: ' + cleanup.error.message, 'error');
+        } else {
+          notify(error instanceof Error ? error.message : 'ثبت آهنگ ناموفق بود.', 'error');
+        }
+      } else {
+        notify(error instanceof Error ? error.message : 'ثبت آهنگ ناموفق بود.', 'error');
+      }
+    } finally {
+      setTrackSaving(false);
+    }
+  };
 
   const setAudioTrackActive = async (trackId: string, isActive: boolean) => {
     setUserBusy(trackId);
@@ -550,6 +656,26 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
         {adminTab === 'media' && <div className="admin-console-card">
           <div className="admin-audit-heading"><strong>کتابخانه مرکزی موسیقی ({audioTracks.length} آهنگ)</strong><button className="button button-quiet" type="button" onClick={() => void refreshAudioTracks()}><Activity size={15}/> تازه‌سازی</button></div>
           <p className="admin-user-policy-note">آهنگ غیرفعال از فهرست عمومی و پخش کاربران عادی پنهان می‌شود؛ فایل و ارتباط آن با فهرست‌های پخش حذف نمی‌شود. فقط مالک و مدیر می‌توانند وضعیت انتشار را تغییر دهند.</p>
+          {role !== 'moderator' && <div className="admin-console-card" style={{ marginBottom: 16 }}>
+            <strong>افزودن آهنگ به کتابخانه مرکزی</strong>
+            <label className="field-label">نام آهنگ</label>
+            <input className="text-input" maxLength={120} value={newTrackTitle} onChange={(event) => setNewTrackTitle(event.target.value)} placeholder="نام آهنگ" disabled={trackSaving}/>
+            <label className="field-label">هنرمند / خواننده</label>
+            <input className="text-input" maxLength={120} value={newTrackArtist} onChange={(event) => setNewTrackArtist(event.target.value)} placeholder="نام هنرمند" disabled={trackSaving}/>
+            <label className="field-label">فایل صوتی (حداکثر ۵۰ مگابایت)</label>
+            <input className="text-input" type="file" accept="audio/*" onChange={(event) => setNewTrackAudio(event.target.files?.[0] ?? null)} disabled={trackSaving}/>
+            {newTrackAudio && <small>{newTrackAudio.name} · {(newTrackAudio.size / 1024 / 1024).toFixed(2)} MB</small>}
+            <label className="field-label">کاور اختیاری (حداکثر ۵ مگابایت)</label>
+            <input className="text-input" type="file" accept="image/*" onChange={(event) => setNewTrackCover(event.target.files?.[0] ?? null)} disabled={trackSaving}/>
+            {newTrackCover && <small>{newTrackCover.name} · {(newTrackCover.size / 1024 / 1024).toFixed(2)} MB</small>}
+            <label className="setting-choice" style={{ justifyContent: 'flex-start', gap: 10 }}>
+              <input type="checkbox" checked={musicRightsConfirmed} onChange={(event) => setMusicRightsConfirmed(event.target.checked)} disabled={trackSaving}/>
+              <span>تأیید می‌کنم مجوز لازم برای بارگذاری و انتشار این موسیقی را دارم.</span>
+            </label>
+            <button className="button button-primary" type="button" disabled={trackSaving || !newTrackTitle.trim() || !newTrackAudio || !musicRightsConfirmed} onClick={() => void uploadCentralTrack()}>
+              <Music2 size={15}/>{trackSaving ? 'در حال بارگذاری و ثبت…' : 'بارگذاری و انتشار آهنگ'}
+            </button>
+          </div>}
           {mediaLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت کتابخانه موسیقی…</span></div> : audioTracks.length === 0 ? <p>هنوز آهنگی در کتابخانه ثبت نشده است.</p> : audioTracks.map((track) => <div className="admin-managed-user" key={track.id}>
             <div className="admin-user-row"><span className="admin-user-avatar"><Music2 size={18}/></span><div className="admin-managed-user-info"><b>{track.title}</b><small>{track.artist} · {track.duration_seconds ? Math.floor(track.duration_seconds / 60) + ':' + String(track.duration_seconds % 60).padStart(2, '0') : 'مدت نامشخص'}</small><small>ثبت: {new Date(track.created_at).toLocaleDateString('fa-IR')} · {track.is_active ? 'در دسترس کاربران' : 'پنهان از کتابخانه عمومی'}</small></div></div>
             <div className="admin-user-actions"><button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void setAudioTrackActive(track.id, !track.is_active)}>{userBusy === track.id ? 'در حال ذخیره…' : track.is_active ? 'غیرفعال‌کردن آهنگ' : 'فعال‌کردن آهنگ'}</button></div>
