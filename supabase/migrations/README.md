@@ -26,7 +26,8 @@ The following versions were read from the live Supabase migration ledger. Filena
 | `20261118213526` | `kaveh_user_moderation_audit` | Included (`20261118213526_kaveh_user_moderation_audit.sql`) |
 | `20261118214059` | `kaveh_admin_role_management` | Included (`20261118214059_kaveh_admin_role_management.sql`) |
 | `20261118214403` | `kaveh_admin_report_review` | Included (`20261118214403_kaveh_admin_report_review.sql`) |
-| `20261118214550` | `kaveh_report_submission_hardening` | Included (`20261118214550_kaveh_report_submission_hardening.sql`) |\n| `20261119061151` | `platform_appearance_versioning` | Included (`20261119061151_platform_appearance_versioning.sql`) |
+| `20261118214550` | `kaveh_report_submission_hardening` | Included (`20261118214550_kaveh_report_submission_hardening.sql`) |
+| `20261119061151` | `platform_appearance_versioning` | Included (`20261119061151_platform_appearance_versioning.sql`) |
 
 **Important:** the live migration ledger is authoritative. The first four original SQL bodies have not yet been exported into this repository. An early local SQL draft is archived at `supabase/archive/initial_schema_draft_NOT_FOR_DEPLOY.sql` and is explicitly non-deployable because it predates the final RLS and privilege fixes.
 
