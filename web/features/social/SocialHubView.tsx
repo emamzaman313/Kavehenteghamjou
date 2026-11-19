@@ -47,7 +47,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     const [r, t, d, p, likes, comments, scheduledRows] = await Promise.all([
       supabase.from('reels').select('id,author_id,caption,video_path,cover_path,mime_type,published_at,allow_comments,views_count').order('published_at', { ascending: false }).limit(40),
       supabase.from('audio_tracks').select('id,title,artist,audio_path,duration_seconds').eq('is_active', true).order('created_at', { ascending: false }),
-      supabase.from('daily_titles').select('id,title,body,category,starts_at,ends_at').eq('is_published', true).lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
+      supabase.from('daily_titles').select('id,title,body,category,starts_at,ends_at').eq('is_published', true).lte('starts_at', new Date().toISOString()).or('ends_at.is.null,ends_at.gt.' + new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
       supabase.from('playlists').select('id,title,description,is_public').eq('owner_id', userId).order('created_at', { ascending: false }),
       supabase.from('reel_reactions').select('reel_id').eq('user_id', userId),
       supabase.from('reel_comments').select('id,reel_id,author_id,body,created_at').order('created_at', { ascending: true }).limit(120),
