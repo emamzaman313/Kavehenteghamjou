@@ -212,16 +212,23 @@ Deno.serve(async (request: Request) => {
   if (action === "admin_get" || action === "admin_update") {
     const user = await getCurrentUser(request);
     const role = user ? await getSiteAdminRole(user.id) : null;
-    if (!user || !role || !["owner", "admin"].includes(role)) {
+    if (!user || !role) {
       return jsonResponse({ ok: false, isAdmin: false, reason: "insufficient_role" }, 403, origin);
     }
 
     if (action === "admin_get") {
+      if (!["owner", "admin", "moderator"].includes(role)) {
+        return jsonResponse({ ok: false, isAdmin: false, reason: "insufficient_role" }, 403, origin);
+      }
       const settings = await getSettings();
       if (!settings) {
-        return jsonResponse({ ok: false, reason: "not_configured" }, 503, origin);
+        return jsonResponse({ ok: false, isAdmin: false, reason: "not_configured" }, 503, origin);
       }
-      return jsonResponse({ ok: true, isAdmin: true, enabled: settings.enabled }, 200, origin);
+      return jsonResponse({ ok: true, isAdmin: true, role, enabled: settings.enabled }, 200, origin);
+    }
+
+    if (!["owner", "admin"].includes(role)) {
+      return jsonResponse({ ok: false, isAdmin: false, reason: "insufficient_role" }, 403, origin);
     }
 
     if (typeof body.enabled !== "boolean") {
