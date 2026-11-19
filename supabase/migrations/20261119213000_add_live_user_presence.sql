@@ -22,6 +22,11 @@ for update to authenticated
 using (user_id = (select auth.uid()))
 with check (user_id = (select auth.uid()));
 
+drop policy if exists user_presence_select_own on public.user_presence;
+create policy user_presence_select_own on public.user_presence
+for select to authenticated
+using (user_id = (select auth.uid()));
+
 drop policy if exists user_presence_select_admin on public.user_presence;
 create policy user_presence_select_admin on public.user_presence
 for select to authenticated
