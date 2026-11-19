@@ -30,6 +30,8 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [caption, setCaption] = useState('');
   const [video, setVideo] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [audioUploadProgress, setAudioUploadProgress] = useState(0);
+  const [reelUploadProgress, setReelUploadProgress] = useState(0);
   const [trackTitle, setTrackTitle] = useState('');
   const [trackArtist, setTrackArtist] = useState('');
   const [audio, setAudio] = useState<File | null>(null);
@@ -73,13 +75,32 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
 
   useEffect(() => { void load(); }, [load]);
 
+  const uploadWithProgress = (bucket: string, objectPath: string, file: File, onProgress: (percent: number) => void) => new Promise<{ error: Error | null }>((resolve) => {
+    void supabase.auth.getSession().then(({ data }) => {
+      const token = data.session?.access_token;
+      if (!token) return resolve({ error: new Error('نشست ورود معتبر نیست؛ دوباره وارد شوید.') });
+      const xhr = new XMLHttpRequest();
+      const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');
+      xhr.open('POST', supabase.supabaseUrl + '/storage/v1/object/' + bucket + '/' + encodedPath);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      xhr.setRequestHeader('apikey', supabase.supabaseKey);
+      xhr.setRequestHeader('x-upsert', 'false');
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(Math.min(100, Math.round(event.loaded / event.total * 100))); };
+      xhr.onerror = () => resolve({ error: new Error('ارتباط هنگام آپلود قطع شد.') });
+      xhr.onabort = () => resolve({ error: new Error('آپلود لغو شد.') });
+      xhr.onload = () => resolve({ error: xhr.status >= 200 && xhr.status < 300 ? null : new Error('خطای ذخیره‌سازی سرور (' + xhr.status + '): ' + xhr.responseText.slice(0, 220)) });
+      xhr.send(file);
+    }).catch(() => resolve({ error: new Error('دریافت نشست ناموفق بود.') }));
+  });
   const uploadReel = async (event: FormEvent) => {
     event.preventDefault();
     if (!video || !video.type.startsWith('video/')) return notify('یک فایل ویدیویی معتبر انتخاب کنید.', 'error');
     if (video.size > 50 * 1024 * 1024) return notify('حداکثر حجم ویدئو ۵۰ مگابایت است.', 'error');
     setUploading(true);
     const path = userId + '/reels/' + crypto.randomUUID() + '-' + video.name.replace(/[^\w.\-]/g, '_');
-    const uploaded = await supabase.storage.from('post-media').upload(path, video, { contentType: video.type, upsert: false });
+    setReelUploadProgress(0);
+    const uploaded = await uploadWithProgress('post-media', path, video, setReelUploadProgress);
     if (uploaded.error) { setUploading(false); return notify('بارگذاری ویدئو ناموفق بود: ' + uploaded.error.message, 'error'); }
     const inserted = await supabase.from('reels').insert({ author_id: userId, caption: caption.trim(), video_path: path, mime_type: video.type, visibility: 'public' });
     setUploading(false);
@@ -174,10 +195,11 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (audio.size > 100 * 1024 * 1024) return notify('حداکثر حجم فایل موسیقی ۱۰۰ مگابایت است.', 'error');
     setUploading(true);
     const path = userId + '/audio/' + crypto.randomUUID() + '-' + audio.name.replace(/[^\w.\-]/g, '_');
-    const uploaded = await supabase.storage.from('music-library').upload(path, audio, { contentType: audio.type || 'application/octet-stream', upsert: false });
-    if (uploaded.error) { setUploading(false); return notify(uploaded.error.message, 'error'); }
+    setAudioUploadProgress(0);
+    const uploaded = await uploadWithProgress('music-library', path, audio, setAudioUploadProgress);
+    if (uploaded.error) { setUploading(false); setAudioUploadProgress(0); return notify(uploaded.error.message, 'error'); }
     const inserted = await supabase.from('audio_tracks').insert({ title: trackTitle.trim(), artist: trackArtist.trim(), audio_path: path, created_by: userId }).select('id,title,artist,audio_path,duration_seconds').single();
-    setUploading(false);
+    setUploading(false); setAudioUploadProgress(0);
     if (inserted.error) { await supabase.storage.from('music-library').remove([path]); return notify(inserted.error.message, 'error'); }
     setTracks((old) => [inserted.data as Track, ...old]); setTrackTitle(''); setTrackArtist(''); setAudio(null); notify('آهنگ به کتابخانه موسیقی اضافه شد.');
   };
@@ -289,12 +311,12 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
         <strong>انتشار ریلز جدید</strong>
         <textarea className="field-input" rows={2} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="برای ویدئوی خود توضیح بنویس…"/>
         <input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => setVideo(e.target.files?.[0] ?? null)}/>
-        <button className="button button-primary" disabled={uploading || !video}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
+        {uploading && tab === 'reels' && <div className="upload-progress-card upload-progress-reel"><div className="upload-progress-head"><span>آپلود ویدئو</span><strong>{reelUploadProgress}٪</strong></div><div className="upload-progress-track"><i style={{ width: reelUploadProgress + '%' }}/></div></div>}<button className="button button-primary" disabled={uploading || !video}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
       </form>
       {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="reel-feed" style={{ maxHeight: '78vh', overflowY: 'auto', scrollSnapType: 'y mandatory', overscrollBehaviorY: 'contain', display: 'grid', gap: 16 }}>{reels.map((reel) => <article className="person-card reel-card" key={reel.id} style={{ scrollSnapAlign: 'start' }}><video data-reel-video data-reel-id={reel.id} controls autoPlay muted loop playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video" style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#080808', borderRadius: 12 }}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button><button onClick={() => {setReportingReel(reportingReel === reel.id ? null : reel.id); setReelReportDetails('');}}>گزارش</button></div>{reportingReel === reel.id && <div className="post-report-form"><textarea className="field-input" value={reelReportDetails} onChange={(e) => setReelReportDetails(e.target.value)} maxLength={500} rows={2} placeholder="توضیحات گزارش (اختیاری)"/><div><button className="button button-quiet" onClick={() => setReportingReel(null)}>انصراف</button><button className="button button-primary" onClick={() => void submitReelReport(reel.id)}>ارسال گزارش</button></div></div>}{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
     </>}
     {tab === 'music' && <>
-      {isAdmin && <section className="panel-card page-stack"><strong>موسیقی سراسری کل پلتفرم</strong><p>این آهنگ پس از انتشار، به‌عنوان موسیقی زمینه در وب و نسخه‌های موبایل معرفی می‌شود. شروع پخش در مرورگر ممکن است به لمس دکمه پخش توسط کاربر نیاز داشته باشد.</p><form className="page-stack" onSubmit={uploadTrack}><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام موسیقی" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="نام هنرمند (اختیاری)"/><input type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.wma,.aiff,.mid,.midi,.amr" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/>{audio && <small>فایل انتخاب‌شده: {audio.name} · {(audio.size / 1048576).toFixed(1)} MB</small>}<button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Upload size={16}/>{uploading ? 'در حال آپلود…' : 'آپلود موسیقی به سرور'}</button></form><div className="page-stack"><label>انتخاب آهنگ سراسری</label><select className="field-input" value={globalTrackId} onChange={(e) => setGlobalTrackId(e.target.value)}><option value="">یک آهنگ را انتخاب کنید</option>{tracks.map((track) => <option key={track.id} value={track.id}>{track.title} — {track.artist || 'بدون نام هنرمند'}</option>)}</select><div className="inline-form"><button className="button button-primary" onClick={() => void publishGlobalMusic()} disabled={!globalTrackId}>انتشار برای همه</button><button className="button button-quiet" onClick={() => void disableGlobalMusic()} disabled={!globalMusicEnabled}>توقف موسیقی سراسری</button></div><small>وضعیت فعلی: {globalMusicEnabled ? 'فعال' : 'غیرفعال'}</small></div></section>}
+      {isAdmin && <section className="panel-card page-stack"><strong>موسیقی سراسری کل پلتفرم</strong><p>این آهنگ پس از انتشار، به‌عنوان موسیقی زمینه در وب و نسخه‌های موبایل معرفی می‌شود. شروع پخش در مرورگر ممکن است به لمس دکمه پخش توسط کاربر نیاز داشته باشد.</p><form className="page-stack" onSubmit={uploadTrack}><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام موسیقی" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="نام هنرمند (اختیاری)"/><input type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.wma,.aiff,.mid,.midi,.amr" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/>{audio && <small>فایل انتخاب‌شده: {audio.name} · {(audio.size / 1048576).toFixed(1)} MB</small>}{uploading && tab === 'music' && <div className="upload-progress-card upload-progress-audio"><div className="upload-progress-head"><span>انتقال موسیقی به سرور</span><strong>{audioUploadProgress}٪</strong></div><div className="upload-progress-orbit"><i style={{ '--progress': audioUploadProgress } as React.CSSProperties}/><b>{audioUploadProgress}٪</b></div><div className="upload-progress-track"><i style={{ width: audioUploadProgress + '%' }}/></div><small>درصد واقعی داده ارسال‌شده به Storage</small></div>}<button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Upload size={16}/>{uploading ? 'در حال آپلود…' : 'آپلود موسیقی به سرور'}</button></form><div className="page-stack"><label>انتخاب آهنگ سراسری</label><select className="field-input" value={globalTrackId} onChange={(e) => setGlobalTrackId(e.target.value)}><option value="">یک آهنگ را انتخاب کنید</option>{tracks.map((track) => <option key={track.id} value={track.id}>{track.title} — {track.artist || 'بدون نام هنرمند'}</option>)}</select><div className="inline-form"><button className="button button-primary" onClick={() => void publishGlobalMusic()} disabled={!globalTrackId}>انتشار برای همه</button><button className="button button-quiet" onClick={() => void disableGlobalMusic()} disabled={!globalMusicEnabled}>توقف موسیقی سراسری</button></div><small>وضعیت فعلی: {globalMusicEnabled ? 'فعال' : 'غیرفعال'}</small></div></section>}
       <section className="panel-card page-stack">
         <strong>فهرست‌های پخش</strong>
         <form onSubmit={createPlaylist} className="page-stack">
