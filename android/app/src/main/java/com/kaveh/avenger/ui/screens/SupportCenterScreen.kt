@@ -59,7 +59,15 @@ private data class SupportTicketRow(
     val status: String,
     val priority: String,
     @SerialName("last_message_at") val lastMessageAt: String? = null,
-    @SerialName("created_at") val createdAt: String? = null
+    @SerialName("created_at") val createdAt: String? = null,
+    val requesterLabel: String? = null
+)
+
+@Serializable
+private data class SupportProfileRow(
+    val id: String,
+    @SerialName("display_name") val displayName: String? = null,
+    val username: String? = null
 )
 
 @Serializable
@@ -122,8 +130,22 @@ fun SupportCenterScreen(
                     limit(100)
                 }.decodeList<SupportTicketRow>()
             }
-            tickets = loaded
-            selected = selected?.let { current -> loaded.firstOrNull { it.id == current.id } }
+            val enriched = if (staff && loaded.isNotEmpty()) {
+                runCatching {
+                    val profiles = supabase.postgrest["profiles"].select {
+                        limit(500)
+                    }.decodeList<SupportProfileRow>().associateBy { it.id }
+                    loaded.map { ticket ->
+                        val profile = profiles[ticket.requesterId]
+                        val label = profile?.displayName?.takeIf { it.isNotBlank() }
+                            ?: profile?.username?.let { "@$it" }
+                            ?: ticket.requesterId.take(8)
+                        ticket.copy(requesterLabel = label)
+                    }
+                }.getOrDefault(loaded)
+            } else loaded
+            tickets = enriched
+            selected = selected?.let { current -> enriched.firstOrNull { it.id == current.id } }
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت درخواست‌های پشتیبانی ناموفق بود."
         } finally {
@@ -286,6 +308,7 @@ fun SupportCenterScreen(
                         ) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Text(ticket.subject, fontWeight = FontWeight.SemiBold)
+                                if (staff) Text("درخواست‌دهنده: ${ticket.requesterLabel ?: ticket.requesterId.take(8)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
                                     "${supportStatusLabel(ticket.status)} · ${supportCategories.firstOrNull { it.first == ticket.category }?.second ?: ticket.category}",
                                     style = MaterialTheme.typography.labelSmall,
