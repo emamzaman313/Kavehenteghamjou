@@ -73,6 +73,27 @@ export default function KavehApp() {
     return () => { alive = false; listener.subscription.unsubscribe(); };
   }, [supabase]);
 
+  useEffect(() => {
+    if (!supabase || !session?.user.id) return;
+    let active = true;
+    const heartbeat = async () => {
+      if (!active || document.visibilityState !== 'visible') return;
+      await supabase.from('user_presence').upsert(
+        { user_id: session.user.id, last_seen_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      );
+    };
+    void heartbeat();
+    const timer = window.setInterval(() => { void heartbeat(); }, 30_000);
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') void heartbeat(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [supabase, session?.user.id]);
+
   const notify = useCallback((text: string, tone: Toast['tone'] = 'success') => toastMessage(setToasts, text, tone), []);
 
   useEffect(() => {
