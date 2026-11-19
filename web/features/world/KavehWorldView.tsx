@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Award, CalendarDays, Check, ChevronLeft, Crown, Flame, Flag, Medal, Plus, RefreshCw, Sparkles, Trophy, Users, X } from 'lucide-react';
+import { Award, CalendarDays, Check, Crown, Flame, Flag, Medal, Plus, RefreshCw, Sparkles, Trophy } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader } from '@/components/ui';
