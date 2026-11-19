@@ -121,7 +121,8 @@ fun FileUploadScreen(userId: String) {
                                 error = null
                                 uploaded = null
                                 try {
-                                    uploaded = FileUploadRepository(SupabaseClientProvider.client).upload(context, userId, uri)\n                                    vaultFiles = FileUploadRepository(SupabaseClientProvider.client).list(userId)
+                                    uploaded = FileUploadRepository(SupabaseClientProvider.client).upload(context, userId, uri)
+                                    vaultFiles = FileUploadRepository(SupabaseClientProvider.client).list(userId)
                                 } catch (exception: Exception) {
                                     error = exception.localizedMessage ?: "آپلود فایل انجام نشد."
                                 } finally {
