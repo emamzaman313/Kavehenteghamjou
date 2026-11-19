@@ -299,12 +299,14 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     const resolvedRecipients = normalizedInputs.map((value) => managedUsers.find((user) =>
       user.id.toLocaleLowerCase() === value ||
       (user.email ?? '').toLocaleLowerCase() === value ||
-      (user.username ?? '').replace(/^@/, '').toLocaleLowerCase() === value
+      (user.username ?? '').replace(/^@/, '').toLocaleLowerCase() === value ||
+      (user.display_name ?? '').trim().toLocaleLowerCase() === value
     ));
     const unresolvedInputs = normalizedInputs.filter((value) => !managedUsers.some((user) =>
       user.id.toLocaleLowerCase() === value ||
       (user.email ?? '').toLocaleLowerCase() === value ||
-      (user.username ?? '').replace(/^@/, '').toLocaleLowerCase() === value
+      (user.username ?? '').replace(/^@/, '').toLocaleLowerCase() === value ||
+      (user.display_name ?? '').trim().toLocaleLowerCase() === value
     ));
     const recipientIds = [...new Set(resolvedRecipients.filter((user): user is NonNullable<typeof user> => Boolean(user)).map((user) => user.id))];
     if (announcementAudience === 'specific' && (recipientInputs.length === 0 || unresolvedInputs.length > 0 || recipientIds.length === 0)) {
@@ -769,10 +771,12 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
               <input className="text-input" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="نام، ایمیل، شناسه یا نام کاربری را جست‌وجو کن…"/>
               {usersLoading ? <small>در حال دریافت فهرست کاربران…</small> : <div style={{ maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 8, padding: 10, border: '1px solid var(--border, rgba(127,127,127,.25))', borderRadius: 12 }}>
                 {visibleManagedUsers.slice(0, 100).map((user) => {
-                  const selected = announcementRecipients.split(/[\\n,;\\s]+/).filter(Boolean).includes(user.id);
+                  const selected = announcementRecipients.split(/[\\n,;\\s]+/).filter(Boolean).some((value) => [user.id, user.email ?? '', user.username ?? ''].some((candidate) => candidate.toLocaleLowerCase() === value.toLocaleLowerCase()));
                   return <label key={user.id} className="setting-choice"><input type="checkbox" checked={selected} onChange={(event) => setAnnouncementRecipients((current) => {
                     const ids = current.split(/[\\n,;\\s]+/).filter(Boolean);
-                    return event.target.checked ? [...new Set([...ids, user.id])].join('\\n') : ids.filter((id) => id !== user.id).join('\\n');
+                    const identifiers = [user.id, user.email ?? '', user.username ?? ''].filter(Boolean);
+                    const filtered = ids.filter((id) => !identifiers.some((candidate) => candidate.toLocaleLowerCase() === id.toLocaleLowerCase()));
+                    return event.target.checked ? [...filtered, user.email ?? user.id].join('\\n') : filtered.join('\\n');
                   })}/><span>{user.display_name || 'کاربر کاوه'} · {user.username ? '@' + user.username : user.email ?? user.id.slice(0, 8)}</span></label>;
                 })}
                 {visibleManagedUsers.length === 0 && <small>کاربری با این عبارت پیدا نشد.</small>}
