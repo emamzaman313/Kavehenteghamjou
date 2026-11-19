@@ -1579,3 +1579,7 @@ button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+
+.message-rank-badge{display:inline-flex;align-items:center;width:max-content;max-width:100%;margin:0 0 7px;padding:3px 9px;border:1px solid rgba(112,190,255,.28);border-radius:999px;background:linear-gradient(110deg,rgba(30,104,163,.22),rgba(222,177,104,.12));color:#a9d9ff;font-size:11px;font-weight:700;letter-spacing:.1px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.profile-avatar-edit{position:relative;display:grid;justify-items:center;gap:6px;border:0;background:transparent;color:var(--muted);cursor:pointer;font:inherit}.profile-avatar-edit span{font-size:11px}
