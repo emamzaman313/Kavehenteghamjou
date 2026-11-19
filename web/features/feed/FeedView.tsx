@@ -157,7 +157,7 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     } catch (error) { notify(error instanceof Error ? error.message : 'کپی پیوند انجام نشد.', 'error'); }
   };
 
-  return <div className="feed-layout"><div className="feed-main">
+  return <><div className="feed-layout"><div className="feed-main">
     <section className="home-hero" aria-label="خوش‌آمدگویی به کاوه انتقامجو">
       <div className="home-hero-copy">
         <div className="home-hero-kicker"><i/> KAVEH AVENGER <span>فضای اختصاصی تو</span></div>
