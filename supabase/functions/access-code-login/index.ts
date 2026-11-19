@@ -217,7 +217,7 @@ Deno.serve(async (request: Request) => {
     }
 
     if (action === "admin_get") {
-      if (!["owner", "admin", "moderator"].includes(role)) {
+      if (!["owner", "admin", "moderator", "support"].includes(role)) {
         return jsonResponse({ ok: false, isAdmin: false, reason: "insufficient_role" }, 403, origin);
       }
       const settings = await getSettings();
