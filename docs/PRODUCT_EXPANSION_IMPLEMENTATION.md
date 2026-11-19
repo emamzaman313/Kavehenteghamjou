@@ -199,3 +199,10 @@ These require a dedicated migration, verified RLS policies, server-side authoriz
 - Existing realtime refresh, private support conversations, attachment handling, and server-side ticket creation are retained. No schema change was required.
 - Web CI passed on implementation commit `6f767804`; Android CI passed on that same commit. The additional web filter implementation is commit `0766ee07` and its fresh web/Android CI runs are pending at the time of this update.
 - No production database migrations, production data changes, secret modifications, or Vercel production promotion were performed.
+
+
+## 2026-11-19 implementation update — support filter test coverage
+
+- Extracted the web support inbox search/status/priority filtering into a pure helper so the filtering rules are independent of React rendering.
+- Added unit tests covering default results, case-insensitive requester/search matching, ticket ID/category lookup, combined status and staff-priority filtering, and the rule that non-staff views ignore staff-only priority filters.
+- Validation on implementation commit `71dc450c`: Web CI passed (TypeScript, ESLint, unit tests including the new support filter tests, Next.js production build, artifact upload); Android CI passed (unit tests, debug APK, AAB, artifact upload). Secret scanning and web dependency audit passed; Dependency Review remains blocked only by the disabled repository Dependency Graph setting.
