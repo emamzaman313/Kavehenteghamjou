@@ -11,7 +11,8 @@ type Ticket = {
   requester?: { display_name: string; username: string | null } | null;
 };
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string };
-type ReadCursor = { conversation_id: string; last_read_at: string | null };\ntype SupportAttachment = { id:string; original_name:string; bucket_id:string; object_path:string; mime_type:string|null; byte_size:number };
+type ReadCursor = { conversation_id: string; last_read_at: string | null };
+type SupportAttachment = { id:string; original_name:string; bucket_id:string; object_path:string; mime_type:string|null; byte_size:number };
 
 const statusLabels: Record<string,string> = { open:'جدید', in_progress:'در حال بررسی', waiting_user:'منتظر پاسخ شما', resolved:'حل‌شده', closed:'بسته‌شده' };
 const categoryLabels: Record<string,string> = { general:'عمومی', account:'حساب کاربری', technical:'مشکل فنی', report:'گزارش تخلف', billing:'مالی', other:'سایر' };
@@ -20,7 +21,9 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   supabase: SupabaseClient; userId: string; notify: Notify; staff?: boolean;
 }) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
-  const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});\n  const [attachments,setAttachments] = useState<Record<string,{file:SupportAttachment;url:string}[]>>({});\n  const [uploading,setUploading] = useState(false);
+  const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});
+  const [attachments,setAttachments] = useState<Record<string,{file:SupportAttachment;url:string}[]>>({});
+  const [uploading,setUploading] = useState(false);
   const [active,setActive] = useState<string|null>(null);
   const [messages,setMessages] = useState<Message[]>([]);
   const [loading,setLoading] = useState(true);
