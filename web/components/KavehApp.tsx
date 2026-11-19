@@ -186,7 +186,7 @@ export default function KavehApp() {
         {tab === 'profile' && <ProfileView supabase={supabase} userId={session.user.id} profile={profile} accountLabel={session.user.user_metadata?.access_method === 'shared_code' ? 'حساب مهمان مستقل' : session.user.email ? 'حساب ایمیل' : 'حساب کاربری'} onSaved={loadProfile} notify={notify}/>}
         {tab === 'notifications' && <NotificationsView supabase={supabase} userId={session.user.id} notify={notify} onUnreadChange={setUnread}/>}
         {tab === 'settings' && <SettingsView supabase={supabase} userId={session.user.id} dark={dark} onTheme={setDark} notify={notify} onSignOut={() => void supabase.auth.signOut()}/>}
-        {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify} role={adminRole ?? 'moderator'}/>}
+        {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify} role={adminRole === 'owner' || adminRole === 'admin' ? adminRole : 'moderator'}/>}
         {tab === 'admin' && !isAdmin && <section className="panel-card"><div className="notice notice-error">دسترسی مدیریت برای این حساب فعال نیست.</div></section>}
       </div>
       <nav className="mobile-nav">{navItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}{isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت</span></button>}</nav>
