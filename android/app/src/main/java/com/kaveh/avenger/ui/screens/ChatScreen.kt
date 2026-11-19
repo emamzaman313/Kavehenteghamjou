@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,7 +94,8 @@ private data class MessageRow(
     @SerialName("conversation_id") val conversationId: String,
     @SerialName("sender_id") val senderId: String,
     val body: String,
-    @SerialName("created_at") val createdAt: String
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("edited_at") val editedAt: String? = null
 )
 
 @Serializable
@@ -777,11 +780,72 @@ fun ChatScreen(
                                     }
                                 }
                                 Text(
-                                    formatMessageTime(message.createdAt),
+                                    formatMessageTime(message.createdAt) + if (message.editedAt != null) " · ویرایش‌شده" else "",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 if (mine) {
+                                    var showEditDialog by remember(message.id) { mutableStateOf(false) }
+                                    var editedDraft by remember(message.id) { mutableStateOf(message.body) }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        TextButton(onClick = {
+                                            editedDraft = message.body
+                                            showEditDialog = true
+                                        }) { Text("ویرایش") }
+                                        TextButton(onClick = {
+                                            scope.launch {
+                                                try {
+                                                    supabase.postgrest["messages"].update({
+                                                        set("deleted_at", Instant.now().toString())
+                                                    }) {
+                                                        filter { eq("id", message.id); eq("sender_id", userId) }
+                                                    }
+                                                    activeConversation?.id?.let { loadMessages(it); loadConversations() }
+                                                } catch (exception: Exception) {
+                                                    errorText = exception.message ?: "حذف پیام ناموفق بود."
+                                                }
+                                            }
+                                        }) { Text("حذف", color = MaterialTheme.colorScheme.error) }
+                                    }
+                                    if (showEditDialog) {
+                                        AlertDialog(
+                                            onDismissRequest = { showEditDialog = false },
+                                            title = { Text("ویرایش پیام") },
+                                            text = {
+                                                OutlinedTextField(
+                                                    value = editedDraft,
+                                                    onValueChange = { editedDraft = it.take(5000) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    maxLines = 5,
+                                                    label = { Text("متن پیام") }
+                                                )
+                                            },
+                                            confirmButton = {
+                                                TextButton(onClick = {
+                                                    val newBody = editedDraft.trim()
+                                                    if (newBody.isNotEmpty() && newBody != message.body) {
+                                                        scope.launch {
+                                                            try {
+                                                                supabase.postgrest["messages"].update({
+                                                                    set("body", newBody)
+                                                                    set("edited_at", Instant.now().toString())
+                                                                }) {
+                                                                    filter { eq("id", message.id); eq("sender_id", userId) }
+                                                                }
+                                                                showEditDialog = false
+                                                                activeConversation?.id?.let { loadMessages(it); loadConversations() }
+                                                            } catch (exception: Exception) {
+                                                                errorText = exception.message ?: "ویرایش پیام ناموفق بود."
+                                                            }
+                                                        }
+                                                    } else showEditDialog = false
+                                                }, enabled = editedDraft.trim().isNotEmpty()) { Text("ذخیره") }
+                                            },
+                                            dismissButton = {
+                                                TextButton(onClick = { showEditDialog = false }) { Text("انصراف") }
+                                            }
+                                        )
+                                    }
                                     val read = activeConversation?.kind == "direct" &&
                                         activeConversation?.peerReadAt?.let { it >= message.createdAt } == true
                                     Text(
