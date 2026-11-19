@@ -96,7 +96,9 @@ private data class MessageRow(
     @SerialName("sender_id") val senderId: String,
     val body: String,
     @SerialName("created_at") val createdAt: String,
-    @SerialName("edited_at") val editedAt: String? = null
+    @SerialName("edited_at") val editedAt: String? = null,
+    @SerialName("reply_to") val replyTo: String? = null,
+    @SerialName("forwarded_from") val forwardedFrom: String? = null
 )
 
 @Serializable
@@ -104,7 +106,9 @@ private data class MessageInsert(
     @SerialName("conversation_id") val conversationId: String,
     @SerialName("sender_id") val senderId: String,
     val body: String,
-    val format: String = "plain"
+    val format: String = "plain",
+    @SerialName("reply_to") val replyTo: String? = null,
+    @SerialName("forwarded_from") val forwardedFrom: String? = null
 )
 
 @Serializable
@@ -185,6 +189,8 @@ fun ChatScreen(
     var creatingConversationFor by remember { mutableStateOf<String?>(null) }
     var uploadingAttachment by remember { mutableStateOf(false) }
     var downloadingFilePath by remember { mutableStateOf<String?>(null) }
+    var replyingTo by remember { mutableStateOf<MessageRow?>(null) }
+    var forwardingMessage by remember { mutableStateOf<MessageRow?>(null) }
     var pendingDownloadBytes by remember { mutableStateOf<ByteArray?>(null) }
     val attachmentsByMessage = remember { mutableStateMapOf<String, List<FileAssetRow>>() }
 
@@ -808,6 +814,16 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (message.replyTo != null) {
+                                    Text("در پاسخ به پیام قبلی", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                }
+                                if (message.forwardedFrom != null) {
+                                    Text("پیام بازفرستاده‌شده", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton(onClick = { replyingTo = message }) { Text("پاسخ") }
+                                    TextButton(onClick = { forwardingMessage = message }) { Text("ارسال مجدد") }
+                                }
                                 if (mine) {
                                     var showEditDialog by remember(message.id) { mutableStateOf(false) }
                                     var editedDraft by remember(message.id) { mutableStateOf(message.body) }
@@ -884,6 +900,19 @@ fun ChatScreen(
                 }
             }
 
+            if (replyingTo != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("پاسخ به پیام", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text(replyingTo?.body.orEmpty(), maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = { replyingTo = null }) { Text("لغو") }
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -907,7 +936,7 @@ fun ChatScreen(
                         val active = activeConversation
                         val text = draft.trim()
                         if (active != null && text.isNotEmpty() && !sending) {
-                            scope.launch { sendChatMessage(supabase, active.id, userId, text, { sending = it }, { errorText = it }, { draft = it }, { loadMessages(active.id); loadConversations() }) }
+                            scope.launch { sendChatMessage(supabase, active.id, userId, text, replyingTo?.id, { sending = it }, { errorText = it }, { draft = it }, { loadMessages(active.id); loadConversations(); replyingTo = null }) }
                         }
                     })
                 )
@@ -917,7 +946,7 @@ fun ChatScreen(
                         val active = activeConversation
                         val text = draft.trim()
                         if (active != null && text.isNotEmpty() && !sending) {
-                            scope.launch { sendChatMessage(supabase, active.id, userId, text, { sending = it }, { errorText = it }, { draft = it }, { loadMessages(active.id); loadConversations() }) }
+                            scope.launch { sendChatMessage(supabase, active.id, userId, text, replyingTo?.id, { sending = it }, { errorText = it }, { draft = it }, { loadMessages(active.id); loadConversations(); replyingTo = null }) }
                         }
                     }
                 ) {
@@ -926,6 +955,51 @@ fun ChatScreen(
                 }
             }
         }
+
+        forwardingMessage?.let { messageToForward ->
+            AlertDialog(
+                onDismissRequest = { forwardingMessage = null },
+                title = { Text("ارسال پیام به گفتگو") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(messageToForward.body, maxLines = 2, style = MaterialTheme.typography.bodySmall)
+                        conversations.filter { it.id != activeConversation?.id }.forEach { target ->
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val forwarded = supabase.postgrest["messages"].insert(
+                                                MessageInsert(
+                                                    conversationId = target.id,
+                                                    senderId = userId,
+                                                    body = messageToForward.body,
+                                                    forwardedFrom = messageToForward.id
+                                                )
+                                            ) { select() }.decodeList<MessageIdRow>().single()
+                                            runCatching {
+                                                supabase.functions("notification-dispatch", body = NotificationDispatchArgs(forwarded.id))
+                                            }
+                                            forwardingMessage = null
+                                            loadConversations()
+                                        } catch (exception: Exception) {
+                                            errorText = exception.message ?: "ارسال مجدد پیام ناموفق بود."
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(target.title) }
+                        }
+                        if (conversations.none { it.id != activeConversation?.id }) {
+                            Text("گفتگوی دیگری برای ارسال وجود ندارد.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { forwardingMessage = null }) { Text("بستن") }
+                }
+            )
+        }
+
     }
 }
 
@@ -934,6 +1008,7 @@ private suspend fun sendChatMessage(
     conversationId: String,
     userId: String,
     text: String,
+    replyTo: String? = null,
     setSending: (Boolean) -> Unit,
     setError: (String?) -> Unit,
     restoreDraft: (String) -> Unit,
@@ -946,7 +1021,8 @@ private suspend fun sendChatMessage(
             MessageInsert(
                 conversationId = conversationId,
                 senderId = userId,
-                body = text
+                body = text,
+                replyTo = replyTo
             )
         ) { select() }.decodeList<MessageIdRow>().single()
         runCatching {
