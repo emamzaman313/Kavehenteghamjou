@@ -38,7 +38,7 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "delete_reel" | "set_audio_track_active" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
+    action: "moderate_post" | "delete_post" | "delete_reel" | "set_audio_track_active" | "warn_user" | "ban_user" | "unban_user" | "mute_user" | "unmute_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
     targetId: string,
     details: Record<string, unknown> = {},
     targetType: "post" | "reel" | "audio_track" | "user" | "report" | "appearance" = "post",
@@ -209,16 +209,46 @@ Deno.serve(async (request: Request) => {
 
   if (body.action === "users_list") {
     if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
-    const [authUsersResult, profilesResult, adminsResult] = await Promise.all([
+    const [authUsersResult, profilesResult, adminsResult, mutesResult, warningLogsResult] = await Promise.all([
       admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       admin.from("profiles").select("id,display_name,username,created_at").limit(1000),
       admin.from("site_access_admins").select("user_id,role"),
+      admin.from("user_mutes").select("id,user_id,restriction,reason,created_at,expires_at").is("revoked_at", null).order("created_at", { ascending: false }).limit(5000),
+      admin.from("admin_audit_logs").select("target_id,created_at,details").eq("action", "warn_user").eq("status", "succeeded").order("created_at", { ascending: false }).limit(5000),
     ]);
-    if (authUsersResult.error || profilesResult.error || adminsResult.error) return respond({ ok: false, reason: "users_query_failed" }, 500, origin);
+    if (authUsersResult.error || profilesResult.error || adminsResult.error || mutesResult.error || warningLogsResult.error) {
+      return respond({ ok: false, reason: "users_query_failed" }, 500, origin);
+    }
     const profileById = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile]));
     const adminRoleById = new Map((adminsResult.data ?? []).map((entry) => [entry.user_id, entry.role]));
+    const activeMutesByUser = new Map<string, Array<Record<string, unknown>>>();
+    for (const mute of mutesResult.data ?? []) {
+      if (mute.expires_at && Date.parse(mute.expires_at) <= Date.now()) continue;
+      const rows = activeMutesByUser.get(mute.user_id) ?? [];
+      rows.push({
+        id: mute.id,
+        restriction: mute.restriction,
+        reason: mute.reason,
+        created_at: mute.created_at,
+        expires_at: mute.expires_at,
+      });
+      activeMutesByUser.set(mute.user_id, rows);
+    }
+    const warningCountByUser = new Map<string, number>();
+    const latestWarningByUser = new Map<string, { created_at: string; reason: string | null }>();
+    for (const warning of warningLogsResult.data ?? []) {
+      warningCountByUser.set(warning.target_id, (warningCountByUser.get(warning.target_id) ?? 0) + 1);
+      if (!latestWarningByUser.has(warning.target_id)) {
+        const details = warning.details && typeof warning.details === "object" ? warning.details as Record<string, unknown> : {};
+        latestWarningByUser.set(warning.target_id, {
+          created_at: warning.created_at,
+          reason: typeof details.reason === "string" ? details.reason : null,
+        });
+      }
+    }
     const users = (authUsersResult.data.users ?? []).map((user) => {
       const profile = profileById.get(user.id);
+      const latestWarning = latestWarningByUser.get(user.id);
       return {
         id: user.id,
         email: user.email ?? null,
@@ -229,6 +259,10 @@ Deno.serve(async (request: Request) => {
         last_sign_in_at: user.last_sign_in_at ?? null,
         banned_until: user.banned_until ?? null,
         is_banned: Boolean(user.banned_until && Date.parse(user.banned_until) > Date.now()),
+        warning_count: warningCountByUser.get(user.id) ?? 0,
+        last_warning_at: latestWarning?.created_at ?? null,
+        last_warning_reason: latestWarning?.reason ?? null,
+        active_mutes: activeMutesByUser.get(user.id) ?? [],
         admin_role: adminRoleById.get(user.id) ?? null,
       };
     }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
@@ -284,7 +318,7 @@ Deno.serve(async (request: Request) => {
     return respond({ ok: true, auditRecorded, notificationSent: !notificationError }, 200, origin);
   }
 
-  if (["warn_user", "ban_user", "unban_user"].includes(String(body.action))) {
+  if (["warn_user", "ban_user", "unban_user", "mute_user", "unmute_user"].includes(String(body.action))) {
     if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
     if (!validId(body.userId)) return respond({ ok: false, reason: "invalid_user_id" }, 400, origin);
     if (body.userId === authData.user.id) return respond({ ok: false, reason: "cannot_moderate_self" }, 400, origin);
@@ -313,6 +347,97 @@ Deno.serve(async (request: Request) => {
       }
       const auditRecorded = await finishAudit(audit.id, "succeeded");
       return respond({ ok: true, auditRecorded, notificationSent: true }, 200, origin);
+    }
+
+    if (body.action === "mute_user") {
+      const restriction = String(body.restriction ?? "");
+      const allowedRestrictions = new Set([
+        "message_send",
+        "group_message_send",
+        "comment",
+        "post_publish",
+        "reel_publish",
+        "file_upload",
+      ]);
+      if (!allowedRestrictions.has(restriction)) return respond({ ok: false, reason: "invalid_mute_restriction" }, 400, origin);
+      const duration = String(body.duration ?? "24h");
+      const durationHours: Record<string, number> = { "1h": 1, "24h": 24, "168h": 168, "720h": 720 };
+      if (duration !== "permanent" && !durationHours[duration]) {
+        return respond({ ok: false, reason: "invalid_mute_duration" }, 400, origin);
+      }
+      const expiresAt = duration === "permanent"
+        ? null
+        : new Date(Date.now() + durationHours[duration] * 60 * 60 * 1000).toISOString();
+      const audit = await beginAudit("mute_user", body.userId, { reason, restriction, duration }, "user");
+      if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+      const { data: mute, error: muteError } = await admin.from("user_mutes").insert({
+        user_id: body.userId,
+        restriction,
+        reason,
+        created_by: authData.user.id,
+        expires_at: expiresAt,
+      }).select("id,restriction,expires_at").single();
+      if (muteError || !mute) {
+        await finishAudit(audit.id, "failed");
+        return respond({ ok: false, reason: "mute_create_failed" }, 500, origin);
+      }
+      const { error: notificationError } = await admin.from("notifications").insert({
+        recipient_id: body.userId,
+        actor_id: authData.user.id,
+        kind: "admin_mute",
+        entity_type: "moderation",
+        entity_id: audit.id,
+        payload: {
+          message: "محدودیت عملکردی برای حساب شما اعمال شد: " + reason,
+          moderation_action: "mute",
+          restriction,
+          expires_at: expiresAt,
+        },
+      });
+      const auditRecorded = await finishAudit(audit.id, "succeeded");
+      return respond({ ok: true, mute, auditRecorded, notificationSent: !notificationError }, 200, origin);
+    }
+
+    if (body.action === "unmute_user") {
+      if (!validId(body.muteId)) return respond({ ok: false, reason: "invalid_mute_id" }, 400, origin);
+      const { data: mute, error: muteLookupError } = await admin.from("user_mutes")
+        .select("id,user_id,restriction,expires_at,revoked_at")
+        .eq("id", body.muteId)
+        .eq("user_id", body.userId)
+        .maybeSingle();
+      if (muteLookupError || !mute) return respond({ ok: false, reason: "mute_not_found" }, 404, origin);
+      if (mute.revoked_at) return respond({ ok: false, reason: "mute_already_revoked" }, 409, origin);
+      const audit = await beginAudit("unmute_user", body.userId, {
+        mute_id: mute.id,
+        restriction: mute.restriction,
+        reason,
+      }, "user");
+      if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+      const revokedAt = new Date().toISOString();
+      const { data: revoked, error: revokeError } = await admin.from("user_mutes")
+        .update({ revoked_at: revokedAt, revoked_by: authData.user.id })
+        .eq("id", mute.id)
+        .is("revoked_at", null)
+        .select("id")
+        .maybeSingle();
+      if (revokeError || !revoked) {
+        await finishAudit(audit.id, "failed");
+        return respond({ ok: false, reason: "mute_revoke_failed" }, 500, origin);
+      }
+      const { error: notificationError } = await admin.from("notifications").insert({
+        recipient_id: body.userId,
+        actor_id: authData.user.id,
+        kind: "admin_unmute",
+        entity_type: "moderation",
+        entity_id: audit.id,
+        payload: {
+          message: "محدودیت عملکردی حساب شما برداشته شد.",
+          moderation_action: "unmute",
+          restriction: mute.restriction,
+        },
+      });
+      const auditRecorded = await finishAudit(audit.id, "succeeded");
+      return respond({ ok: true, auditRecorded, notificationSent: !notificationError }, 200, origin);
     }
 
     if (body.action === "ban_user") {
