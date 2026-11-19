@@ -494,6 +494,16 @@ Deno.serve(async (request: Request) => {
     return respond({ ok: true, auditRecorded }, 200, origin);
   }
 
+  if (body.action === "reels_list") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const { data, error } = await admin.from("reels")
+      .select("id,author_id,caption,video_path,cover_path,visibility,views_count,published_at,created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return respond({ ok: false, reason: "query_failed" }, 500, origin);
+    return respond({ ok: true, reels: data ?? [] }, 200, origin);
+  }
+
   if (body.action === "audio_tracks_list") {
     if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
     const { data, error } = await admin.from("audio_tracks")
