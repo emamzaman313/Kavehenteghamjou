@@ -762,7 +762,6 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
             <label className="field-label">روش‌های ارسال</label>
             <label className="setting-choice"><input type="checkbox" checked={announcementInApp} onChange={(event) => setAnnouncementInApp(event.target.checked)}/> صندوق اعلان داخل برنامه</label>
             <label className="setting-choice"><input type="checkbox" checked={announcementPush} onChange={(event) => setAnnouncementPush(event.target.checked)}/> اعلان سیستمی گوشی (Push / FCM)</label>
-            <label className="setting-choice"><input type="checkbox" checked={announcementEmail} onChange={(event) => setAnnouncementEmail(event.target.checked)}/> ایمیل (پس از اتصال سرویس ایمیل)</label>
             <label className="field-label">زمان ارسال</label>
             <input className="text-input" type="datetime-local" value={announcementAt} onChange={(event) => setAnnouncementAt(event.target.value)}/>
             <button className="button button-primary" type="button" disabled={scheduledSaving} onClick={() => void createScheduledNotification()}><Megaphone size={15}/>{scheduledSaving ? 'در حال ثبت…' : 'ثبت و زمان‌بندی اعلان'}</button>
