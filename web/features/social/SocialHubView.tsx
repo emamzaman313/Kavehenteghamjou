@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Film, Music2, Megaphone, Heart, MessageCircle, Plus, Upload, ListMusic, RefreshCw } from 'lucide-react';
+import { Film, Music2, Megaphone, Heart, MessageCircle, Plus, Upload, ListMusic, RefreshCw, Send } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader, EmptyState } from '@/components/ui';
 
-type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean };
+type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean; views_count: number };
 type Track = { id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null };
 type DailyTitle = { id: string; title: string; body: string; category: string; starts_at: string; ends_at: string | null };
 type Playlist = { id: string; title: string; description: string; is_public: boolean };
@@ -18,6 +18,8 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [titles, setTitles] = useState<DailyTitle[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [liked, setLiked] = useState<Set<string>>(new Set());
+  const [reelComments, setReelComments] = useState<Record<string, {id:string;author_id:string;body:string;created_at:string}[]>>({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<string,string>>({});
   const [loading, setLoading] = useState(false);
   const [caption, setCaption] = useState('');
   const [video, setVideo] = useState<File | null>(null);
@@ -35,18 +37,20 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [r, t, d, p, likes] = await Promise.all([
-      supabase.from('reels').select('id,author_id,caption,video_path,cover_path,mime_type,published_at,allow_comments').order('published_at', { ascending: false }).limit(40),
+    const [r, t, d, p, likes, comments] = await Promise.all([
+      supabase.from('reels').select('id,author_id,caption,video_path,cover_path,mime_type,published_at,allow_comments,views_count').order('published_at', { ascending: false }).limit(40),
       supabase.from('audio_tracks').select('id,title,artist,audio_path,duration_seconds').eq('is_active', true).order('created_at', { ascending: false }),
       supabase.from('daily_titles').select('id,title,body,category,starts_at,ends_at').eq('is_published', true).lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
       supabase.from('playlists').select('id,title,description,is_public').eq('owner_id', userId).order('created_at', { ascending: false }),
       supabase.from('reel_reactions').select('reel_id').eq('user_id', userId),
+      supabase.from('reel_comments').select('id,reel_id,author_id,body,created_at').order('created_at', { ascending: true }).limit(120),
     ]);
     if (r.error) notify('دریافت ریلز ناموفق بود: ' + r.error.message, 'error'); else setReels((r.data ?? []) as Reel[]);
     if (t.error) notify('دریافت موسیقی ناموفق بود: ' + t.error.message, 'error'); else setTracks((t.data ?? []) as Track[]);
     if (d.error) notify('دریافت اطلاعیه‌ها ناموفق بود: ' + d.error.message, 'error'); else setTitles((d.data ?? []) as DailyTitle[]);
     if (!p.error) setPlaylists((p.data ?? []) as Playlist[]);
     if (!likes.error) setLiked(new Set((likes.data ?? []).map((x) => x.reel_id)));
+    if (!comments.error) { const grouped: Record<string, {id:string;author_id:string;body:string;created_at:string}[]> = {}; for (const item of comments.data ?? []) (grouped[item.reel_id] ??= []).push(item); setReelComments(grouped); }
     setLoading(false);
   }, [supabase, userId, notify]);
 
@@ -121,6 +125,18 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     setDailyTitle(''); setDailyBody(''); notify('اطلاعیه منتشر شد.'); await load();
   };
 
+  const addReelComment = async (reelId: string) => {
+    const body = (commentDrafts[reelId] ?? '').trim();
+    if (!body) return;
+    const { data, error } = await supabase.from('reel_comments').insert({ reel_id: reelId, author_id: userId, body }).select('id,author_id,body,created_at').single();
+    if (error) return notify('ارسال دیدگاه ناموفق بود: ' + error.message, 'error');
+    setReelComments((old) => ({ ...old, [reelId]: [...(old[reelId] ?? []), data as {id:string;author_id:string;body:string;created_at:string}] }));
+    setCommentDrafts((old) => ({ ...old, [reelId]: '' }));
+  };
+  const recordReelView = async (reelId: string) => {
+    const { error } = await supabase.from('reel_views').insert({ reel_id: reelId, viewer_id: userId });
+    if (error && !/duplicate|unique/i.test(error.message)) notify('ثبت بازدید انجام نشد.', 'error');
+  };
   const publicUrl = (path: string) => supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;
 
   return <div className="page-stack">
@@ -138,7 +154,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
         <input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => setVideo(e.target.files?.[0] ?? null)}/>
         <button className="button button-primary" disabled={uploading || !video}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
       </form>
-      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="people-grid">{reels.map((reel) => <article className="person-card reel-card" key={reel.id}><video controls playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video"/><p>{reel.caption}</p><button className={liked.has(reel.id) ? 'button button-primary button-small' : 'button button-quiet button-small'} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button></article>)}</div>}
+      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="people-grid">{reels.map((reel) => <article className="person-card reel-card" key={reel.id}><video controls playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video" onPlay={() => void recordReelView(reel.id)}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button></div>{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
     </>}
     {tab === 'music' && <>
       {isAdmin && <form className="panel-card page-stack" onSubmit={uploadTrack}><strong>افزودن آهنگ به کتابخانه (مدیر)</strong><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام آهنگ" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="هنرمند"/><input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/><button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Plus size={16}/> افزودن آهنگ</button></form>}
