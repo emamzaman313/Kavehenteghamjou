@@ -152,15 +152,15 @@ export default function KavehApp() {
   if (!session || needsEmailPasswordSetup) return <LoginScreen supabase={supabase} configured={configured}/>;
   if (!supabase) return null;
 
-  return <div className={`app-frame ${dark ? 'theme-dark' : 'theme-light'}`} style={{ '--remote-accent': appearance.accent, '--remote-background': appearance.background, '--remote-surface': appearance.surface, '--remote-radius': `${appearance.radius}px` } as CSSProperties}>
+  return <div className={`app-frame kaveh-premium-shell ${dark ? 'theme-dark' : 'theme-light'}`} style={{ '--remote-accent': appearance.accent, '--remote-background': appearance.background, '--remote-surface': appearance.surface, '--remote-radius': `${appearance.radius}px` } as CSSProperties}>
     <aside className="sidebar">
-      <div className="sidebar-brand"><BrandMark/><div><strong>کاوه انتقامجو</strong><small>فضای ارتباطی مستقل</small></div></div>
-      <div className="side-label">فضای شما</div>
+      <div className="sidebar-brand"><BrandMark/><div><strong>کاوه انتقامجو</strong><small>THE PRIVATE SOCIAL UNIVERSE</small></div></div>
+      <div className="side-label"><span>01</span> فضای شما</div>
       <nav className="side-nav">
         {navItems.map((item) => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span>{item.id === 'chats' && unread > 0 && <b className="nav-count">{unread}</b>}</button>)}
       </nav>
       <div className="side-divider"/>
-      <div className="side-label">حساب و تنظیمات</div>
+      <div className="side-label"><span>02</span> حساب و تنظیمات</div>
       <nav className="side-nav">
         <button className={`nav-item ${tab === 'notifications' ? 'active' : ''}`} onClick={() => setTab('notifications')}><Bell size={19}/><span>اعلان‌ها</span>{unread > 0 && <b className="nav-count">{unread}</b>}</button>
         <button className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}><Settings size={19}/><span>تنظیمات</span></button>
@@ -168,13 +168,13 @@ export default function KavehApp() {
       </nav>
       <div className="sidebar-bottom">
         <div className="mini-profile"><Avatar profile={profile} size="md"/><div className="mini-profile-text"><strong>{profile?.display_name || session.user.user_metadata?.full_name || 'کاربر کاوه'}</strong><small>{profile?.username ? `@${profile.username}` : session.user.email}</small></div><button className="icon-button" title="خروج" onClick={() => void supabase.auth.signOut()}><LogOut size={17}/></button></div>
-        <div className="online-indicator"><i/> نشست شما فعال است</div>
+        <div className="online-indicator"><i/> <span>اتصال امن برقرار است</span><small>LIVE</small></div>
       </div>
     </aside>
 
     <main className="main-area">
       <header className="topbar">
-        <div className="topbar-title"><span className="eyebrow"><i/> فضای شخصی شما</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
+        <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
         <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title="تغییر تم"><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       <div className="content-scroll">
