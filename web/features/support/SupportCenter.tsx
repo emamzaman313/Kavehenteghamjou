@@ -10,7 +10,7 @@ type Ticket = {
   subject: string; category: string; status: string; priority: string; created_at: string; updated_at: string; last_message_at: string;
   requester?: { display_name: string; username: string | null } | null;
 };
-type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string };
+type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string };\ntype ReadCursor = { conversation_id: string; last_read_at: string | null };
 
 const statusLabels: Record<string,string> = { open:'جدید', in_progress:'در حال بررسی', waiting_user:'منتظر پاسخ شما', resolved:'حل‌شده', closed:'بسته‌شده' };
 const categoryLabels: Record<string,string> = { general:'عمومی', account:'حساب کاربری', technical:'مشکل فنی', report:'گزارش تخلف', billing:'مالی', other:'سایر' };
@@ -18,7 +18,7 @@ const categoryLabels: Record<string,string> = { general:'عمومی', account:'�
 export default function SupportCenter({ supabase, userId, notify, staff = false }: {
   supabase: SupabaseClient; userId: string; notify: Notify; staff?: boolean;
 }) {
-  const [tickets,setTickets] = useState<Ticket[]>([]);
+  const [tickets,setTickets] = useState<Ticket[]>([]);\n  const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});
   const [active,setActive] = useState<string|null>(null);
   const [messages,setMessages] = useState<Message[]>([]);
   const [loading,setLoading] = useState(true);
@@ -46,6 +46,29 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
         rows.forEach(row=>{ row.requester = map[row.requester_id] ?? null; });
       }
       setTickets(rows);
+      if (rows.length) {
+        const conversationIds = rows.map(row=>row.conversation_id);
+        const [{data:cursors}, {data:recentMessages}] = await Promise.all([
+          supabase.from('conversation_members').select('conversation_id,last_read_at')
+            .eq('user_id',userId).in('conversation_id',conversationIds),
+          supabase.from('messages').select('conversation_id,sender_id,created_at')
+            .in('conversation_id',conversationIds).is('deleted_at',null)
+            .order('created_at',{ascending:false}).limit(Math.min(500,rows.length*5)),
+        ]);
+        const cursorByConversation = new Map(((cursors ?? []) as ReadCursor[]).map(cursor=>[cursor.conversation_id,cursor.last_read_at]));
+        const latestByConversation = new Map<string,{sender_id:string;created_at:string}>();
+        (recentMessages ?? []).forEach(message=>{
+          if (!latestByConversation.has(message.conversation_id)) latestByConversation.set(message.conversation_id,message);
+        });
+        const unread: Record<string,boolean> = {};
+        rows.forEach(row=>{
+          const latest = latestByConversation.get(row.conversation_id);
+          const lastReadAt = cursorByConversation.get(row.conversation_id);
+          unread[row.id] = !!latest && latest.sender_id !== userId &&
+            (!lastReadAt || new Date(latest.created_at).getTime() > new Date(lastReadAt).getTime());
+        });
+        setUnreadTickets(unread);
+      } else setUnreadTickets({});
       if (active && !rows.some(x=>x.id===active)) setActive(null);
     }
     setLoading(false);
@@ -131,7 +154,7 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
       <div className="panel-card" style={{padding:12,minWidth:0}}>
         <strong style={{display:'block',padding:8,marginBottom:6}}>درخواست‌ها ({tickets.length})</strong>
         {loading ? <p>در حال دریافت…</p> : tickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>هنوز درخواستی ثبت نشده است.</p> : tickets.map(ticket=><button key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
-          <strong style={{fontSize:12}}>{ticket.subject}</strong>
+          <span style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><strong style={{fontSize:12}}>{ticket.subject}</strong>{unreadTickets[ticket.id] && <span aria-label="پیام خوانده‌نشده" style={{fontSize:9,background:'var(--accent)',color:'#fff',borderRadius:999,padding:'3px 7px',whiteSpace:'nowrap'}}>جدید</span>}</span>
           {staff && <small style={{color:'var(--muted)'}}>{ticket.requester?.display_name ?? ticket.requester_id.slice(0,8)}{ticket.requester?.username?' · @'+ticket.requester.username:''}</small>}
           <span style={{fontSize:10,color:'var(--muted)'}}>{categoryLabels[ticket.category]??ticket.category} · {statusLabels[ticket.status]??ticket.status} · اولویت {ticket.priority==='urgent'?'فوری':ticket.priority==='high'?'بالا':ticket.priority==='low'?'پایین':'عادی'}</span>
           <small style={{color:'var(--muted)'}}>{new Date(ticket.last_message_at).toLocaleString('fa-IR')}</small>
