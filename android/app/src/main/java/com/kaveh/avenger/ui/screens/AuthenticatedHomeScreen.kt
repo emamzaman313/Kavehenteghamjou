@@ -63,6 +63,8 @@ import com.kaveh.avenger.data.SupabaseClientProvider
 import com.kaveh.avenger.notifications.PushTokenRegistration
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -74,6 +76,9 @@ private enum class MainTab(val title: String) {
     Home("خانه"), Chats("گفتگوها"), Support("پشتیبانی"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), World("جهان"), Admin("مدیریت"), Profile("پروفایل")
 }
 
+@Serializable
+private data class MobileFeatureFlagRow(val key:String,val enabled:Boolean)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
@@ -81,16 +86,42 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var adminRole by remember { mutableStateOf<String?>(null) }
     var rankNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var featureFlags by remember { mutableStateOf<Map<String,Boolean>>(emptyMap()) }
     LaunchedEffect(userId) {
         adminRole = runCatching {
             SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()["role"]?.jsonPrimitive?.contentOrNull
         }.getOrNull()
+        featureFlags = runCatching { SupabaseClientProvider.client.postgrest["platform_feature_flags"].select().decodeList<MobileFeatureFlagRow>().associate { it.key to it.enabled } }.getOrDefault(emptyMap())
         rankNames = runCatching {
             SupabaseClientProvider.client.postgrest.rpc("my_kaveh_ranks").decodeAs<kotlinx.serialization.json.JsonArray>()
                 .mapNotNull { item -> item.jsonObject["name_fa"]?.jsonPrimitive?.contentOrNull }
         }.getOrDefault(emptyList())
     }
-    val tabs = MainTab.entries.filter { it != MainTab.Admin && it != MainTab.World }
+    val isAdmin = adminRole in setOf("owner","admin","moderator")
+    fun featureOn(key:String)=isAdmin || featureFlags[key] != false
+    val tabs = MainTab.entries.filter { tab ->
+        if(tab==MainTab.Admin || tab==MainTab.World) false else when(tab) {
+            MainTab.Chats, MainTab.Communities -> featureOn("chat")
+            MainTab.Support -> featureOn("support")
+            MainTab.Publish -> featureOn("posts")
+            MainTab.Explore -> featureOn("social_discovery")
+            MainTab.Reels -> featureOn("reels")
+            MainTab.Media -> featureOn("uploads")
+            else -> true
+        }
+    }
+    LaunchedEffect(featureFlags) {
+        val key=when(selectedTab) {
+            MainTab.Chats,MainTab.Communities -> "chat"
+            MainTab.Support -> "support"
+            MainTab.Publish -> "posts"
+            MainTab.Explore -> "social_discovery"
+            MainTab.Reels -> "reels"
+            MainTab.Media -> "uploads"
+            else -> null
+        }
+        if(key!=null && featureFlags[key]==false && !isAdmin) selectedTab=MainTab.Profile
+    }
     PushTokenRegistration(supabase = SupabaseClientProvider.client, userId = userId)
 
     Scaffold(
