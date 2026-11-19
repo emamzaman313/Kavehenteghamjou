@@ -119,9 +119,9 @@ class FileUploadRepository(private val supabase: SupabaseClient) {
 
     suspend fun list(ownerId: String): List<VaultFile> {
         require(ownerId.isNotBlank()) { "شناسه کاربر معتبر نیست." }
-        return supabase.postgrest["file_assets"].select {
-            eq("owner_id", ownerId)
-        }.decodeList<VaultFile>()
+        return supabase.postgrest["file_assets"].select()
+            .decodeList<VaultFile>()
+            .filter { it.owner_id == ownerId }
     }
 
     suspend fun downloadToUri(context: Context, file: VaultFile, destination: Uri) {
