@@ -179,3 +179,13 @@ These require a dedicated migration, verified RLS policies, server-side authoriz
 - The admin navigation row now scrolls horizontally on narrow phones instead of overflowing the viewport.
 - Validation on implementation commit `e2bc9166`: Web CI passed; Android unit tests and debug APK/AAB assembly and upload passed. Secret scanning and the web dependency audit passed; Dependency Review remains blocked only because the repository Dependency Graph is disabled.
 - No production database migrations, production data changes, secret updates, or Vercel production promotion were performed.
+
+
+## 2026-11-19 implementation update — Android support inbox triage
+
+- Added search to the Android support center across ticket subject, requester label, category, and ticket ID.
+- Added status filters and per-status counts for all, new, in progress, waiting for user, resolved, and closed tickets.
+- Added staff-only priority filters and counts for urgent, high, normal, and low priority tickets. Regular users only see their own tickets and do not receive staff priority controls.
+- This uses the existing support-ticket RLS and realtime refresh path; no database schema changes were required.
+- Validation on implementation commit `6f767804`: Web CI passed (TypeScript, ESLint, unit tests, Next.js production build); Android CI passed (unit tests, debug APK, AAB, artifact upload). Gitleaks and the web dependency audit passed; Dependency Review is unavailable until GitHub Dependency Graph is enabled.
+- No production database migrations, production data changes, secret modifications, or Vercel production promotion were performed.
