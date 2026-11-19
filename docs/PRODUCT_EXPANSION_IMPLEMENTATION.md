@@ -170,3 +170,12 @@ The existing private vault is now extended across web and Android without changi
 - Server-enforced anti-abuse controls, rate limits, and race-safe reward accounting.
 
 These require a dedicated migration, verified RLS policies, server-side authorization and database tests. They are deliberately not represented as active UI features until that backend slice is implemented and tested.
+
+
+## 2026-11-19 implementation update — Android moderation triage
+
+- Added a searchable report inbox to the Android admin console, with live filters and counts for all, open, in-review, resolved, and rejected reports.
+- Report target types and review states are displayed in Persian; the existing privileged `admin-console` Edge Function remains the only moderation write path and continues to record audit events and notify report submitters on final decisions.
+- The admin navigation row now scrolls horizontally on narrow phones instead of overflowing the viewport.
+- Validation on implementation commit `e2bc9166`: Web CI passed; Android unit tests and debug APK/AAB assembly and upload passed. Secret scanning and the web dependency audit passed; Dependency Review remains blocked only because the repository Dependency Graph is disabled.
+- No production database migrations, production data changes, secret updates, or Vercel production promotion were performed.
