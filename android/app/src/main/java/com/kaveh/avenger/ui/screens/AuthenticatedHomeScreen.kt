@@ -60,7 +60,7 @@ import com.kaveh.avenger.data.SupabaseClientProvider
 import kotlinx.coroutines.launch
 
 private enum class MainTab(val title: String) {
-    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Notifications("اعلان‌ها"), Profile("پروفایل")
+    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), Profile("پروفایل")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,6 +109,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         MainTab.Explore -> Icons.Outlined.Explore
                         MainTab.Reels -> Icons.Outlined.PlayCircleOutline
                         MainTab.Media -> Icons.Outlined.MusicNote
+                        MainTab.Communities -> Icons.Outlined.ChatBubbleOutline
                         MainTab.Notifications -> Icons.Outlined.Notifications
                         MainTab.Profile -> Icons.Outlined.PersonOutline
                     }
@@ -140,6 +141,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 MainTab.Explore -> ExploreFeedScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Reels -> ReelsScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Media -> AudioAndDailyScreen(supabase = SupabaseClientProvider.client)
+                MainTab.Communities -> CommunitiesScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Notifications -> NotificationsScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Profile -> EditableProfileScreen(supabase = SupabaseClientProvider.client, userId = userId, email = email)
             }
