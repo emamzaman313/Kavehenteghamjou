@@ -38,10 +38,10 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "delete_reel" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
+    action: "moderate_post" | "delete_post" | "delete_reel" | "set_audio_track_active" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
     targetId: string,
     details: Record<string, unknown> = {},
-    targetType: "post" | "reel" | "user" | "report" | "appearance" = "post",
+    targetType: "post" | "reel" | "audio_track" | "user" | "report" | "appearance" = "post",
   ) {
     const { data, error } = await admin.from("admin_audit_logs").insert({
       actor_id: authData.user.id,
@@ -489,6 +489,30 @@ Deno.serve(async (request: Request) => {
     if (error) {
       await finishAudit(audit.id, "failed");
       return respond({ ok: false, reason: "delete_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, auditRecorded }, 200, origin);
+  }
+
+  if (body.action === "audio_tracks_list") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const { data, error } = await admin.from("audio_tracks")
+      .select("id,title,artist,audio_path,duration_seconds,is_active,created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return respond({ ok: false, reason: "query_failed" }, 500, origin);
+    return respond({ ok: true, tracks: data ?? [] }, 200, origin);
+  }
+
+  if (body.action === "set_audio_track_active") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    if (!validId(body.trackId) || typeof body.isActive !== "boolean") return respond({ ok: false, reason: "invalid_track_update" }, 400, origin);
+    const audit = await beginAudit("set_audio_track_active", body.trackId, { is_active: body.isActive }, "audio_track");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const { error } = await admin.from("audio_tracks").update({ is_active: body.isActive }).eq("id", body.trackId);
+    if (error) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "update_failed" }, 500, origin);
     }
     const auditRecorded = await finishAudit(audit.id, "succeeded");
     return respond({ ok: true, auditRecorded }, 200, origin);
