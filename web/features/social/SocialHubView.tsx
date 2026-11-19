@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Film, Music2, Megaphone, Heart, Plus, Upload, RefreshCw, Send } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
@@ -41,6 +41,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduled, setScheduled] = useState<ScheduledNotice[]>([]);
   const [dailySaving, setDailySaving] = useState(false);
+  const viewedReelsRef = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,6 +156,34 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     const { error } = await supabase.from('reel_views').insert({ reel_id: reelId, viewer_id: userId });
     if (error && !/duplicate|unique/i.test(error.message)) notify('ثبت بازدید انجام نشد.', 'error');
   };
+  // Reels behave like a real vertical short-video feed: only the visible
+  // item plays, and each viewer is recorded once per page session.
+  useEffect(() => {
+    if (tab !== 'reels' || reels.length === 0) return;
+    const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('[data-reel-video]'));
+    if (!('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const video = entry.target as HTMLVideoElement;
+        const reelId = video.dataset.reelId;
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.65) {
+          void video.play().catch(() => undefined);
+          if (reelId && !viewedReelsRef.current.has(reelId)) {
+            viewedReelsRef.current.add(reelId);
+            void recordReelView(reelId);
+          }
+        } else {
+          video.pause();
+        }
+      }
+    }, { threshold: [0, 0.35, 0.65, 0.9] });
+    videos.forEach((video) => observer.observe(video));
+    return () => {
+      observer.disconnect();
+      videos.forEach((video) => video.pause());
+    };
+  }, [tab, reels, userId]);
+
   const queueScheduledNotice = async (event: FormEvent) => {
     event.preventDefault();
     if (!isAdmin || !scheduleTitle.trim() || !scheduleBody.trim() || !scheduleAt) return;
@@ -191,7 +220,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
         <input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => setVideo(e.target.files?.[0] ?? null)}/>
         <button className="button button-primary" disabled={uploading || !video}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
       </form>
-      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="people-grid">{reels.map((reel) => <article className="person-card reel-card" key={reel.id}><video controls playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video" onPlay={() => void recordReelView(reel.id)}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button><button onClick={() => {setReportingReel(reportingReel === reel.id ? null : reel.id); setReelReportDetails('');}}>گزارش</button></div>{reportingReel === reel.id && <div className="post-report-form"><textarea className="field-input" value={reelReportDetails} onChange={(e) => setReelReportDetails(e.target.value)} maxLength={500} rows={2} placeholder="توضیحات گزارش (اختیاری)"/><div><button className="button button-quiet" onClick={() => setReportingReel(null)}>انصراف</button><button className="button button-primary" onClick={() => void submitReelReport(reel.id)}>ارسال گزارش</button></div></div>}{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
+      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="reel-feed" style={{ maxHeight: '78vh', overflowY: 'auto', scrollSnapType: 'y mandatory', overscrollBehaviorY: 'contain', display: 'grid', gap: 16 }}>{reels.map((reel) => <article className="person-card reel-card" key={reel.id} style={{ scrollSnapAlign: 'start' }}><video data-reel-video data-reel-id={reel.id} controls autoPlay muted loop playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video" style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#080808', borderRadius: 12 }}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button><button onClick={() => {setReportingReel(reportingReel === reel.id ? null : reel.id); setReelReportDetails('');}}>گزارش</button></div>{reportingReel === reel.id && <div className="post-report-form"><textarea className="field-input" value={reelReportDetails} onChange={(e) => setReelReportDetails(e.target.value)} maxLength={500} rows={2} placeholder="توضیحات گزارش (اختیاری)"/><div><button className="button button-quiet" onClick={() => setReportingReel(null)}>انصراف</button><button className="button button-primary" onClick={() => void submitReelReport(reel.id)}>ارسال گزارش</button></div></div>}{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
     </>}
     {tab === 'music' && <>
       {isAdmin && <form className="panel-card page-stack" onSubmit={uploadTrack}><strong>افزودن آهنگ به کتابخانه (مدیر)</strong><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام آهنگ" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="هنرمند"/><input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/><button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Plus size={16}/> افزودن آهنگ</button></form>}
