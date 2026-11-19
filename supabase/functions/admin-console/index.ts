@@ -38,10 +38,10 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "delete_reel" | "set_audio_track_active" | "register_audio_track" | "warn_user" | "ban_user" | "unban_user" | "mute_user" | "unmute_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
+    action: "moderate_post" | "delete_post" | "delete_reel" | "set_audio_track_active" | "register_audio_track" | "warn_user" | "ban_user" | "unban_user" | "mute_user" | "unmute_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback" | "feature_flag_set",
     targetId: string,
     details: Record<string, unknown> = {},
-    targetType: "post" | "reel" | "audio_track" | "user" | "report" | "appearance" = "post",
+    targetType: "post" | "reel" | "audio_track" | "user" | "report" | "appearance" | "feature_flag" = "post",
   ) {
     const { data, error } = await admin.from("admin_audit_logs").insert({
       actor_id: authData.user.id,
@@ -535,6 +535,37 @@ Deno.serve(async (request: Request) => {
       processed += 1;
     }
     return respond({ ok: true, processed, delivered, failed }, 200, origin);
+  }
+
+  if (body.action === "feature_flags_list") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const { data, error } = await admin.from("platform_feature_flags")
+      .select("key,title,description,enabled,updated_at,updated_by")
+      .order("key");
+    if (error) return respond({ ok: false, reason: "feature_flags_query_failed" }, 500, origin);
+    return respond({ ok: true, flags: data ?? [] }, 200, origin);
+  }
+
+  if (body.action === "feature_flag_set") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const key = String(body.key ?? "");
+    if (!/^[a-z][a-z0-9_]{1,48}$/.test(key) || typeof body.enabled !== "boolean") {
+      return respond({ ok: false, reason: "invalid_feature_flag" }, 400, origin);
+    }
+    const { data: current, error: currentError } = await admin.from("platform_feature_flags")
+      .select("key,title,enabled").eq("key", key).maybeSingle();
+    if (currentError || !current) return respond({ ok: false, reason: "feature_flag_not_found" }, 404, origin);
+    const audit = await beginAudit("feature_flag_set", key, { title: current.title, previous_enabled: current.enabled, enabled: body.enabled }, "feature_flag");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const { data: updated, error } = await admin.from("platform_feature_flags")
+      .update({ enabled: body.enabled, updated_at: new Date().toISOString(), updated_by: authData.user.id })
+      .eq("key", key).select("key,title,description,enabled,updated_at").single();
+    if (error || !updated) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "feature_flag_update_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, flag: updated, auditRecorded }, 200, origin);
   }
 
   if (body.action === "overview") {
