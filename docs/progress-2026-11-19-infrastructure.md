@@ -2,7 +2,7 @@
 
 ## بهینه‌سازی کلیدهای خارجی دیتابیس
 
-- Migration با نسخه `20261119132000` و نام `kaveh_fk_covering_indexes` روی Supabase Production با موفقیت اجرا شد.
+- Migration با نسخه `20261119094914` و نام `kaveh_fk_covering_indexes` روی Supabase Production با موفقیت اجرا شد.
 - ده index برای ستون‌های Foreign Key که Performance Advisor گزارش کرده بود اضافه شدند.
 - بررسی مستقیم `pg_indexes` وجود هر ده index را تأیید کرد.
 - هیچ جدول، policy، رکورد کاربر یا فایل حذف یا بازنویسی نشد.
