@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Check, Compass, Home, LogOut, MessageCircle, Search, Settings, ShieldCheck, SunMoon, Users, FolderOpen, X, Film, LifeBuoy } from 'lucide-react';
+import { Bell, Check, Compass, Home, LogOut, MessageCircle, Search, Settings, ShieldCheck, SunMoon, Users, FolderOpen, X, Film, LifeBuoy, Trophy } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -21,13 +21,15 @@ import SocialHubView from '@/features/social/SocialHubView';
 import AdminAccessCodePanel from '@/features/admin/AdminAccessCodePanel';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
 import SupportCenter from '@/features/support/SupportCenter';
+import KavehWorldView from '@/features/world/KavehWorldView';
 
 type Toast = { id: number; text: string; tone?: ToastTone };
-type Tab = 'home' | 'chats' | 'files' | 'discover' | 'social' | 'profile' | 'notifications' | 'settings' | 'support' | 'admin';
+type Tab = 'home' | 'chats' | 'files' | 'discover' | 'social' | 'profile' | 'notifications' | 'settings' | 'support' | 'world' | 'admin';
 const navItems = [
   { id: 'home', label: 'خانه', icon: Home },
   { id: 'chats', label: 'گفتگوها', icon: MessageCircle },
   { id: 'support', label: 'پشتیبانی', icon: LifeBuoy },
+  { id: 'world', label: 'جهان کاوه', icon: Trophy },
   { id: 'files', label: 'فایل‌های من', icon: FolderOpen },
   { id: 'discover', label: 'اکتشاف', icon: Compass },
   { id: 'social', label: 'ریلز و موسیقی', icon: Film },
@@ -186,6 +188,7 @@ export default function KavehApp() {
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
         {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'support' && <SupportCenter supabase={supabase} userId={session.user.id} notify={notify} staff={isSupportStaff}/>}
+        {tab === 'world' && <KavehWorldView supabase={supabase} userId={session.user.id} isAdmin={isAdmin} notify={notify}/>}
         {tab === 'files' && <FilesView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'social' && <SocialHubView supabase={supabase} userId={session.user.id} isAdmin={isAdmin} notify={notify}/>}
         {tab === 'discover' && <DiscoverView supabase={supabase} userId={session.user.id} initialSearch={search} notify={notify} onOpenChat={() => setTab('chats')}/>}
