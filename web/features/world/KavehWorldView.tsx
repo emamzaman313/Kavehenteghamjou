@@ -51,7 +51,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     setLoading(true);
     const now = new Date().toISOString();
     const [missionResult, progressResult, eventResult, joinedResult, levelResult, rankResult, badgeResult, myBadgeResult] = await Promise.all([
-      supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,active,starts_at,ends_at').eq('active', true).lte('starts_at', now).or('ends_at.is.null,ends_at.gt.' + now).order('created_at', { ascending: false }),
+      isAdmin ? supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,active,starts_at,ends_at').order('created_at', { ascending: false }) : supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,active,starts_at,ends_at').eq('active', true).lte('starts_at', now).or('ends_at.is.null,ends_at.gt.' + now).order('created_at', { ascending: false }),
       supabase.from('mission_progress').select('mission_id,progress_count,completed_at,reward_claimed_at').eq('user_id', userId),
       isAdmin ? supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward').order('starts_at', { ascending: false }).limit(50) : supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward').eq('status', 'published').or('ends_at.is.null,ends_at.gt.' + now).order('starts_at', { ascending: false }).limit(30),
       supabase.from('platform_event_participants').select('event_id').eq('user_id', userId),
@@ -139,6 +139,14 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     notify('رویداد در جهان کاوه منتشر شد.'); await refresh();
   };
 
+  const toggleMission = async (mission: Mission) => {
+    setBusy(mission.id);
+    const { error } = await supabase.from('daily_missions').update({ active: !mission.active }).eq('id', mission.id);
+    setBusy(null);
+    if (error) { notify('تغییر وضعیت مأموریت ناموفق بود: ' + error.message, 'error'); return; }
+    notify(mission.active ? 'مأموریت متوقف شد.' : 'مأموریت دوباره فعال شد.'); await refresh();
+  };
+
   const updateEventStatus = async (event: EventRow, status: string) => {
     setBusy(event.id);
     const { error } = await supabase.from('platform_events').update({ status }).eq('id', event.id);
@@ -192,7 +200,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
             const count = Math.min(state?.progress_count ?? 0, mission.target_count);
             const percent = Math.round(count / mission.target_count * 100);
             return <article className={state?.completed_at ? 'world-mission completed' : 'world-mission'} key={mission.id}>
-              <div className="world-card-icon"><Flame size={19}/></div><div className="world-card-content"><div className="world-card-top"><strong>{mission.title}</strong>{state?.completed_at ? <span className="world-complete"><Check size={13}/> تکمیل شد</span> : <span className="world-reward">+{mission.reward_points} XP</span>}</div><p>{mission.description}</p><div className="world-progress-track"><i style={{width:percent+'%'}}/></div><small>{actionLabels[mission.action_key] ?? mission.action_key} · {count} از {mission.target_count}</small></div>
+              <div className="world-card-icon"><Flame size={19}/></div><div className="world-card-content"><div className="world-card-top"><strong>{mission.title}</strong>{state?.completed_at ? <span className="world-complete"><Check size={13}/> تکمیل شد</span> : <span className="world-reward">+{mission.reward_points} XP</span>}{isAdmin && <button type="button" className="world-mission-toggle" onClick={()=>void toggleMission(mission)} disabled={busy===mission.id}>{mission.active?'توقف':'فعال‌سازی'}</button>}</div><p>{mission.description}</p><div className="world-progress-track"><i style={{width:percent+'%'}}/></div><small>{actionLabels[mission.action_key] ?? mission.action_key} · {count} از {mission.target_count}</small></div>
             </article>;
           }) : <div className="world-empty"><Flag size={24}/><strong>فعلاً مأموریت فعالی وجود ندارد</strong><span>به‌زودی چالش‌های تازه اضافه می‌شوند.</span></div>}</div>
           {isAdmin && <form className="world-admin-card" onSubmit={createMission}><div className="world-admin-title"><Plus size={18}/><strong>ساخت مأموریت</strong></div><input className="field-input" value={missionTitle} onChange={(e)=>setMissionTitle(e.target.value)} placeholder="عنوان مأموریت" maxLength={120} required/><textarea className="field-input" value={missionDescription} onChange={(e)=>setMissionDescription(e.target.value)} placeholder="توضیح کوتاه" rows={3}/><label>نوع فعالیت<select className="field-input" value={missionAction} onChange={(e)=>setMissionAction(e.target.value)}>{Object.entries(actionLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><div className="world-form-row"><label>تعداد هدف<input className="field-input" type="number" min="1" max="100" value={missionTarget} onChange={(e)=>setMissionTarget(e.target.value)} required/></label><label>جایزه XP<input className="field-input" type="number" min="0" max="10000" value={missionReward} onChange={(e)=>setMissionReward(e.target.value)} required/></label></div><button className="button button-primary" disabled={busy==='mission-create'}>{busy==='mission-create'?'در حال ساخت…':'انتشار مأموریت'}</button></form>}
