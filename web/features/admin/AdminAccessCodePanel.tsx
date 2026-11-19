@@ -67,7 +67,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [reportRows, setReportRows] = useState<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: string; target_summary: string | null; target_author_id: string | null }[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number; reels?: number; audio_tracks?: number; playlists?: number; daily_titles?: number; reel_views?: number; new_users_7d?: number; pending_reports?: number; notifications_7d?: number }; daily_activity?: { date: string; posts: number; comments: number; reels: number }[]; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewLoading, setOverviewLoading] = useState(role !== 'moderator');
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [appearanceRows, setAppearanceRows] = useState<{ id: string; version: number; config: { appearance?: { accent?: string; background?: string; surface?: string; radius?: number } }; is_published: boolean; created_at: string }[]>([]);
   const [appearanceDraft, setAppearanceDraft] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
@@ -606,10 +606,10 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
         eyebrow="مرکز فرماندهی"
         title="پنل مدیریت کاوه"
         description="نمای کلی جامعه، مدیریت محتوا و کنترل دسترسی مهمان‌ها."
-        action={<button className="button button-quiet" type="button" onClick={() => void refreshOverview()}><Activity size={16}/> تازه‌سازی</button>}
+        action={role !== 'moderator' ? <button className="button button-quiet" type="button" onClick={() => void refreshOverview()}><Activity size={16}/> تازه‌سازی</button> : undefined}
       />
       <section className="admin-dashboard">
-        <div className="admin-stat-grid">
+        {role !== 'moderator' && <div className="admin-stat-grid">
           <div className="admin-stat"><Users/><span>کاربران</span><strong>{overview?.stats.users ?? '—'}</strong></div>
           <div className="admin-stat"><LayoutDashboard/><span>پست‌ها</span><strong>{overview?.stats.posts ?? '—'}</strong></div>
           <div className="admin-stat"><MessageCircle/><span>دیدگاه‌ها</span><strong>{overview?.stats.comments ?? '—'}</strong></div>
@@ -622,7 +622,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           <div className="admin-stat"><Users/><span>عضو جدید (۷ روز)</span><strong>{overview?.stats.new_users_7d ?? '—'}</strong></div>
           <div className="admin-stat"><Flag/><span>گزارش‌های باز</span><strong>{overview?.stats.pending_reports ?? '—'}</strong></div>
           <div className="admin-stat"><Megaphone/><span>اعلان‌های ثبت‌شده (۷ روز)</span><strong>{overview?.stats.notifications_7d ?? '—'}</strong></div>
-        </div>
+        </div>}
         <div className="admin-tabs">
           {role !== 'moderator' && <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>}
           {role !== 'moderator' && <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}><Users size={15}/> کاربران</button>}
