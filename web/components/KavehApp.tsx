@@ -163,6 +163,12 @@ export default function KavehApp() {
     return () => { alive = false; void supabase.removeChannel(channel); };
   }, [supabase, session?.user.id]);
 
+  useEffect(()=>{
+    const required:Record<string,string>={home:'posts',chats:'chat',support:'support',files:'uploads',discover:'social_discovery',social:'reels'};
+    const key=required[tab];
+    if(key && featureFlags[key]===false && !isAdmin) setTab('profile');
+  },[tab,featureFlags,isAdmin]);
+
   if (!authReady) return <div className="boot-screen"><BrandMark/><span className="spinner"/><p>کاوه در حال آماده‌سازی است…</p></div>;
   const needsEmailPasswordSetup = Boolean(
     session?.user.email &&
@@ -183,12 +189,6 @@ export default function KavehApp() {
     if(item.id==='social') return featureEnabled('reels');
     return true;
   });
-  useEffect(()=>{
-    const required:Record<string,string>={home:'posts',chats:'chat',support:'support',files:'uploads',discover:'social_discovery',social:'reels'};
-    const key=required[tab];
-    if(key && featureFlags[key]===false && !isAdmin) setTab('profile');
-  },[tab,featureFlags,isAdmin]);
-
   return <div className={`app-frame kaveh-premium-shell ${dark ? 'theme-dark' : 'theme-light'}`} style={{ '--remote-accent': appearance.accent, '--remote-background': appearance.background, '--remote-surface': appearance.surface, '--remote-radius': `${appearance.radius}px` } as CSSProperties}>
     <aside className="sidebar">
       <div className="sidebar-brand"><BrandMark/><div><strong>کاوه انتقامجو</strong><small>THE PRIVATE SOCIAL UNIVERSE</small></div></div>
