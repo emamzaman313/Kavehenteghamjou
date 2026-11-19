@@ -392,6 +392,9 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
     var following by remember { mutableStateOf(0) }
     val incomingRequests = remember { mutableStateListOf<SocialFollowRow>() }
     val requestProfiles = remember { mutableStateListOf<SocialProfileRow>() }
+    val followerProfiles = remember { mutableStateListOf<SocialProfileRow>() }
+    val followingProfiles = remember { mutableStateListOf<SocialProfileRow>() }
+    var showingConnections by remember { mutableStateOf("none") }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -417,6 +420,20 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
             val requests = supabase.postgrest["follows"].select {
                 filter { eq("following_id", userId); eq("status", "pending") }
             }.decodeList<SocialFollowRow>()
+            val followerRows = supabase.postgrest["follows"].select {
+                filter { eq("following_id", userId); eq("status", "accepted") }
+            }.decodeList<SocialFollowRow>()
+            val followingRows = supabase.postgrest["follows"].select {
+                filter { eq("follower_id", userId); eq("status", "accepted") }
+            }.decodeList<SocialFollowRow>()
+            val connectionIds = (followerRows.map { it.followerId } + followingRows.map { it.followingId }).distinct()
+            val connectionProfiles = if (connectionIds.isEmpty()) emptyList() else supabase.postgrest["profiles"].select {
+                filter { isIn("id", connectionIds) }
+            }.decodeList<SocialProfileRow>()
+            followerProfiles.clear()
+            followerProfiles.addAll(connectionProfiles.filter { p -> followerRows.any { it.followerId == p.id } })
+            followingProfiles.clear()
+            followingProfiles.addAll(connectionProfiles.filter { p -> followingRows.any { it.followingId == p.id } })
             incomingRequests.clear()
             incomingRequests.addAll(requests)
             val requestIds = requests.map { it.followerId }.distinct()
@@ -450,6 +467,18 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         Text("$followers دنبال‌کننده")
                         Text("$following دنبال‌شونده")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { showingConnections = if (showingConnections == "followers") "none" else "followers" }) { Text("نمایش دنبال‌کنندگان") }
+                        TextButton(onClick = { showingConnections = if (showingConnections == "following") "none" else "following" }) { Text("نمایش دنبال‌شوندگان") }
+                    }
+                    val connectionList = if (showingConnections == "followers") followerProfiles else followingProfiles
+                    if (showingConnections != "none") {
+                        Text(if (showingConnections == "followers") "دنبال‌کنندگان" else "دنبال‌شوندگان", fontWeight = FontWeight.SemiBold)
+                        if (connectionList.isEmpty()) Text("فهرست خالی است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        connectionList.forEach { person ->
+                            Text(person.displayName.ifBlank { person.username ?: "کاربر" })
+                        }
                     }
                 }
             }
