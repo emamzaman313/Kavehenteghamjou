@@ -1582,6 +1582,8 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
     var loading by remember { mutableStateOf(true) }
     var busyId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var communityQuery by remember { mutableStateOf("") }
+    var communityFilter by remember { mutableStateOf("all") }
 
     suspend fun refresh() {
         loading = true
@@ -1612,11 +1614,42 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             Text("گروه‌ها و کانال‌ها", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { scope.launch { refresh() } }) { Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی") }
         }
+        Text("فضاهای موردعلاقه‌ات را پیدا کن و به جامعه‌های کاوه بپیوند.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(
+            value = communityQuery,
+            onValueChange = { communityQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("جست‌وجوی نام یا موضوع اجتماع") }
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("all" to "همه", "group" to "گروه‌ها", "channel" to "کانال‌ها", "joined" to "عضویت‌های من").forEach { (key, label) ->
+                if (communityFilter == key) {
+                    Button(onClick = { communityFilter = key }) { Text(label) }
+                } else {
+                    OutlinedButton(onClick = { communityFilter = key }) { Text(label) }
+                }
+            }
+        }
+        val visibleCommunities = communities.filter { community ->
+            val matchesQuery = (community.title + " " + community.description + " " + (community.username ?: "")).contains(communityQuery.trim(), ignoreCase = true)
+            val isMember = community.conversationId in members.value
+            val isPending = community.conversationId in pending.value
+            val matchesFilter = when (communityFilter) {
+                "group" -> community.kind == "group"
+                "channel" -> community.kind == "channel"
+                "joined" -> isMember || isPending
+                else -> true
+            }
+            matchesQuery && matchesFilter
+        }
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (!loading && communities.isEmpty() && error == null) Text("هنوز گروه یا کانال عمومی‌ای ساخته نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!loading && communities.isNotEmpty() && visibleCommunities.isEmpty()) Text("اجتماعی با این جست‌وجو یا فیلتر پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("${visibleCommunities.size} اجتماع", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(communities, key = { it.conversationId }) { community ->
+            items(visibleCommunities, key = { it.conversationId }) { community ->
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(community.title, fontWeight = FontWeight.Bold)
