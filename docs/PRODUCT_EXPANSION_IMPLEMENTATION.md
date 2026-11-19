@@ -143,3 +143,13 @@ Never commit any of these secrets or ask the user to paste them into source file
 8. Design, implement, independently review and then release E2EE.
 
 This order prioritizes usable, testable product value and avoids shipping expensive or security-sensitive placeholders.
+
+
+## 2026-11-19 implementation update — private cloud vault
+
+The existing private vault is now extended across web and Android without changing the production schema:
+
+- Web: searchable file names, MIME-based filters (image/video/document/other), used-storage summary, and clearer file-type icons.
+- Android: owner-filtered metadata listing, filename search, and authenticated downloads saved through Android's system document picker.
+- Both clients continue to use the existing private `user-files` bucket and `file_assets` RLS policies. No public URL or service-role credential is introduced.
+- Validation: Web CI passed on commit `e09005d5` (TypeScript, ESLint, unit tests, production build). Android CI exposed two Kotlin compile errors in the first vault iteration; those source errors were corrected afterward. A fresh Android CI result for the corrected latest commit is still required.
