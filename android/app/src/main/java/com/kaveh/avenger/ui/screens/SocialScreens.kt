@@ -1,6 +1,9 @@
 package com.kaveh.avenger.ui.screens
 
 import android.net.Uri
+import android.content.Context
+import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import android.media.MediaPlayer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,6 +61,7 @@ import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import java.util.UUID
+import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -1262,6 +1266,46 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
 }
 
 
+private const val MAX_SOCIAL_ATTACHMENT_BYTES = 50_000_000L
+
+private fun contentDisplayName(context: Context, uri: Uri, fallback: String): String {
+    return runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (cursor.moveToFirst() && index >= 0) cursor.getString(index)?.take(180) else null
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() } ?: fallback
+}
+
+private fun copyUriToBoundedCacheFile(context: Context, uri: Uri, mimeType: String): File {
+    val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType) ?: "bin"
+    val tempFile = File.createTempFile("kaveh-post-", ".$extension", context.cacheDir)
+    try {
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("خواندن فایل انتخاب‌شده ممکن نیست.")
+        input.use { source ->
+            tempFile.outputStream().buffered().use { destination ->
+                val buffer = ByteArray(64 * 1024)
+                var totalBytes = 0L
+                while (true) {
+                    val count = source.read(buffer)
+                    if (count < 0) break
+                    totalBytes += count
+                    require(totalBytes <= MAX_SOCIAL_ATTACHMENT_BYTES) {
+                        "حجم هر فایل نباید بیشتر از ۵۰ مگابایت باشد."
+                    }
+                    destination.write(buffer, 0, count)
+                }
+            }
+        }
+        require(tempFile.length() > 0L) { "فایل انتخاب‌شده خالی است." }
+        return tempFile
+    } catch (exception: Exception) {
+        tempFile.delete()
+        throw exception
+    }
+}
+
 @Serializable
 private data class SocialPostInsert(
     val id: String,
@@ -1289,14 +1333,14 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
     var body by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var publishing by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { selected ->
         val combined = (selectedMedia + selected).distinct()
         if (combined.size > 4) message = "حداکثر ۴ فایل می‌توانی پیوست کنی."
         selectedMedia = combined.take(4)
     }
-    var message by remember { mutableStateOf<String?>(null) }
-    var failed by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -1354,9 +1398,11 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                             publishing = true
                             message = null
                             failed = false
+                            val postId = UUID.randomUUID().toString()
+                            val uploadedPaths = mutableListOf<String>()
+                            var postCreated = false
                             try {
                                 require(body.isNotBlank() || selectedMedia.isNotEmpty()) { "متن یا رسانه‌ای برای انتشار انتخاب کن." }
-                                val postId = UUID.randomUUID().toString()
                                 supabase.postgrest["posts"].insert(
                                     SocialPostInsert(
                                         id = postId,
@@ -1366,28 +1412,49 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                         publishedAt = java.time.Instant.now().toString()
                                     )
                                 )
+                                postCreated = true
                                 selectedMedia.forEachIndexed { index, uri ->
                                     val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
                                     require(mime.startsWith("image/") || mime.startsWith("video/")) { "فقط عکس و ویدئو قابل پیوست است." }
-                                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                        ?: throw IllegalStateException("خواندن فایل شماره ${index + 1} ناموفق بود.")
-                                    require(bytes.size <= 50_000_000) { "حجم هر فایل نباید بیشتر از ۵۰ مگابایت باشد." }
-                                    val path = "$userId/$postId/${UUID.randomUUID()}"
-                                    supabase.storage.from("post-media").upload(path, bytes) {
-                                        contentType = ContentType.parse(mime)
-                                        upsert = false
+                                    val tempFile = copyUriToBoundedCacheFile(context, uri, mime)
+                                    try {
+                                        val path = "$userId/$postId/${UUID.randomUUID()}"
+                                        supabase.storage.from("post-media").upload(path, tempFile, upsert = false)
+                                        uploadedPaths.add(path)
+                                        val displayName = contentDisplayName(context, uri, "media-${index + 1}")
+                                        supabase.postgrest["post_attachments"].insert(
+                                            SocialPostAttachmentInsert(postId, userId, "post-media", path, displayName, mime, tempFile.length())
+                                        )
+                                    } finally {
+                                        tempFile.delete()
                                     }
-                                    val displayName = uri.lastPathSegment?.substringAfterLast('/')?.take(180)?.ifBlank { null } ?: "media-${index + 1}"
-                                    supabase.postgrest["post_attachments"].insert(
-                                        SocialPostAttachmentInsert(postId, userId, "post-media", path, displayName, mime, bytes.size.toLong())
-                                    )
                                 }
                                 body = ""
                                 selectedMedia = emptyList()
                                 message = "پست و رسانه‌های پیوست‌شده با موفقیت منتشر شدند."
                             } catch (exception: Exception) {
+                                var cleanupFailed = false
+                                if (uploadedPaths.isNotEmpty()) {
+                                    try {
+                                        supabase.storage["post-media"].delete(*uploadedPaths.toTypedArray())
+                                    } catch (_: Exception) {
+                                        cleanupFailed = true
+                                    }
+                                }
+                                if (postCreated) {
+                                    try {
+                                        supabase.postgrest["posts"].delete {
+                                            filter { eq("id", postId); eq("author_id", userId) }
+                                        }
+                                    } catch (_: Exception) {
+                                        cleanupFailed = true
+                                    }
+                                }
                                 failed = true
-                                message = exception.message ?: "انتشار پست انجام نشد. دوباره تلاش کن."
+                                val baseMessage = exception.message ?: "انتشار پست انجام نشد. دوباره تلاش کن."
+                                message = if (cleanupFailed) {
+                                    "$baseMessage پاک‌سازی خودکار کامل نشد؛ لطفاً این عملیات را دوباره بررسی کن."
+                                } else baseMessage
                             } finally {
                                 publishing = false
                             }
