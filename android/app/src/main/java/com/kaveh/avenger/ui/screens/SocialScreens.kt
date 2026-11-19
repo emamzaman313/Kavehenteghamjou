@@ -2,6 +2,8 @@ package com.kaveh.avenger.ui.screens
 
 import android.net.Uri
 import android.media.MediaPlayer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.ui.viewinterop.AndroidView
@@ -49,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.storage.storage
+import io.ktor.http.ContentType
+import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -101,6 +106,11 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     var loading by remember { mutableStateOf(true) }
     var busyPost by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var caption by remember { mutableStateOf("") }
+    var selectedVideo by remember { mutableStateOf<Uri?>(null) }
+    var uploading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedVideo = it }
 
     suspend fun refresh() {
         loading = true
@@ -303,6 +313,15 @@ private data class ReelRow(
 )
 
 @Serializable
+private data class ReelInsertRow(
+    @SerialName("author_id") val authorId: String,
+    val caption: String,
+    @SerialName("video_path") val videoPath: String,
+    @SerialName("mime_type") val mimeType: String,
+    val visibility: String = "public"
+)
+
+@Serializable
 private data class ReelReactionRow(
     @SerialName("reel_id") val reelId: String,
     @SerialName("user_id") val userId: String,
@@ -356,6 +375,37 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
     LaunchedEffect(userId) { refresh() }
 
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        OutlinedTextField(value = caption, onValueChange = { caption = it.take(2200) }, label = { Text("توضیح ریلز") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { videoPicker.launch("video/*") }, enabled = !uploading) { Text(if (selectedVideo == null) "انتخاب ویدئو" else "تغییر ویدئو") }
+            Button(onClick = {
+                val uri = selectedVideo ?: return@Button
+                scope.launch {
+                    uploading = true
+                    error = null
+                    try {
+                        val mime = context.contentResolver.getType(uri) ?: "video/mp4"
+                        require(mime.startsWith("video/")) { "فایل انتخاب‌شده ویدئو نیست." }
+                        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            ?: throw IllegalStateException("خواندن ویدئو ناموفق بود.")
+                        require(bytes.size <= 50_000_000) { "حداکثر حجم ویدئو ۵۰ مگابایت است." }
+                        val path = "$userId/reels/${UUID.randomUUID()}"
+                        supabase.storage["post-media"].upload(path, bytes) {
+                            contentType = ContentType.parse(mime)
+                            upsert = false
+                        }
+                        supabase.postgrest["reels"].insert(ReelInsertRow(userId, caption.trim(), path, mime))
+                        selectedVideo = null
+                        caption = ""
+                        refresh()
+                    } catch (exception: Exception) {
+                        error = exception.message ?: "انتشار ریلز ناموفق بود."
+                    } finally {
+                        uploading = false
+                    }
+                }
+            }, enabled = selectedVideo != null && !uploading) { Text(if (uploading) "در حال بارگذاری…" else "انتشار ریلز") }
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("ویدئوهای کوتاه", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { scope.launch { refresh() } }) {
