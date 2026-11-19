@@ -185,7 +185,7 @@ export default function KavehApp() {
       <div className="content-scroll">
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
         {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
-        {tab === 'support' && <SupportCenter supabase={supabase} userId={session.user.id} notify={notify} staff={isSupportStaff}/ >}
+        {tab === 'support' && <SupportCenter supabase={supabase} userId={session.user.id} notify={notify} staff={isSupportStaff}/>}
         {tab === 'files' && <FilesView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'social' && <SocialHubView supabase={supabase} userId={session.user.id} isAdmin={isAdmin} notify={notify}/>}
         {tab === 'discover' && <DiscoverView supabase={supabase} userId={session.user.id} initialSearch={search} notify={notify} onOpenChat={() => setTab('chats')}/>}
