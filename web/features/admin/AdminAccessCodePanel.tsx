@@ -32,6 +32,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [appearanceDraft, setAppearanceDraft] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
   const [appearanceLoading, setAppearanceLoading] = useState(false);
   const [appearanceSaving, setAppearanceSaving] = useState(false);
+  const [canRollbackAppearance, setCanRollbackAppearance] = useState(false);
 
 
   const refreshOverview = useCallback(async () => {
@@ -97,6 +98,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
     setAppearanceLoading(false);
     if (error || data?.ok !== true) { notify('دریافت تنظیمات ظاهری ناموفق بود.', 'error'); return; }
     const rows = (data.versions ?? []) as typeof appearanceRows;
+    setCanRollbackAppearance(data.can_rollback === true);
     setAppearanceRows(rows);
     const value = rows.find((row) => row.is_published)?.config?.appearance;
     if (value) setAppearanceDraft({ accent: value.accent ?? '#168bff', background: value.background ?? '#07111f', surface: value.surface ?? '#101b2c', radius: value.radius ?? 16 });
@@ -365,7 +367,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
       </div>
     </div>
     <div className="admin-access-footer"><span>نسخه فعال: {appearanceRows.find((row) => row.is_published)?.version ?? '—'}</span><button className="button button-primary" type="button" disabled={appearanceSaving} onClick={() => void publishAppearance()}><Save size={15}/>{appearanceSaving ? 'در حال انتشار…' : 'انتشار تنظیمات'}</button></div>
-    <div className="admin-appearance-history"><strong>تاریخچه نسخه‌ها</strong>{appearanceRows.map((row) => <div className="admin-appearance-version" key={row.id}><span>نسخه {row.version} · {new Date(row.created_at).toLocaleString('fa-IR')} {row.is_published ? '· فعال' : ''}</span>{!row.is_published && <button className="button button-quiet" type="button" disabled={appearanceSaving} onClick={() => void rollbackAppearance(row.version)}><RotateCcw size={14}/> بازگردانی</button>}</div>)}</div>
+    <div className="admin-appearance-history"><strong>تاریخچه نسخه‌ها</strong>{appearanceRows.map((row) => <div className="admin-appearance-version" key={row.id}><span>نسخه {row.version} · {new Date(row.created_at).toLocaleString('fa-IR')} {row.is_published ? '· فعال' : ''}</span>{!row.is_published && canRollbackAppearance && <button className="button button-quiet" type="button" disabled={appearanceSaving} onClick={() => void rollbackAppearance(row.version)}><RotateCcw size={14}/> بازگردانی</button>}</div>)}</div>
   </>}
 </section>}
 {adminTab === 'access' && <section className="settings-card admin-access-card">
