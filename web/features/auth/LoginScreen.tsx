@@ -134,18 +134,12 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { data: passwordResult, error: updateError } = await supabase.functions.invoke('set-account-password', {
-        body: { password },
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+        data: { account_password_ready: true },
       });
-      if (updateError || passwordResult?.ok !== true) {
-        setError(passwordResult?.reason === 'weak_password'
-          ? 'رمز عبور باید حداقل ۱۰ نویسه و شامل حروف کوچک و بزرگ انگلیسی، عدد و نماد باشد.'
-          : authErrorMessage(updateError ?? passwordResult?.reason));
-        return;
-      }
-      const { error: metadataError } = await supabase.auth.updateUser({ data: { account_password_ready: true } });
-      if (metadataError) {
-        setError('رمز عبور ذخیره شد، اما به‌روزرسانی وضعیت حساب کامل نشد. دوباره وارد شوید.');
+      if (updateError) {
+        setError(authErrorMessage(updateError));
         return;
       }
       setNotice('ثبت‌نام با موفقیت تکمیل شد. حساب شما اکنون با ایمیل و رمز عبور قابل ورود است.');
