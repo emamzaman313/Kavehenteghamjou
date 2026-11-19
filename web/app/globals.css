@@ -1755,3 +1755,6 @@ button:disabled { cursor: not-allowed; }
 .reel-card { display:grid; gap:12px; padding:16px; border:1px solid var(--line); border-radius:20px; background:var(--surface); }
 .reel-card video { max-height:72vh; }
 @media(max-width:620px) { .creator-studio-stats { grid-template-columns:1fr 1fr; } .creator-studio-stats>div:last-child { grid-column:1/-1; } .creator-studio-fields { grid-template-columns:1fr; } .creator-media-summary { flex-direction:column; } }
+
+
+.creator-visibility-note { grid-column:1/-1; padding:10px 12px; border-radius:12px; color:var(--muted); background:var(--surface-2); border:1px solid var(--line); font-size:10px; line-height:1.8; }
