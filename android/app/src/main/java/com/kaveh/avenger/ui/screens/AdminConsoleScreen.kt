@@ -163,6 +163,15 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
         finally { busyId = null }
     }
 
+    suspend fun loadAudit() {
+        loading = true; error = null
+        try {
+            val result = callAdminConsole(supabase, AdminActionRequest(action = "audit_logs"))
+            auditRows = result["events"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+        } catch (exception: Exception) { error = exception.message ?: "دریافت سوابق مدیران ناموفق بود." }
+        finally { loading = false }
+    }
+
     suspend fun loadReels() {
         loading = true; error = null
         try {
@@ -199,15 +208,6 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
             loadAudioTracks(); loadAudit()
         } catch (exception: Exception) { error = exception.message ?: "تغییر وضعیت آهنگ ناموفق بود." }
         finally { busyId = null }
-    }
-
-    suspend fun loadAudit() {
-        loading = true; error = null
-        try {
-            val result = callAdminConsole(supabase, AdminActionRequest(action = "audit_logs"))
-            auditRows = result["events"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
-        } catch (exception: Exception) { error = exception.message ?: "دریافت سوابق مدیران ناموفق بود." }
-        finally { loading = false }
     }
 
     suspend fun moderatePost(postId: String, visibility: String) {
