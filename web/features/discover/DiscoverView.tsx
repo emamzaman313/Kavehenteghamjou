@@ -65,7 +65,7 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     setQuery(initialSearch);
     const safe = initialSearch.trim().replace(/[,%()]/g, '');
     let alive = true;
-    void supabase.from('profiles').select('*').or('username.ilike.%' + safe + '%,display_name.ilike.%' + safe + '%').neq('id', userId).limit(24).then(({ data, error }) => {
+    void supabase.from('profiles').select('*').or('username.ilike.%' + safe + '%,display_name.ilike.%' + safe + '%').neq('id', userId).limit(24).then(async ({ data, error }) => {
       if (!alive) return;
       if (error) notify(error.message, 'error'); else {
         const results = (data ?? []) as Profile[];
