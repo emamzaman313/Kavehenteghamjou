@@ -50,6 +50,7 @@ private data class WorldMissionRow(
     @SerialName("action_key") val actionKey: String,
     @SerialName("target_count") val targetCount: Int,
     @SerialName("reward_points") val rewardPoints: Int,
+    @SerialName("reward_badge_code") val rewardBadgeCode: String? = null,
     val active: Boolean,
     @SerialName("starts_at") val startsAt: String = "",
     @SerialName("ends_at") val endsAt: String? = null,
@@ -151,7 +152,8 @@ private data class WorldMissionInsert(
     @SerialName("reward_points") val rewardPoints: Int,
     val active: Boolean = true,
     @SerialName("starts_at") val startsAt: String,
-    @SerialName("created_by") val createdBy: String
+    @SerialName("created_by") val createdBy: String,
+    @SerialName("reward_badge_code") val rewardBadgeCode: String? = null
 )
 
 @Serializable
@@ -193,6 +195,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
     var missionAction by remember { mutableStateOf("publish_post") }
     var missionTarget by remember { mutableStateOf("1") }
     var missionReward by remember { mutableStateOf("25") }
+    var missionBadgeCode by remember { mutableStateOf("") }
     var eventTitle by remember { mutableStateOf("") }
     var eventSummary by remember { mutableStateOf("") }
     var eventBody by remember { mutableStateOf("") }
@@ -297,7 +300,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                 Text(if (done) "✓ تکمیل شد" else "+${mission.rewardPoints} XP", color = if (done) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             Text(mission.description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                            Text("$count از ${mission.targetCount} · ${mission.actionKey}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("$count از ${mission.targetCount} · ${mission.actionKey}" + (mission.rewardBadgeCode?.let { code -> " · نشان: " + (badges.firstOrNull { it.code == code }?.title ?: code) } ?: ""), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             if (isAdmin) {
                                 TextButton(onClick = {
                                     scope.launch {
@@ -384,6 +387,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                     OutlinedTextField(missionTarget, { missionTarget = it.filter(Char::isDigit).take(3) }, label = { Text("هدف") }, modifier = Modifier.weight(1f), singleLine = true)
                                     OutlinedTextField(missionReward, { missionReward = it.filter(Char::isDigit).take(5) }, label = { Text("امتیاز") }, modifier = Modifier.weight(1f), singleLine = true)
                                 }
+                                OutlinedTextField(missionBadgeCode, { missionBadgeCode = it.trim().take(48) }, label = { Text("کد نشان جایزه (اختیاری)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                                 Button(
                                     onClick = {
                                         scope.launch {
@@ -395,8 +399,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                             }
                                             busy = true
                                             try {
-                                                supabase.postgrest["daily_missions"].insert(WorldMissionInsert("android-${UUID.randomUUID()}", missionTitle.trim(), missionDescription.trim(), missionAction, target, reward, true, Instant.now().toString(), userId))
-                                                missionTitle = ""; missionDescription = ""; refresh()
+                                                supabase.postgrest["daily_missions"].insert(WorldMissionInsert("android-${UUID.randomUUID()}", missionTitle.trim(), missionDescription.trim(), missionAction, target, reward, true, Instant.now().toString(), userId, missionBadgeCode.ifBlank { null }))
+                                                missionTitle = ""; missionDescription = ""; missionBadgeCode = ""; refresh()
                                             } catch (exception: Exception) { error = exception.message ?: "ساخت مأموریت ناموفق بود." }
                                             finally { busy = false }
                                         }
