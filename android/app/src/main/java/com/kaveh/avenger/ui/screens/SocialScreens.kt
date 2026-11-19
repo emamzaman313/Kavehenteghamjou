@@ -1095,6 +1095,50 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
             }
         }
+        if (pendingRequests.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("درخواست‌های عضویت برای فضاهای تحت مدیریت", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    pendingRequests.forEach { request ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("درخواست عضویت جدید", fontWeight = FontWeight.SemiBold)
+                                Text("شناسه کاربر: ${request.requesterId.take(8)}…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            OutlinedButton(enabled = busyId != request.id, onClick = {
+                                scope.launch {
+                                    busyId = request.id
+                                    try {
+                                        supabase.postgrest["conversation_join_requests"].update({
+                                            set("status", "approved")
+                                            set("reviewed_at", java.time.Instant.now().toString())
+                                            set("reviewed_by", userId)
+                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                        pendingRequests.removeAll { it.id == request.id }
+                                        refresh()
+                                    } catch (exception: Exception) { error = exception.message ?: "تأیید درخواست ناموفق بود." }
+                                    finally { busyId = null }
+                                }
+                            }) { Text("تأیید") }
+                            TextButton(enabled = busyId != request.id, onClick = {
+                                scope.launch {
+                                    busyId = request.id
+                                    try {
+                                        supabase.postgrest["conversation_join_requests"].update({
+                                            set("status", "rejected")
+                                            set("reviewed_at", java.time.Instant.now().toString())
+                                            set("reviewed_by", userId)
+                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                        pendingRequests.removeAll { it.id == request.id }
+                                    } catch (exception: Exception) { error = exception.message ?: "رد درخواست ناموفق بود." }
+                                    finally { busyId = null }
+                                }
+                            }) { Text("رد") }
+                        }
+                    }
+                }
+            }
+        }
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (!loading && cards.isEmpty() && error == null) Text("هنوز ریلزی منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1575,10 +1619,19 @@ private data class CommunityRequestRow(
     @SerialName("conversation_id") val conversationId: String
 )
 
+@Serializable
+private data class CommunityJoinRequestRow(
+    val id: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("requester_id") val requesterId: String,
+    @SerialName("requested_at") val requestedAt: String
+)
+
 @Composable
 fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
     val communities = remember { mutableStateListOf<CommunityRow>() }
+    val pendingRequests = remember { mutableStateListOf<CommunityJoinRequestRow>() }
     val members = remember { mutableStateOf<Set<String>>(emptySet()) }
     val pending = remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
@@ -1598,8 +1651,15 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             val myRequests = supabase.postgrest["conversation_join_requests"].select {
                 filter { eq("requester_id", userId); eq("status", "pending") }
             }.decodeList<CommunityRequestRow>()
+            val managerRequests = supabase.postgrest["conversation_join_requests"].select {
+                filter { eq("status", "pending") }
+                order("requested_at", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                limit(40)
+            }.decodeList<CommunityJoinRequestRow>()
             communities.clear()
             communities.addAll(found)
+            pendingRequests.clear()
+            pendingRequests.addAll(managerRequests)
             members.value = myMembers.map { it.conversationId }.toSet()
             pending.value = myRequests.map { it.conversationId }.toSet()
         } catch (exception: Exception) {
