@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader } from '@/components/ui';
 import { isValidAccessCode, normalizeAccessCode } from '@/lib/access-code';
+import RankManagementPanel from '@/features/admin/RankManagementPanel';
 
 export default function AdminAccessCodePanel({ supabase, notify, role }: { supabase: SupabaseClient; notify: Notify; role: 'owner' | 'admin' | 'moderator' }) {
   const [enabled, setEnabled] = useState(false);
@@ -13,7 +14,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance' | 'ranks'>('overview');
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
   const [audioTracks, setAudioTracks] = useState<{ id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null; is_active: boolean; created_at: string }[]>([]);
   const [managedReels, setManagedReels] = useState<{ id: string; author_id: string; caption: string; visibility: string; views_count: number; published_at: string; created_at: string }[]>([]);
@@ -395,6 +396,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           {role !== 'moderator' && <button className={adminTab === 'media' ? 'active' : ''} onClick={() => setAdminTab('media')}><Music2 size={15}/> کتابخانه رسانه</button>}
           {role !== 'moderator' && <button className={adminTab === 'notifications' ? 'active' : ''} onClick={() => setAdminTab('notifications')}><Megaphone size={15}/> اعلان‌های زمان‌بندی‌شده</button>}
           {role !== 'moderator' && <button className={adminTab === 'appearance' ? 'active' : ''} onClick={() => setAdminTab('appearance')}><Palette size={15}/> ظاهر سایت</button>}
+          {role === 'owner' && <button className={adminTab === 'ranks' ? 'active' : ''} onClick={() => setAdminTab('ranks')}><ShieldCheck size={15}/> رتبه‌ها و مجوزها</button>}
           {role !== 'moderator' && <button className={adminTab === 'access' ? 'active' : ''} onClick={() => setAdminTab('access')}><KeyRound size={15}/> ورود مهمان</button>}
         </div>
         {overviewLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت اطلاعات پنل…</span></div> : null}
@@ -552,7 +554,8 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     <div className="admin-appearance-history"><strong>تاریخچه نسخه‌ها</strong>{appearanceRows.map((row) => <div className="admin-appearance-version" key={row.id}><span>نسخه {row.version} · {new Date(row.created_at).toLocaleString('fa-IR')} {row.is_published ? '· فعال' : ''}</span>{!row.is_published && canRollbackAppearance && <button className="button button-quiet" type="button" disabled={appearanceSaving} onClick={() => void rollbackAppearance(row.version)}><RotateCcw size={14}/> بازگردانی</button>}</div>)}</div>
   </>}
 </section>}
-{adminTab === 'access' && <section className="settings-card admin-access-card">
+{adminTab === 'ranks' && role === 'owner' && <RankManagementPanel supabase={supabase} notify={notify}/>}
+      {adminTab === 'access' && <section className="settings-card admin-access-card">
         <div className="side-info-title"><ShieldCheck size={19}/><strong>تنظیمات دسترسی مهمان</strong></div>
         {loadError && <div className="notice notice-error" role="alert">{loadError}</div>}
         {loading ? (
