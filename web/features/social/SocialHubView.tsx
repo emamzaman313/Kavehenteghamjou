@@ -21,6 +21,8 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [reelComments, setReelComments] = useState<Record<string, {id:string;author_id:string;body:string;created_at:string}[]>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string,string>>({});
+  const [reportingReel, setReportingReel] = useState<string | null>(null);
+  const [reelReportDetails, setReelReportDetails] = useState('');
   const [loading, setLoading] = useState(false);
   const [caption, setCaption] = useState('');
   const [video, setVideo] = useState<File | null>(null);
@@ -150,6 +152,15 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     setReelComments((old) => ({ ...old, [reelId]: [...(old[reelId] ?? []), data as {id:string;author_id:string;body:string;created_at:string}] }));
     setCommentDrafts((old) => ({ ...old, [reelId]: '' }));
   };
+  const submitReelReport = async (reelId: string) => {
+    const details = reelReportDetails.trim();
+    const { data: existing, error: lookupError } = await supabase.from('reports').select('id').eq('reporter_id', userId).eq('target_type', 'reel').eq('target_id', reelId).in('status', ['open','reviewing']).limit(1).maybeSingle();
+    if (lookupError) return notify('بررسی گزارش قبلی ناموفق بود.', 'error');
+    if (existing) { setReportingReel(null); return notify('برای این ریلز گزارش باز دارید.', 'error'); }
+    const { error } = await supabase.from('reports').insert({ reporter_id: userId, target_type: 'reel', target_id: reelId, reason: 'گزارش ریلز نامناسب', details: details || null, status: 'open' });
+    if (error) return notify('ارسال گزارش ریلز ناموفق بود: ' + error.message, 'error');
+    setReportingReel(null); setReelReportDetails(''); notify('گزارش ریلز برای بررسی مدیران ارسال شد.');
+  };
   const recordReelView = async (reelId: string) => {
     const { error } = await supabase.from('reel_views').insert({ reel_id: reelId, viewer_id: userId });
     if (error && !/duplicate|unique/i.test(error.message)) notify('ثبت بازدید انجام نشد.', 'error');
@@ -190,7 +201,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
         <input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => setVideo(e.target.files?.[0] ?? null)}/>
         <button className="button button-primary" disabled={uploading || !video}><Upload size={16}/>{uploading ? 'در حال بارگذاری…' : 'انتشار ریلز'}</button>
       </form>
-      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="people-grid">{reels.map((reel) => <article className="person-card reel-card" key={reel.id}><video controls playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video" onPlay={() => void recordReelView(reel.id)}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button></div>{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
+      {reels.length === 0 ? <EmptyState icon={<Film/>} title="هنوز ریلزی منتشر نشده" description="اولین ویدئوی کوتاه را منتشر کن."/> : <div className="people-grid">{reels.map((reel) => <article className="person-card reel-card" key={reel.id}><video controls playsInline preload="metadata" src={publicUrl(reel.video_path)} className="post-media-video" onPlay={() => void recordReelView(reel.id)}/><p>{reel.caption}</p><small>{reel.views_count ?? 0} بازدید · {(reelComments[reel.id] ?? []).length} دیدگاه</small><div className="post-actions"><button className={liked.has(reel.id) ? 'is-liked' : ''} onClick={() => void toggleLike(reel)}><Heart size={15} fill={liked.has(reel.id) ? 'currentColor' : 'none'}/> {liked.has(reel.id) ? 'پسندیده شد' : 'پسندیدن'}</button><button onClick={() => {setReportingReel(reportingReel === reel.id ? null : reel.id); setReelReportDetails('');}}>گزارش</button></div>{reportingReel === reel.id && <div className="post-report-form"><textarea className="field-input" value={reelReportDetails} onChange={(e) => setReelReportDetails(e.target.value)} maxLength={500} rows={2} placeholder="توضیحات گزارش (اختیاری)"/><div><button className="button button-quiet" onClick={() => setReportingReel(null)}>انصراف</button><button className="button button-primary" onClick={() => void submitReelReport(reel.id)}>ارسال گزارش</button></div></div>}{(reelComments[reel.id] ?? []).map((comment) => <p key={comment.id} className="comment-row">{comment.body}</p>)}{reel.allow_comments && <div className="inline-form"><input className="field-input" value={commentDrafts[reel.id] ?? ''} onChange={(e) => setCommentDrafts((old) => ({...old, [reel.id]: e.target.value}))} placeholder="دیدگاه بنویس…"/><button className="button button-quiet" onClick={() => void addReelComment(reel.id)}><Send size={15}/> ارسال</button></div>}</article>)}</div>}
     </>}
     {tab === 'music' && <>
       {isAdmin && <form className="panel-card page-stack" onSubmit={uploadTrack}><strong>افزودن آهنگ به کتابخانه (مدیر)</strong><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام آهنگ" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="هنرمند"/><input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/><button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Plus size={16}/> افزودن آهنگ</button></form>}
