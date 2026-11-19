@@ -39,7 +39,7 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     const [{ data: mine }, { data: requests }, { data: managerRequests }] = await Promise.all([
       supabase.from('conversation_members').select('conversation_id').eq('user_id', userId),
       supabase.from('conversation_join_requests').select('conversation_id').eq('requester_id', userId).eq('status', 'pending'),
-      supabase.from('conversation_join_requests').select('id,conversation_id,requester_id,requested_at').eq('status', 'pending').order('requested_at', { ascending: true }).limit(40),
+      supabase.from('conversation_join_requests').select('id,conversation_id,requester_id,requested_at').eq('status', 'pending').neq('requester_id', userId).order('requested_at', { ascending: true }).limit(40),
     ]);
     const memberIds = new Set((mine ?? []).map((row) => row.conversation_id));
     const pendingIds = new Set((requests ?? []).map((row) => row.conversation_id));
