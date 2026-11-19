@@ -4,6 +4,7 @@ import { LifeBuoy, MessageCircle, Plus, Send, RefreshCw, Paperclip, Download } f
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
+import { filterSupportTickets } from '@/lib/support-ticket-filters';
 
 type Ticket = {
   id: string; conversation_id: string; requester_id: string; assigned_to: string | null;
@@ -38,12 +39,11 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   const [creating,setCreating] = useState(false);
   const [showNew,setShowNew] = useState(false);
 
-  const filteredTickets = tickets.filter(ticket => {
-    const searchable = [ticket.subject, ticket.requester?.display_name, ticket.requester?.username, ticket.requester_id, ticket.category, ticket.id]
-      .filter(Boolean).join(' ').toLocaleLowerCase();
-    return (statusFilter === 'all' || ticket.status === statusFilter) &&
-      (!staff || priorityFilter === 'all' || ticket.priority === priorityFilter) &&
-      (!ticketSearch.trim() || searchable.includes(ticketSearch.trim().toLocaleLowerCase()));
+  const filteredTickets = filterSupportTickets(tickets, {
+    search: ticketSearch,
+    status: statusFilter,
+    priority: priorityFilter,
+    staff,
   });
 
   const refresh = useCallback(async () => {
