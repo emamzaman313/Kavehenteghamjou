@@ -1264,6 +1264,7 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
 
 @Serializable
 private data class SocialPostInsert(
+    val id: String,
     @SerialName("author_id") val authorId: String,
     val body: String,
     val visibility: String,
@@ -1271,11 +1272,28 @@ private data class SocialPostInsert(
     @SerialName("published_at") val publishedAt: String
 )
 
+@Serializable
+private data class SocialPostAttachmentInsert(
+    @SerialName("post_id") val postId: String,
+    @SerialName("author_id") val authorId: String,
+    @SerialName("bucket_id") val bucketId: String,
+    @SerialName("object_path") val objectPath: String,
+    @SerialName("original_name") val originalName: String,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("byte_size") val byteSize: Long
+)
+
 @Composable
 fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
     var body by remember { mutableStateOf("") }
+    var selectedMedia by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var publishing by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { selected ->
+        selectedMedia = (selectedMedia + selected).distinct().take(4)
+        if (selected.size > 4) message = "حداکثر ۴ فایل می‌توانی پیوست کنی."
+    }
     var message by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
 
@@ -1315,28 +1333,57 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                 Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)) {
                     Text("انتشار عمومی", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                 }
+                OutlinedButton(onClick = { mediaPicker.launch(arrayOf("image/*", "video/*")) }, enabled = !publishing && selectedMedia.size < 4, modifier = Modifier.fillMaxWidth()) {
+                    Text("افزودن عکس یا ویدئو · ${selectedMedia.size}/4")
+                }
+                selectedMedia.forEachIndexed { index, uri ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(context.contentResolver.getType(uri) ?: "رسانه ${index + 1}", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { selectedMedia = selectedMedia.filterIndexed { itemIndex, _ -> itemIndex != index } }, enabled = !publishing) { Text("حذف") }
+                    }
+                }
                 if (message != null) {
                     Text(message!!, color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                 }
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !publishing && body.isNotBlank(),
+                    enabled = !publishing && (body.isNotBlank() || selectedMedia.isNotEmpty()),
                     onClick = {
                         scope.launch {
                             publishing = true
                             message = null
                             failed = false
                             try {
+                                require(body.isNotBlank() || selectedMedia.isNotEmpty()) { "متن یا رسانه‌ای برای انتشار انتخاب کن." }
+                                val postId = UUID.randomUUID().toString()
                                 supabase.postgrest["posts"].insert(
                                     SocialPostInsert(
+                                        id = postId,
                                         authorId = userId,
                                         body = body.trim(),
                                         visibility = "public",
                                         publishedAt = java.time.Instant.now().toString()
                                     )
                                 )
+                                selectedMedia.forEachIndexed { index, uri ->
+                                    val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                                    require(mime.startsWith("image/") || mime.startsWith("video/")) { "فقط عکس و ویدئو قابل پیوست است." }
+                                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                        ?: throw IllegalStateException("خواندن فایل شماره ${index + 1} ناموفق بود.")
+                                    require(bytes.size <= 50_000_000) { "حجم هر فایل نباید بیشتر از ۵۰ مگابایت باشد." }
+                                    val path = "$userId/$postId/${UUID.randomUUID()}"
+                                    supabase.storage.from("post-media").upload(path, bytes) {
+                                        contentType = ContentType.parse(mime)
+                                        upsert = false
+                                    }
+                                    val displayName = uri.lastPathSegment?.substringAfterLast('/')?.take(180)?.ifBlank { null } ?: "media-${index + 1}"
+                                    supabase.postgrest["post_attachments"].insert(
+                                        SocialPostAttachmentInsert(postId, userId, "post-media", path, displayName, mime, bytes.size.toLong())
+                                    )
+                                }
                                 body = ""
-                                message = "پست با موفقیت منتشر شد."
+                                selectedMedia = emptyList()
+                                message = "پست و رسانه‌های پیوست‌شده با موفقیت منتشر شدند."
                             } catch (exception: Exception) {
                                 failed = true
                                 message = exception.message ?: "انتشار پست انجام نشد. دوباره تلاش کن."
