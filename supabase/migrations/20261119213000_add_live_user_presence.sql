@@ -38,6 +38,21 @@ using (
   )
 );
 
+create or replace function public.touch_user_presence()
+returns void
+language sql
+security invoker
+set search_path = pg_catalog, public
+as $
+  insert into public.user_presence(user_id, last_seen_at)
+  values ((select auth.uid()), now())
+  on conflict (user_id)
+  do update set last_seen_at = now();
+$;
+
+revoke all on function public.touch_user_presence() from public, anon;
+grant execute on function public.touch_user_presence() to authenticated;
+
 create or replace function private.touch_user_presence()
 returns trigger
 language plpgsql
