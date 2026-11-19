@@ -243,20 +243,54 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
         notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         if (section == "overview" && role in listOf("owner", "admin")) {
             val stats = overviewStats
-            val labels = listOf("users" to "کاربران", "posts" to "پست‌ها", "comments" to "دیدگاه‌ها", "pending_reports" to "گزارش‌های باز", "new_users_7d" to "عضو جدید در ۷ روز")
+            val labels = listOf(
+                "users" to "کل کاربران", "new_users_7d" to "عضو جدید در ۷ روز",
+                "posts" to "کل پست‌ها", "comments" to "کل دیدگاه‌ها",
+                "media" to "پیوست‌های رسانه‌ای", "reels" to "کل ریلزها",
+                "reel_views" to "بازدید ریلزها", "audio_tracks" to "آهنگ‌ها",
+                "playlists" to "فهرست‌های پخش", "daily_titles" to "عنوان‌های روزانه",
+                "pending_reports" to "گزارش‌های باز", "notifications_7d" to "اعلان‌های ۷ روز اخیر"
+            )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("نمای کلی زنده", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     Button(onClick={scope.launch{loadOverview()}}){Text("تازه‌سازی")}
                     Text("آمار بر اساس داده‌های سرور",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                labels.forEach { (key,label) ->
-                    Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)) {
-                        Row(Modifier.fillMaxWidth().padding(13.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                            Text(label)
-                            Text(stats?.get(key)?.jsonPrimitive?.contentOrNull ?: "—",fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.primary)
+                labels.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        pair.forEach { (key,label) ->
+                            Card(modifier=Modifier.weight(1f),shape=RoundedCornerShape(14.dp)) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(label, style=MaterialTheme.typography.labelMedium)
+                                    Text(stats?.get(key)?.jsonPrimitive?.contentOrNull ?: "—",fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.titleLarge)
+                                }
+                            }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+                Text("روند فعالیت ۷ روز اخیر",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+                overviewActivity.forEach { day ->
+                    val date = day["date"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    val posts = day["posts"]?.jsonPrimitive?.contentOrNull ?: "0"
+                    val comments = day["comments"]?.jsonPrimitive?.contentOrNull ?: "0"
+                    val reels = day["reels"]?.jsonPrimitive?.contentOrNull ?: "0"
+                    Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text(date,style=MaterialTheme.typography.labelMedium)
+                            Text("پست $posts  ·  دیدگاه $comments  ·  ریلز $reels",style=MaterialTheme.typography.labelSmall)
                         }
                     }
+                }
+                Text("کاربران تازه‌وارد",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+                overviewUsers.take(5).forEach { person ->
+                    Text(person["display_name"]?.jsonPrimitive?.contentOrNull ?: person["username"]?.jsonPrimitive?.contentOrNull ?: "کاربر",style=MaterialTheme.typography.bodyMedium)
+                }
+                Text("آخرین پست‌ها",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+                overviewPosts.take(5).forEach { post ->
+                    val body = post["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    Text(body.take(100).ifBlank { "پست بدون متن" },style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else if (section == "features" && role in listOf("owner", "admin")) {
