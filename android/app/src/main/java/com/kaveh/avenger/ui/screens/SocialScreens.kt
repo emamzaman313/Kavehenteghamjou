@@ -376,6 +376,7 @@ private data class ReelRow(
     val caption: String,
     @SerialName("video_path") val videoPath: String,
     @SerialName("views_count") val viewsCount: Long = 0,
+    @SerialName("allow_comments") val allowComments: Boolean = true,
     @SerialName("published_at") val publishedAt: String
 )
 
