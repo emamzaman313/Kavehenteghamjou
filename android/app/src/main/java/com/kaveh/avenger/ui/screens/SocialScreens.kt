@@ -2,6 +2,7 @@ package com.kaveh.avenger.ui.screens
 
 import android.net.Uri
 import android.content.Context
+import android.content.Intent
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import android.media.MediaPlayer
@@ -127,12 +128,24 @@ private data class SocialFollowRow(
     val status: String = "pending"
 )
 
+@Serializable
+private data class SocialPostAttachmentRow(
+    val id: String,
+    @SerialName("post_id") val postId: String,
+    @SerialName("bucket_id") val bucketId: String,
+    @SerialName("object_path") val objectPath: String,
+    @SerialName("original_name") val originalName: String,
+    @SerialName("mime_type") val mimeType: String? = null,
+    @SerialName("byte_size") val byteSize: Long
+)
+
 private data class FeedCardState(
     val post: SocialPostRow,
     val author: String,
     val likeCount: Int,
     val likedByMe: Boolean,
-    val followStatus: String? = null
+    val followStatus: String? = null,
+    val attachments: List<SocialPostAttachmentRow> = emptyList()
 )
 
 @Composable
@@ -164,6 +177,11 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
             val reactions = if (posts.isEmpty()) emptyList() else supabase.postgrest["post_reactions"].select {
                 filter { isIn("post_id", posts.map { it.id }) }
             }.decodeList<SocialReactionRow>()
+            val attachments = if (posts.isEmpty()) emptyList() else supabase.postgrest["post_attachments"].select {
+                filter { isIn("post_id", posts.map { it.id }) }
+                order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+            }.decodeList<SocialPostAttachmentRow>()
+            val attachmentsByPost = attachments.groupBy { it.postId }
             val follows = if (authorIds.isEmpty()) emptyList() else supabase.postgrest["follows"].select {
                 filter { eq("follower_id", userId); isIn("following_id", authorIds) }
             }.decodeList<SocialFollowRow>()
@@ -173,7 +191,14 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
             cards.clear()
             cards.addAll(posts.map { post ->
                 val postReactions = reactionsByPost[post.id].orEmpty()
-                FeedCardState(post, profileNames[post.authorId] ?: "کاربر کاوه", postReactions.size, postReactions.any { it.userId == userId }, followByAuthor[post.authorId])
+                FeedCardState(
+                    post = post,
+                    author = profileNames[post.authorId] ?: "کاربر کاوه",
+                    likeCount = postReactions.size,
+                    likedByMe = postReactions.any { it.userId == userId },
+                    followStatus = followByAuthor[post.authorId],
+                    attachments = attachmentsByPost[post.id].orEmpty()
+                )
             })
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت فید ناموفق بود."
@@ -250,7 +275,43 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                                     }
                                 }
                             }
-                            Text(card.post.body, style = MaterialTheme.typography.bodyLarge)
+                            if (card.post.body.isNotBlank()) {
+                                Text(card.post.body, style = MaterialTheme.typography.bodyLarge)
+                            }
+                            card.attachments.forEach { attachment ->
+                                val mediaUrl = supabase.storage[attachment.bucketId].publicUrl(attachment.objectPath)
+                                val mimeType = attachment.mimeType.orEmpty()
+                                if (mimeType.startsWith("video/")) {
+                                    AndroidView(
+                                        factory = { viewContext ->
+                                            val controller = MediaController(viewContext)
+                                            VideoView(viewContext).apply {
+                                                setMediaController(controller)
+                                                controller.setAnchorView(this)
+                                                setVideoURI(Uri.parse(mediaUrl))
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(220.dp)
+                                    )
+                                } else {
+                                    TextButton(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                    setDataAndType(Uri.parse(mediaUrl), mimeType.ifBlank { "*/*" })
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                                LocalContext.current.startActivity(intent)
+                                            } catch (exception: Exception) {
+                                                error = exception.message ?: "باز کردن فایل ناموفق بود."
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("پیوست: ${attachment.originalName} · ${attachment.byteSize / 1024} KB")
+                                    }
+                                }
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 IconButton(
                                     onClick = {
@@ -1438,80 +1499,3 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                                     }
                                                 }
                                                 input.toByteReadChannel()
-                                            },
-                                            source = uri.toString(),
-                                            size = tempFile.length(),
-                                            path = path
-                                        ) {
-                                            contentType = ContentType.parse(mime)
-                                        }
-                                        val progressMonitor = scope.launch {
-                                            resumableUpload.stateFlow.collect { state ->
-                                                uploadProgress = state.progress
-                                            }
-                                        }
-                                        try {
-                                            resumableUpload.startOrResumeUploading()
-                                        } finally {
-                                            progressMonitor.cancel()
-                                        }
-                                        uploadedPaths.add(path)
-                                        val displayName = contentDisplayName(context, uri, "media-${index + 1}")
-                                        supabase.postgrest["post_attachments"].insert(
-                                            SocialPostAttachmentInsert(postId, userId, "post-media", path, displayName, mime, tempFile.length())
-                                        )
-                                    } finally {
-                                        tempFile.delete()
-                                    }
-                                }
-                                body = ""
-                                selectedMedia = emptyList()
-                                uploadProgress = null
-                                message = "پست و رسانه‌های پیوست‌شده با موفقیت منتشر شدند."
-                            } catch (exception: Exception) {
-                                var cleanupFailed = false
-                                if (uploadedPaths.isNotEmpty()) {
-                                    try {
-                                        supabase.storage["post-media"].delete(*uploadedPaths.toTypedArray())
-                                    } catch (_: Exception) {
-                                        cleanupFailed = true
-                                    }
-                                }
-                                if (postCreated) {
-                                    try {
-                                        supabase.postgrest["posts"].delete {
-                                            filter { eq("id", postId); eq("author_id", userId) }
-                                        }
-                                    } catch (_: Exception) {
-                                        cleanupFailed = true
-                                    }
-                                }
-                                failed = true
-                                uploadProgress = null
-                                val baseMessage = exception.message ?: "انتشار پست انجام نشد. دوباره تلاش کن."
-                                message = if (cleanupFailed) {
-                                    "$baseMessage پاک‌سازی خودکار کامل نشد؛ لطفاً این عملیات را دوباره بررسی کن."
-                                } else baseMessage
-                            } finally {
-                                publishing = false
-                            }
-                        }
-                    }
-                ) {
-                    if (publishing) CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp)
-                    else Text("انتشار در کاوه")
-                }
-            }
-        }
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f))
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("یادآوری حریم خصوصی", fontWeight = FontWeight.SemiBold)
-                Text("این نسخه پست را به‌صورت عمومی منتشر می‌کند؛ محتوا می‌تواند در اکتشاف و فید جامعه نمایش داده شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
