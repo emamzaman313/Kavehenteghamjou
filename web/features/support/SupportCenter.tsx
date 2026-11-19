@@ -181,7 +181,7 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     let assetId:string|null=null;
     let messageId:string|null=null;
     try {
-      const safeName = file.name.replace(/[\\/\\\\\\u0000-\\u001f]/g,'_').slice(0,180) || 'attachment';
+const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).join('_').replace(/[\u0000-\u001f]/g,'_').slice(0,180) || 'attachment';
       const bytes = await file.arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256',bytes);
       const hash = Array.from(new Uint8Array(digest)).map(value=>value.toString(16).padStart(2,'0')).join('');
