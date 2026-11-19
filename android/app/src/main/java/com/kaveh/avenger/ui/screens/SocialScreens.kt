@@ -106,12 +106,6 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     var loading by remember { mutableStateOf(true) }
     var busyPost by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var caption by remember { mutableStateOf("") }
-    var selectedVideo by remember { mutableStateOf<Uri?>(null) }
-    var uploading by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedVideo = it }
-
     suspend fun refresh() {
         loading = true
         error = null
@@ -342,6 +336,12 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
     var loading by remember { mutableStateOf(true) }
     var busyReel by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    var caption by remember { mutableStateOf("") }
+    var selectedVideo by remember { mutableStateOf<Uri?>(null) }
+    var uploading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedVideo = it }
 
     suspend fun refresh() {
         loading = true
