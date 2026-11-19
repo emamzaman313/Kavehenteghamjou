@@ -153,3 +153,20 @@ The existing private vault is now extended across web and Android without changi
 - Android: owner-filtered metadata listing, filename search, and authenticated downloads saved through Android's system document picker.
 - Both clients continue to use the existing private `user-files` bucket and `file_assets` RLS policies. No public URL or service-role credential is introduced.
 - Validation: Web CI passed on commit `e09005d5` (TypeScript, ESLint, unit tests, production build). Android CI exposed two Kotlin compile errors in the first vault iteration; those source errors were corrected afterward. A fresh Android CI result for the corrected latest commit is still required.
+
+
+## 2026-11-19 implementation update — Android Kaveh World navigation parity
+
+- The Android Kaveh World screen now has horizontally scrollable tabs for missions, events, leaderboard, honors, and (for authorized admins only) management controls.
+- The Android presentation now matches the existing web information architecture more closely; data, mission rewards, and event participation continue to use the existing Supabase tables and server-side triggers.
+- Validation on implementation commit `c9913723`: Web CI passed; Android unit tests and debug APK/AAB assembly and artifact upload passed.
+- Security checks: secret scanning and the web dependency audit passed. GitHub Dependency Review remains blocked because repository Dependency Graph is disabled. Enable it at the repository Security Analysis settings before treating that check as complete.
+- No production database migration, production data change, secret modification, or Vercel production promotion was performed.
+
+## Remaining Kaveh World work — not yet shipped
+
+- Seasons and archived seasonal leaderboards.
+- Team/clan creation, membership roles, invitations, team challenges, and server-calculated team scores.
+- Server-enforced anti-abuse controls, rate limits, and race-safe reward accounting.
+
+These require a dedicated migration, verified RLS policies, server-side authorization and database tests. They are deliberately not represented as active UI features until that backend slice is implemented and tested.
