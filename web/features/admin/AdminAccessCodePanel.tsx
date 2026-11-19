@@ -25,7 +25,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [auditLoading, setAuditLoading] = useState(false);
   const [reportRows, setReportRows] = useState<{ id: string; reporter_id: string; target_type: string; target_id: string; reason: string; details: string | null; status: string; created_at: string; target_summary: string | null; target_author_id: string | null }[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
-  const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number; reels?: number; audio_tracks?: number; playlists?: number; daily_titles?: number; reel_views?: number }; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
+  const [overview, setOverview] = useState<{ stats: { users: number; posts: number; comments: number; media: number; reels?: number; audio_tracks?: number; playlists?: number; daily_titles?: number; reel_views?: number; new_users_7d?: number; pending_reports?: number; notifications_7d?: number }; daily_activity?: { date: string; posts: number; comments: number; reels: number }[]; users: { id: string; display_name: string; username: string | null; created_at: string }[]; posts: { id: string; author_id: string; body: string; visibility: string; created_at: string }[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [appearanceRows, setAppearanceRows] = useState<{ id: string; version: number; config: { appearance?: { accent?: string; background?: string; surface?: string; radius?: number } }; is_published: boolean; created_at: string }[]>([]);
@@ -284,6 +284,9 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <div className="admin-stat"><ListMusic/><span>فهرست‌های پخش</span><strong>{overview?.stats.playlists ?? '—'}</strong></div>
           <div className="admin-stat"><Megaphone/><span>عنوان‌ها و اطلاعیه‌ها</span><strong>{overview?.stats.daily_titles ?? '—'}</strong></div>
           <div className="admin-stat"><Eye/><span>بازدید ریلز</span><strong>{overview?.stats.reel_views ?? '—'}</strong></div>
+          <div className="admin-stat"><Users/><span>عضو جدید (۷ روز)</span><strong>{overview?.stats.new_users_7d ?? '—'}</strong></div>
+          <div className="admin-stat"><Flag/><span>گزارش‌های باز</span><strong>{overview?.stats.pending_reports ?? '—'}</strong></div>
+          <div className="admin-stat"><Megaphone/><span>اعلان‌های ثبت‌شده (۷ روز)</span><strong>{overview?.stats.notifications_7d ?? '—'}</strong></div>
         </div>
         <div className="admin-tabs">
           <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>
@@ -298,6 +301,24 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
         {adminTab === 'overview' && !overviewLoading && <div className="admin-overview-grid">
           <div className="admin-console-card"><strong>آخرین فعالیت‌ها</strong>{(overview?.posts ?? []).slice(0,5).map((post) => <div className="admin-activity-row" key={post.id}><span className="admin-activity-dot"/><div><b>{post.body || 'پست رسانه‌ای'}</b><small>{post.visibility === 'public' ? 'عمومی' : 'محدود'} · {new Date(post.created_at).toLocaleDateString('fa-IR')}</small></div></div>)}{!overview?.posts.length && <p>هنوز فعالیتی ثبت نشده است.</p>}</div>
           <div className="admin-console-card"><strong>آخرین اعضا</strong>{(overview?.users ?? []).slice(0,5).map((user) => <div className="admin-user-row" key={user.id}><span className="admin-user-avatar">{(user.display_name || 'ک').slice(0,1)}</span><div><b>{user.display_name || 'کاربر کاوه'}</b><small>{user.username ? '@' + user.username : 'نام کاربری ثبت نشده'}</small></div></div>)}</div>
+          <div className="admin-console-card">
+            <strong>روند فعالیت هفت‌روزه</strong>
+            <p className="admin-user-policy-note">تعداد پست‌ها، دیدگاه‌ها و ریلزهای ایجادشده در هر روز (بر اساس زمان UTC)</p>
+            <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+              {(overview?.daily_activity ?? []).map((day) => {
+                const total = day.posts + day.comments + day.reels;
+                const max = Math.max(1, ...(overview?.daily_activity ?? []).map((item) => item.posts + item.comments + item.reels));
+                return <div key={day.date} style={{ display: 'grid', gridTemplateColumns: '76px minmax(0,1fr) 38px', gap: 10, alignItems: 'center' }}>
+                  <small>{new Date(day.date + 'T00:00:00Z').toLocaleDateString('fa-IR', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</small>
+                  <div title={`پست: ${day.posts} · دیدگاه: ${day.comments} · ریلز: ${day.reels}`} style={{ height: 10, background: 'var(--surface-muted, rgba(127,127,127,.16))', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.round((total / max) * 100)}%`, height: '100%', background: 'var(--accent, #168bff)', borderRadius: 99, minWidth: total ? 3 : 0 }}/>
+                  </div>
+                  <b style={{ textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>{total}</b>
+                </div>;
+              })}
+            </div>
+            <small style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 14 }}><span>پست: {(overview?.daily_activity ?? []).reduce((sum, day) => sum + day.posts, 0)}</span><span>دیدگاه: {(overview?.daily_activity ?? []).reduce((sum, day) => sum + day.comments, 0)}</span><span>ریلز: {(overview?.daily_activity ?? []).reduce((sum, day) => sum + day.reels, 0)}</span></small>
+          </div>
         </div>}
         {adminTab === 'users' && <div className="admin-console-card">
           <div className="admin-audit-heading"><strong>مدیریت کاربران ({managedUsers.length})</strong><button className="button button-quiet" type="button" onClick={() => void refreshUsers()}><Activity size={15}/> تازه‌سازی</button></div>
