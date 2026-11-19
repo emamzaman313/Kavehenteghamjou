@@ -391,17 +391,22 @@ Deno.serve(async (request: Request) => {
   }
 
   if (body.action === "overview") {
-    const [users, userCount, posts, comments, media, latestPosts] = await Promise.all([
+    const [users, userCount, posts, comments, media, reels, audioTracks, playlists, dailyTitles, reelViews, latestPosts] = await Promise.all([
       admin.from("profiles").select("id,display_name,username,created_at").order("created_at", { ascending: false }).limit(30),
       admin.from("profiles").select("id", { count: "exact", head: true }),
       admin.from("posts").select("id", { count: "exact", head: true }),
       admin.from("comments").select("id", { count: "exact", head: true }),
       admin.from("post_attachments").select("id", { count: "exact", head: true }),
+      admin.from("reels").select("id", { count: "exact", head: true }),
+      admin.from("audio_tracks").select("id", { count: "exact", head: true }),
+      admin.from("playlists").select("id", { count: "exact", head: true }),
+      admin.from("daily_titles").select("id", { count: "exact", head: true }),
+      admin.from("reel_views").select("reel_id", { count: "exact", head: true }),
       admin.from("posts").select("id,author_id,body,visibility,created_at").order("created_at", { ascending: false }).limit(30),
     ]);
-    const firstError = users.error || userCount.error || posts.error || comments.error || media.error || latestPosts.error;
+    const firstError = users.error || userCount.error || posts.error || comments.error || media.error || reels.error || audioTracks.error || playlists.error || dailyTitles.error || reelViews.error || latestPosts.error;
     if (firstError) return respond({ ok: false, reason: "query_failed" }, 500, origin);
-    return respond({ ok: true, stats: { users: userCount.count ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0, media: media.count ?? 0 }, users: users.data ?? [], posts: latestPosts.data ?? [] }, 200, origin);
+    return respond({ ok: true, stats: { users: userCount.count ?? 0, posts: posts.count ?? 0, comments: comments.count ?? 0, media: media.count ?? 0, reels: reels.count ?? 0, audio_tracks: audioTracks.count ?? 0, playlists: playlists.count ?? 0, daily_titles: dailyTitles.count ?? 0, reel_views: reelViews.count ?? 0 }, users: users.data ?? [], posts: latestPosts.data ?? [] }, 200, origin);
   }
 
   if (body.action === "moderate_post") {
