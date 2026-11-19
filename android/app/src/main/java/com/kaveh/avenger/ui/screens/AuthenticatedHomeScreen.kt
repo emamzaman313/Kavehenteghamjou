@@ -71,7 +71,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.launch
 
 private enum class MainTab(val title: String) {
-    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), World("جهان"), Admin("مدیریت"), Profile("پروفایل")
+    Home("خانه"), Chats("گفتگوها"), Support("پشتیبانی"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), World("جهان"), Admin("مدیریت"), Profile("پروفایل")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
