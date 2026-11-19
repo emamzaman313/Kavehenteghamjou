@@ -352,6 +352,44 @@ Deno.serve(async (request: Request) => {
     return respond({ ok: true, auditRecorded, notificationSent: !notificationError, banned_until: updatedUser.user.banned_until ?? null }, 200, origin);
   }
 
+  if (body.action === "process_scheduled_notifications") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const { data: dueRows, error: dueError } = await admin.from("scheduled_notifications")
+      .select("id,title,body,audience,recipient_ids,scheduled_at")
+      .eq("status", "pending").lte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: true }).limit(50);
+    if (dueError) return respond({ ok: false, reason: "scheduled_lookup_failed" }, 500, origin);
+    let processed = 0;
+    for (const item of dueRows ?? []) {
+      const { data: claimed, error: claimError } = await admin.from("scheduled_notifications")
+        .update({ status: "processing", error_message: null }).eq("id", item.id).eq("status", "pending").select("id").maybeSingle();
+      if (claimError || !claimed) continue;
+      let recipientIds: string[] = [];
+      if (item.audience === "admins") {
+        const { data } = await admin.from("site_access_admins").select("user_id").limit(1000);
+        recipientIds = (data ?? []).map((row) => row.user_id);
+      } else if (item.audience === "specific") {
+        recipientIds = Array.isArray(item.recipient_ids) ? item.recipient_ids.filter((id): id is string => validId(id)) : [];
+      } else {
+        const { data } = await admin.from("profiles").select("id").limit(1000);
+        recipientIds = (data ?? []).map((row) => row.id);
+      }
+      const rows = [...new Set(recipientIds)].map((recipient_id) => ({
+        recipient_id, actor_id: authData.user.id, kind: "scheduled_announcement",
+        entity_type: "announcement", entity_id: item.id,
+        payload: { title: item.title, message: item.body },
+      }));
+      const { error: deliveryError } = rows.length ? await admin.from("notifications").insert(rows) : { error: null };
+      if (deliveryError) {
+        await admin.from("scheduled_notifications").update({ status: "failed", error_message: "in_app_delivery_failed" }).eq("id", item.id);
+      } else {
+        await admin.from("scheduled_notifications").update({ status: "sent", sent_at: new Date().toISOString(), error_message: null }).eq("id", item.id);
+      }
+      processed += 1;
+    }
+    return respond({ ok: true, processed }, 200, origin);
+  }
+
   if (body.action === "overview") {
     const [users, userCount, posts, comments, media, latestPosts] = await Promise.all([
       admin.from("profiles").select("id,display_name,username,created_at").order("created_at", { ascending: false }).limit(30),
