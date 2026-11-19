@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Check, Compass, Home, LogOut, MessageCircle, Search, Settings, ShieldCheck, SunMoon, Users, FolderOpen, X, Film } from 'lucide-react';
+import { Bell, Check, Compass, Home, LogOut, MessageCircle, Search, Settings, ShieldCheck, SunMoon, Users, FolderOpen, X, Film, LifeBuoy } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -20,12 +20,14 @@ import SettingsView from '@/features/settings/SettingsView';
 import SocialHubView from '@/features/social/SocialHubView';
 import AdminAccessCodePanel from '@/features/admin/AdminAccessCodePanel';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
+import SupportCenter from '@/features/support/SupportCenter';
 
 type Toast = { id: number; text: string; tone?: ToastTone };
-type Tab = 'home' | 'chats' | 'files' | 'discover' | 'social' | 'profile' | 'notifications' | 'settings' | 'admin';
+type Tab = 'home' | 'chats' | 'files' | 'discover' | 'social' | 'profile' | 'notifications' | 'settings' | 'support' | 'admin';
 const navItems = [
   { id: 'home', label: 'خانه', icon: Home },
   { id: 'chats', label: 'گفتگوها', icon: MessageCircle },
+  { id: 'support', label: 'پشتیبانی', icon: LifeBuoy },
   { id: 'files', label: 'فایل‌های من', icon: FolderOpen },
   { id: 'discover', label: 'اکتشاف', icon: Compass },
   { id: 'social', label: 'ریلز و موسیقی', icon: Film },
@@ -52,6 +54,7 @@ export default function KavehApp() {
   const [search, setSearch] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminRole, setAdminRole] = useState<string | null>(null);
+  const isSupportStaff = ['owner', 'admin', 'support'].includes(adminRole ?? '');
 
   useEffect(() => {
     if (!supabase) return;
@@ -176,12 +179,13 @@ export default function KavehApp() {
     <GlobalAudioPlayer supabase={supabase}/>
     <main className="main-area">
       <header className="topbar">
-        <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
+        <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', support: isSupportStaff ? 'صندوق پشتیبانی' : 'پشتیبانی و ارتباط با مدیریت', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
         <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title="تغییر تم"><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       <div className="content-scroll">
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
         {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
+        {tab === 'support' && <SupportCenter supabase={supabase} userId={session.user.id} notify={notify} staff={isSupportStaff}/ >}
         {tab === 'files' && <FilesView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'social' && <SocialHubView supabase={supabase} userId={session.user.id} isAdmin={isAdmin} notify={notify}/>}
         {tab === 'discover' && <DiscoverView supabase={supabase} userId={session.user.id} initialSearch={search} notify={notify} onOpenChat={() => setTab('chats')}/>}
