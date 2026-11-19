@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.R
 import com.kaveh.avenger.data.SupabaseClientProvider
 import com.kaveh.avenger.notifications.PushTokenRegistration
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
