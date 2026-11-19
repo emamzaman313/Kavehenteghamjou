@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,6 +64,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 private data class SocialPostRow(
@@ -1020,17 +1025,56 @@ private data class NotificationRow(
     @SerialName("created_at") val createdAt: String
 )
 
+@Serializable
+private data class UserNotificationSettingsRow(
+    @SerialName("user_id") val userId: String,
+    val notifications: JsonObject = JsonObject(emptyMap())
+)
+
 @Composable
 fun NotificationsScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
     val rows = remember { mutableStateListOf<NotificationRow>() }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var pushEnabled by remember { mutableStateOf(true) }
+    var emailEnabled by remember { mutableStateOf(false) }
+    var savingPreferences by remember { mutableStateOf(false) }
+
+    suspend fun savePreferences(push: Boolean = pushEnabled, email: Boolean = emailEnabled) {
+        savingPreferences = true
+        error = null
+        try {
+            val current = supabase.postgrest["user_settings"].select {
+                filter { eq("user_id", userId) }
+                limit(1)
+            }.decodeList<UserNotificationSettingsRow>().firstOrNull()
+                ?: throw IllegalStateException("تنظیمات حساب پیدا نشد؛ یک‌بار از حساب خارج و دوباره وارد شوید.")
+            val merged = buildJsonObject {
+                current.notifications.forEach { (key, value) -> put(key, value) }
+                put("push", JsonPrimitive(push))
+                put("email", JsonPrimitive(email))
+            }
+            supabase.postgrest["user_settings"].update({ set("notifications", merged) }) {
+                filter { eq("user_id", userId) }
+            }
+            pushEnabled = push
+            emailEnabled = email
+        } catch (exception: Exception) {
+            error = exception.message ?: "ذخیره تنظیمات اعلان ناموفق بود."
+        } finally { savingPreferences = false }
+    }
 
     suspend fun refresh() {
         loading = true
         error = null
         try {
+            val preferences = supabase.postgrest["user_settings"].select {
+                filter { eq("user_id", userId) }
+                limit(1)
+            }.decodeList<UserNotificationSettingsRow>().firstOrNull()?.notifications
+            pushEnabled = preferences?.get("push")?.jsonPrimitive?.booleanOrNull ?: true
+            emailEnabled = preferences?.get("email")?.jsonPrimitive?.booleanOrNull ?: false
             val result = supabase.postgrest["notifications"].select {
                 filter { eq("recipient_id", userId) }
                 order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
@@ -1056,6 +1100,28 @@ fun NotificationsScreen(supabase: SupabaseClient, userId: String) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (!loading && rows.isEmpty() && error == null) Text("اعلان تازه‌ای ندارید.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("تنظیمات دریافت اعلان", fontWeight = FontWeight.Bold)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("اعلان‌های فوری")
+                                Text("دریافت اعلان‌های درون‌برنامه‌ای و Push", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = pushEnabled, onCheckedChange = { value -> scope.launch { savePreferences(push = value) } }, enabled = !savingPreferences)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("اعلان ایمیلی")
+                                Text("ارسال اعلان‌های پشتیبانی‌شده به ایمیل", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = emailEnabled, onCheckedChange = { value -> scope.launch { savePreferences(email = value) } }, enabled = !savingPreferences)
+                        }
+                        if (savingPreferences) Text("در حال ذخیره تنظیمات…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
             items(rows, key = { it.id }) { item ->
                 val title = when (item.kind) {
                     "chat_message" -> "پیام جدید"
