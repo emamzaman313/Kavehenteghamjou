@@ -16,6 +16,8 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'access' | 'appearance'>('overview');
   const [auditRows, setAuditRows] = useState<{ id: string; actor_id: string | null; action: string; target_type: string; target_id: string; status: string; details: Record<string, unknown>; created_at: string; completed_at: string | null }[]>([]);
   const [audioTracks, setAudioTracks] = useState<{ id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null; is_active: boolean; created_at: string }[]>([]);
+  const [managedReels, setManagedReels] = useState<{ id: string; author_id: string; caption: string; visibility: string; views_count: number; published_at: string; created_at: string }[]>([]);
+
   const [mediaLoading, setMediaLoading] = useState(false);
 
   const [managedUsers, setManagedUsers] = useState<{ id: string; email: string | null; is_anonymous: boolean; display_name: string; username: string | null; created_at: string; last_sign_in_at: string | null; banned_until: string | null; is_banned: boolean; admin_role: string | null }[]>([]);
@@ -73,10 +75,17 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
 
   const refreshAudioTracks = useCallback(async () => {
     setMediaLoading(true);
-    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'audio_tracks_list' } });
+    const [tracksResult, reelsResult] = await Promise.all([
+      supabase.functions.invoke('admin-console', { body: { action: 'audio_tracks_list' } }),
+      supabase.functions.invoke('admin-console', { body: { action: 'reels_list' } }),
+    ]);
     setMediaLoading(false);
-    if (error || data?.ok !== true) { notify('دریافت کتابخانه موسیقی ناموفق بود.', 'error'); return; }
-    setAudioTracks(data.tracks ?? []);
+    if (tracksResult.error || tracksResult.data?.ok !== true || reelsResult.error || reelsResult.data?.ok !== true) {
+      notify('دریافت کتابخانه رسانه ناموفق بود.', 'error');
+      return;
+    }
+    setAudioTracks(tracksResult.data.tracks ?? []);
+    setManagedReels(reelsResult.data.reels ?? []);
   }, [supabase, notify]);
 
   const setAudioTrackActive = async (trackId: string, isActive: boolean) => {
@@ -411,6 +420,11 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           {mediaLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت کتابخانه موسیقی…</span></div> : audioTracks.length === 0 ? <p>هنوز آهنگی در کتابخانه ثبت نشده است.</p> : audioTracks.map((track) => <div className="admin-managed-user" key={track.id}>
             <div className="admin-user-row"><span className="admin-user-avatar"><Music2 size={18}/></span><div className="admin-managed-user-info"><b>{track.title}</b><small>{track.artist} · {track.duration_seconds ? Math.floor(track.duration_seconds / 60) + ':' + String(track.duration_seconds % 60).padStart(2, '0') : 'مدت نامشخص'}</small><small>ثبت: {new Date(track.created_at).toLocaleDateString('fa-IR')} · {track.is_active ? 'در دسترس کاربران' : 'پنهان از کتابخانه عمومی'}</small></div></div>
             <div className="admin-user-actions"><button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void setAudioTrackActive(track.id, !track.is_active)}>{userBusy === track.id ? 'در حال ذخیره…' : track.is_active ? 'غیرفعال‌کردن آهنگ' : 'فعال‌کردن آهنگ'}</button></div>
+          </div>)}
+          <div className="admin-audit-heading" style={{ marginTop: 28 }}><strong>کتابخانه ریلز ({managedReels.length})</strong></div>
+          {mediaLoading ? null : managedReels.length === 0 ? <p>هنوز ریلزی ثبت نشده است.</p> : managedReels.map((reel) => <div className="admin-managed-user" key={reel.id}>
+            <div className="admin-user-row"><span className="admin-user-avatar"><Film size={18}/></span><div className="admin-managed-user-info"><b>{reel.caption || 'ریلز بدون توضیح'}</b><small>سازنده: {reel.author_id.slice(0, 8)}… · {reel.visibility === 'public' ? 'عمومی' : reel.visibility === 'followers' ? 'دنبال‌کنندگان' : 'خصوصی'}</small><small>{reel.views_count} بازدید · انتشار: {new Date(reel.published_at).toLocaleDateString('fa-IR')}</small></div></div>
+            <div className="admin-user-actions"><button className="button button-quiet admin-ban-button" type="button" disabled={userBusy !== null} onClick={() => void deleteReel(reel.id)}><Trash2 size={14}/>{deleteCandidate === 'reel:' + reel.id ? 'برای تأیید دوباره بزن' : 'حذف ریلز'}</button></div>
           </div>)}
         </div>}
         {adminTab === 'audit' && <div className="admin-console-card">
