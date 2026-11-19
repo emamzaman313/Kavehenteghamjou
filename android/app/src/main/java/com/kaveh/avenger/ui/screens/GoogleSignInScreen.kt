@@ -1,5 +1,6 @@
 package com.kaveh.avenger.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,9 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -58,7 +62,7 @@ fun GoogleSignInScreen(
                 Brush.verticalGradient(
                     listOf(
                         MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
                         MaterialTheme.colorScheme.background
                     )
                 )
@@ -66,12 +70,34 @@ fun GoogleSignInScreen(
             .padding(horizontal = 24.dp, vertical = 30.dp),
         contentAlignment = Alignment.Center
     ) {
+        Surface(
+            modifier = Modifier.align(Alignment.TopEnd).size(210.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.055f)
+        ) {}
+        Surface(
+            modifier = Modifier.align(Alignment.BottomStart).size(170.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.065f)
+        ) {}
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                modifier = Modifier.size(76.dp),
+                shape = RoundedCornerShape(25.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.13f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                shadowElevation = 10.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("ک", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.height(20.dp))
             Text(
                 text = "کاوه انتقامجو",
                 style = MaterialTheme.typography.headlineLarge,
@@ -89,10 +115,13 @@ fun GoogleSignInScreen(
 
             OutlinedCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp)
+                shape = RoundedCornerShape(28.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)),
+                elevation = CardDefaults.outlinedCardElevation(defaultElevation = 12.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(26.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -124,7 +153,7 @@ fun GoogleSignInScreen(
                         },
                         enabled = configured && !isLoading,
                         modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(17.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFF8F8F8),
                             contentColor = Color(0xFF202124),
