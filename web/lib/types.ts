@@ -7,6 +7,10 @@ export type Profile = {
   avatar_path: string | null;
   cover_path: string | null;
   profile_visibility: string;
+  profile_theme?: { accent?: string; surface?: string; text?: string };
+  profile_music_path?: string | null;
+  profile_music_title?: string | null;
+  featured_badges?: string[];
   created_at: string;
 };
 
