@@ -58,6 +58,7 @@ export default function KavehApp() {
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [featureFlags, setFeatureFlags] = useState<Record<string,boolean>>({});
   const isSupportStaff = ['owner', 'admin', 'support'].includes(adminRole ?? '');
+  const canBypassFeatureFlags = ['owner', 'admin'].includes(adminRole ?? '');
 
   useEffect(() => {
     if (!supabase) return;
@@ -166,8 +167,8 @@ export default function KavehApp() {
   useEffect(()=>{
     const required:Record<string,string>={home:'posts',chats:'chat',support:'support',files:'uploads',discover:'social_discovery',social:'reels'};
     const key=required[tab];
-    if(key && featureFlags[key]===false && !isAdmin) setTab('profile');
-  },[tab,featureFlags,isAdmin]);
+    if(key && featureFlags[key]===false && !canBypassFeatureFlags) setTab('profile');
+  },[tab,featureFlags,canBypassFeatureFlags]);
 
   if (!authReady) return <div className="boot-screen"><BrandMark/><span className="spinner"/><p>کاوه در حال آماده‌سازی است…</p></div>;
   const needsEmailPasswordSetup = Boolean(
@@ -179,7 +180,7 @@ export default function KavehApp() {
   if (!session || needsEmailPasswordSetup) return <LoginScreen supabase={supabase} configured={configured}/>;
   if (!supabase) return null;
 
-  const featureEnabled=(key:string)=>isAdmin || featureFlags[key] !== false;
+  const featureEnabled=(key:string)=>canBypassFeatureFlags || featureFlags[key] !== false;
   const visibleNavItems=navItems.filter(item=>{
     if(item.id==='home') return featureEnabled('posts');
     if(item.id==='chats') return featureEnabled('chat');
