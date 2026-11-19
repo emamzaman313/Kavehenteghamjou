@@ -10,6 +10,7 @@ type Reel = { id: string; author_id: string; caption: string; video_path: string
 type Track = { id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null };
 type DailyTitle = { id: string; title: string; body: string; category: string; starts_at: string; ends_at: string | null };
 type Playlist = { id: string; title: string; description: string; is_public: boolean };
+type ScheduledNotice = { id: string; title: string; body: string; scheduled_at: string; status: string };
 
 export default function SocialHubView({ supabase, userId, isAdmin, notify }: { supabase: SupabaseClient; userId: string; isAdmin: boolean; notify: Notify }) {
   const [tab, setTab] = useState<'reels' | 'music' | 'daily'>('reels');
@@ -33,17 +34,22 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [dailyTitle, setDailyTitle] = useState('');
   const [dailyBody, setDailyBody] = useState('');
   const [dailyCategory, setDailyCategory] = useState('announcement');
+  const [scheduleTitle, setScheduleTitle] = useState('');
+  const [scheduleBody, setScheduleBody] = useState('');
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [scheduled, setScheduled] = useState<ScheduledNotice[]>([]);
   const [dailySaving, setDailySaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [r, t, d, p, likes, comments] = await Promise.all([
+    const [r, t, d, p, likes, comments, scheduledRows] = await Promise.all([
       supabase.from('reels').select('id,author_id,caption,video_path,cover_path,mime_type,published_at,allow_comments,views_count').order('published_at', { ascending: false }).limit(40),
       supabase.from('audio_tracks').select('id,title,artist,audio_path,duration_seconds').eq('is_active', true).order('created_at', { ascending: false }),
       supabase.from('daily_titles').select('id,title,body,category,starts_at,ends_at').eq('is_published', true).lte('starts_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(30),
       supabase.from('playlists').select('id,title,description,is_public').eq('owner_id', userId).order('created_at', { ascending: false }),
       supabase.from('reel_reactions').select('reel_id').eq('user_id', userId),
       supabase.from('reel_comments').select('id,reel_id,author_id,body,created_at').order('created_at', { ascending: true }).limit(120),
+      isAdmin ? supabase.from('scheduled_notifications').select('id,title,body,scheduled_at,status').order('scheduled_at', { ascending: true }).limit(30) : Promise.resolve({data:[],error:null}),
     ]);
     if (r.error) notify('دریافت ریلز ناموفق بود: ' + r.error.message, 'error'); else setReels((r.data ?? []) as Reel[]);
     if (t.error) notify('دریافت موسیقی ناموفق بود: ' + t.error.message, 'error'); else setTracks((t.data ?? []) as Track[]);
@@ -51,6 +57,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (!p.error) setPlaylists((p.data ?? []) as Playlist[]);
     if (!likes.error) setLiked(new Set((likes.data ?? []).map((x) => x.reel_id)));
     if (!comments.error) { const grouped: Record<string, {id:string;author_id:string;body:string;created_at:string}[]> = {}; for (const item of comments.data ?? []) (grouped[item.reel_id] ??= []).push(item); setReelComments(grouped); }
+    if (!scheduledRows.error) setScheduled((scheduledRows.data ?? []) as ScheduledNotice[]);
     setLoading(false);
   }, [supabase, userId, notify]);
 
@@ -137,6 +144,25 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     const { error } = await supabase.from('reel_views').insert({ reel_id: reelId, viewer_id: userId });
     if (error && !/duplicate|unique/i.test(error.message)) notify('ثبت بازدید انجام نشد.', 'error');
   };
+  const queueScheduledNotice = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!isAdmin || !scheduleTitle.trim() || !scheduleBody.trim() || !scheduleAt) return;
+    const when = new Date(scheduleAt);
+    if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) return notify('زمان ارسال باید در آینده باشد.', 'error');
+    const { data, error } = await supabase.from('scheduled_notifications').insert({
+      title: scheduleTitle.trim(), body: scheduleBody.trim(), audience: 'all',
+      scheduled_at: when.toISOString(), created_by: userId, status: 'pending',
+    }).select('id,title,body,scheduled_at,status').single();
+    if (error) return notify('ثبت اعلان زمان‌بندی‌شده ناموفق بود: ' + error.message, 'error');
+    setScheduled((old) => [...old, data as ScheduledNotice].sort((a,b) => a.scheduled_at.localeCompare(b.scheduled_at)));
+    setScheduleTitle(''); setScheduleBody(''); setScheduleAt('');
+    notify('اعلان در صف زمان‌بندی ثبت شد؛ ارسال خودکار پس از راه‌اندازی زمان‌بند سرور فعال می‌شود.');
+  };
+  const cancelScheduledNotice = async (id: string) => {
+    const { error } = await supabase.from('scheduled_notifications').update({ status: 'cancelled' }).eq('id', id).eq('status', 'pending');
+    if (error) return notify('لغو اعلان ناموفق بود: ' + error.message, 'error');
+    setScheduled((old) => old.map((item) => item.id === id ? {...item, status:'cancelled'} : item));
+  };
   const publicUrl = (path: string) => supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;
 
   return <div className="page-stack">
@@ -163,6 +189,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     </>}
     {tab === 'daily' && <>
       {isAdmin && <form className="panel-card page-stack" onSubmit={publishDailyTitle}><strong>انتشار عنوان یا اطلاعیه جدید</strong><input className="field-input" value={dailyTitle} onChange={(e) => setDailyTitle(e.target.value)} maxLength={180} placeholder="عنوان" required/><textarea className="field-input" rows={3} value={dailyBody} onChange={(e) => setDailyBody(e.target.value)} maxLength={5000} placeholder="متن اطلاعیه"/><select className="field-input" value={dailyCategory} onChange={(e) => setDailyCategory(e.target.value)}><option value="announcement">اطلاعیه</option><option value="daily_title">عنوان روزانه</option><option value="maintenance">تعمیر و نگهداری</option><option value="event">رویداد</option></select><button className="button button-primary" disabled={dailySaving}><Megaphone size={16}/>{dailySaving ? 'در حال انتشار…' : 'انتشار'}</button></form>}
+      {isAdmin && <section className="panel-card page-stack"><strong>اعلان زمان‌بندی‌شده</strong><form className="page-stack" onSubmit={queueScheduledNotice}><input className="field-input" value={scheduleTitle} onChange={(e) => setScheduleTitle(e.target.value)} placeholder="عنوان اعلان" maxLength={180} required/><textarea className="field-input" rows={2} value={scheduleBody} onChange={(e) => setScheduleBody(e.target.value)} placeholder="متن اعلان" maxLength={5000} required/><label>زمان ارسال <input className="field-input" type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} required/></label><button className="button button-primary"><Megaphone size={16}/> ثبت در صف</button></form><small>این بخش فعلاً اعلان را در صف دیتابیس ثبت می‌کند؛ اجرای خودکار صف به زمان‌بند سرور و مجوز سرویس نیاز دارد.</small>{scheduled.map((item) => <div className="file-row" key={item.id}><div><strong>{item.title}</strong><small>{new Date(item.scheduled_at).toLocaleString('fa-IR')} · {item.status}</small></div>{item.status === 'pending' && <button className="button button-quiet button-small" onClick={() => void cancelScheduledNotice(item.id)}>لغو</button>}</div>)}</section>}
       {titles.length === 0 ? <EmptyState icon={<Megaphone/>} title="اطلاعیه‌ای منتشر نشده" description="عنوان‌های روزانه و خبرهای مهم اینجا نمایش داده می‌شوند."/> : titles.map((item) => <article className="panel-card page-stack" key={item.id}><small>{item.category === 'daily_title' ? 'عنوان روزانه' : item.category === 'maintenance' ? 'تعمیر و نگهداری' : item.category === 'event' ? 'رویداد' : 'اطلاعیه'}</small><h3>{item.title}</h3>{item.body && <p>{item.body}</p>}<small>{new Date(item.starts_at).toLocaleString('fa-IR')}</small></article>)}
     </>}
   </div>;
