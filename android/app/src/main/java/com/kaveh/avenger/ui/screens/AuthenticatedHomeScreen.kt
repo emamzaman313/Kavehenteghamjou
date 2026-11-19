@@ -70,7 +70,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.launch
 
 private enum class MainTab(val title: String) {
-    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), Admin("مدیریت"), Profile("پروفایل")
+    Home("خانه"), Chats("گفتگوها"), Publish("انتشار"), Explore("اکتشاف"), Reels("ریلز"), Media("موسیقی"), Communities("گروه‌ها"), Notifications("اعلان‌ها"), World("جهان"), Admin("مدیریت"), Profile("پروفایل")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,7 +89,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 .mapNotNull { item -> item.jsonObject["name_fa"]?.jsonPrimitive?.contentOrNull }
         }.getOrDefault(emptyList())
     }
-    val tabs = MainTab.entries.filter { it != MainTab.Admin }
+    val tabs = MainTab.entries.filter { it != MainTab.Admin && it != MainTab.World }
     PushTokenRegistration(supabase = SupabaseClientProvider.client, userId = userId)
 
     Scaffold(
@@ -117,6 +117,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     }
                 },
                 actions = {
+                    TextButton(onClick = { selectedTab = MainTab.World }) { Text("جهان") }
                     if (adminRole != null) TextButton(onClick = { selectedTab = MainTab.Admin }) { Text("مدیریت") }
                     TextButton(onClick = { scope.launch { onSignOut() } }) { Text("خروج") }
                 },
@@ -179,6 +180,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 MainTab.Media -> AudioAndDailyScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Communities -> CommunitiesScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Notifications -> NotificationsScreen(supabase = SupabaseClientProvider.client, userId = userId)
+                MainTab.World -> KavehWorldScreen(supabase = SupabaseClientProvider.client, userId = userId, isAdmin = adminRole in setOf("owner", "admin", "moderator"))
                 MainTab.Admin -> AdminConsoleScreen(supabase = SupabaseClientProvider.client, role = adminRole ?: "support")
                 MainTab.Profile -> EditableProfileScreen(supabase = SupabaseClientProvider.client, userId = userId, email = email)
             }
