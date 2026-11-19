@@ -90,6 +90,18 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => {
+    const channel = supabase.channel('kaveh-world:' + userId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_missions' }, () => { void refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'platform_events' }, () => { void refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'platform_event_participants', filter: 'user_id=eq.' + userId }, () => { void refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_progress', filter: 'user_id=eq.' + userId }, () => { void refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_rank_state', filter: 'user_id=eq.' + userId }, () => { void refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_badges', filter: 'user_id=eq.' + userId }, () => { void refresh(); })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [supabase, userId, refresh]);
+
   const progressMap = useMemo(() => new Map(progress.map((item) => [item.mission_id, item])), [progress]);
   const nextRank = useMemo(() => levels.find((level) => level.min_score > (myRank?.score ?? 0)) ?? null, [levels, myRank]);
   const currentRankMin = myRank?.rank?.min_score ?? 0;
