@@ -487,11 +487,20 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
     var themeSurface by remember { mutableStateOf("#101b2c") }
     var themeText by remember { mutableStateOf("#f4f1eb") }
     var musicTitle by remember { mutableStateOf("") }
+    var removeProfileMusic by remember { mutableStateOf(false) }
+    var profilePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var profileMusicPlaying by remember { mutableStateOf(false) }
     var featuredBadges by remember { mutableStateOf(setOf<String>()) }
     var availableBadges by remember { mutableStateOf<List<Pair<String,String>>>(emptyList()) }
     val context = LocalContext.current
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedCover = it }
-    val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedMusic = it }
+    val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedMusic = uri
+        removeProfileMusic = false
+        profilePlayer?.release()
+        profilePlayer = null
+        profileMusicPlaying = false
+    }
 
     suspend fun loadProfile() {
         loading = true
@@ -559,6 +568,9 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
         }
     }
 
+    DisposableEffect(userId) {
+        onDispose { profilePlayer?.release(); profilePlayer = null }
+    }
     LaunchedEffect(userId) { loadProfile() }
 
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -641,6 +653,18 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("شخصی‌سازی پروفایل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("تم اختصاصی", color = MaterialTheme.colorScheme.primary)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(themeSurface)) }.getOrDefault(MaterialTheme.colorScheme.surface)
+                        )
+                    ) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(displayName.ifBlank { "پیش‌نمایش پروفایل" }, color = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(themeText)) }.getOrDefault(MaterialTheme.colorScheme.onSurface), fontWeight = FontWeight.Bold)
+                            Text(bio.ifBlank { "این نمای آزمایشی تم پروفایل توست." }, color = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(themeText)) }.getOrDefault(MaterialTheme.colorScheme.onSurface))
+                            Text("کاوه • هویت اختصاصی", color = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(themeAccent)) }.getOrDefault(MaterialTheme.colorScheme.primary))
+                        }
+                    }
                     OutlinedTextField(value=themeAccent,onValueChange={themeAccent=it},label={Text("رنگ تأکیدی (#RRGGBB)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
                     OutlinedTextField(value=themeSurface,onValueChange={themeSurface=it},label={Text("پس‌زمینه کارت (#RRGGBB)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
                     OutlinedTextField(value=themeText,onValueChange={themeText=it},label={Text("رنگ نوشته (#RRGGBB)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
@@ -651,6 +675,56 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                         TextButton(onClick={profileVisibility="private"}) { Text(if(profileVisibility=="private") "✓ خصوصی" else "خصوصی") }
                     }
                     Text("موسیقی پروفایل", color = MaterialTheme.colorScheme.primary)
+                    val savedMusicPath = profile?.profileMusicPath
+                    if (savedMusicPath != null || selectedMusic != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(onClick = {
+                                try {
+                                    val current = profilePlayer
+                                    if (current?.isPlaying == true) {
+                                        current.pause()
+                                        profileMusicPlaying = false
+                                    } else if (current != null) {
+                                        current.start()
+                                        profileMusicPlaying = true
+                                    } else {
+                                        val source = selectedMusic?.toString()
+                                            ?: supabase.storage["post-media"].publicUrl(savedMusicPath!!)
+                                        profilePlayer = MediaPlayer().apply {
+                                            setDataSource(context, Uri.parse(source))
+                                            setOnPreparedListener { media ->
+                                                media.start()
+                                                profileMusicPlaying = true
+                                            }
+                                            setOnCompletionListener { media ->
+                                                media.seekTo(0)
+                                                profileMusicPlaying = false
+                                            }
+                                            setOnErrorListener { _, _, _ ->
+                                                profileMusicPlaying = false
+                                                profilePlayer?.release()
+                                                profilePlayer = null
+                                                true
+                                            }
+                                            prepareAsync()
+                                        }
+                                    }
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "پخش موسیقی پروفایل ناموفق بود."
+                                }
+                            }, modifier = Modifier.weight(1f)) {
+                                Text(if (profileMusicPlaying) "توقف موسیقی" else "پیش‌شنوی موسیقی")
+                            }
+                            TextButton(onClick = {
+                                profilePlayer?.release()
+                                profilePlayer = null
+                                profileMusicPlaying = false
+                                selectedMusic = null
+                                removeProfileMusic = true
+                                musicTitle = ""
+                            }) { Text("حذف موسیقی", color = MaterialTheme.colorScheme.error) }
+                        }
+                    }
                     OutlinedTextField(value=musicTitle,onValueChange={musicTitle=it.take(120)},label={Text("نام قطعه")},modifier=Modifier.fillMaxWidth(),singleLine=true)
                     OutlinedButton(onClick={musicPicker.launch("audio/*")},modifier=Modifier.fillMaxWidth()) { Text(if(selectedMusic==null) "انتخاب فایل موسیقی" else "فایل موسیقی انتخاب شد") }
                     Text("ویترین دستاوردها (حداکثر ۶ نشان)", color = MaterialTheme.colorScheme.primary)
@@ -685,8 +759,8 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                     upsert = false
                                 }
                             }
-                            var profileMusicPath = profile?.profileMusicPath
-                            selectedMusic?.let { uri ->
+                            var profileMusicPath = if (removeProfileMusic) null else profile?.profileMusicPath
+                            if (!removeProfileMusic) selectedMusic?.let { uri ->
                                 val mime = context.contentResolver.getType(uri) ?: "audio/mpeg"
                                 require(mime.startsWith("audio/")) { "فایل موسیقی معتبر نیست." }
                                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -717,6 +791,8 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                             }
                             selectedCover = null
                             selectedMusic = null
+                            removeProfileMusic = false
+                            profilePlayer?.release(); profilePlayer = null; profileMusicPlaying = false
                             message = "پروفایل ذخیره شد."
                             loadProfile()
                         } catch (exception: Exception) {
