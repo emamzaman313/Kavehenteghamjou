@@ -122,8 +122,8 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const finishRegistration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!supabase || busy) return;
-    if (password.length < 8) {
-      setError('رمز عبور باید حداقل ۸ نویسه داشته باشد.');
+    if (password.length < 10 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      setError('رمز عبور باید حداقل ۱۰ نویسه و شامل حروف کوچک و بزرگ انگلیسی، عدد و نماد باشد.');
       return;
     }
     if (password !== passwordConfirm) {
@@ -278,7 +278,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       {step === 'setup' && <form className="auth-form" onSubmit={(event) => void finishRegistration(event)}>
         <p className="auth-code-hint">ایمیل <b dir="ltr">{email}</b> تأیید شده است. یک رمز امن بسازید تا دفعات بعد بدون کد ایمیل وارد شوید.</p>
         <label className="auth-label" htmlFor="signup-password">انتخاب رمز عبور</label>
-        <input id="signup-password" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={8} placeholder="حداقل ۸ نویسه" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/>
+        <input id="signup-password" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={8} placeholder="حداقل ۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/>
         <label className="auth-label" htmlFor="signup-password-confirm">تکرار رمز عبور</label>
         <input id="signup-password-confirm" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={8} placeholder="دقیقاً همان رمز را دوباره وارد کنید" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} required disabled={busy}/>
         {passwordConfirm && password !== passwordConfirm && <p className="auth-code-hint">دو رمز با هم یکسان نیستند.</p>}
