@@ -2,6 +2,7 @@
 
 import { Bell, Check, Compass, Home, LogOut, MessageCircle, Search, Settings, ShieldCheck, SunMoon, Users, FolderOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { authErrorMessage, getOAuthCallbackError } from '@/lib/auth-errors';
@@ -42,6 +43,7 @@ export default function KavehApp() {
   const [tab, setTab] = useState<Tab>('home');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dark, setDark] = useState(true);
+  const [appearance, setAppearance] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [unread, setUnread] = useState(0);
   const [search, setSearch] = useState('');
@@ -81,6 +83,36 @@ export default function KavehApp() {
     if (callbackError) notify(authErrorMessage(callbackError), 'error');
   }, [notify]);
 
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    const loadAppearance = async () => {
+      const { data } = await supabase.from('platform_appearance_versions')
+        .select('config').eq('is_published', true).maybeSingle();
+      const value = data?.config && typeof data.config === 'object'
+        ? (data.config as { appearance?: { accent?: string; background?: string; surface?: string; radius?: number } }).appearance
+        : undefined;
+      if (active && value) setAppearance({
+        accent: value.accent ?? '#168bff',
+        background: value.background ?? '#07111f',
+        surface: value.surface ?? '#101b2c',
+        radius: value.radius ?? 16,
+      });
+    };
+    const refreshOnFocus = () => { if (document.visibilityState === 'visible') void loadAppearance(); };
+    void loadAppearance();
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    const interval = window.setInterval(() => { void loadAppearance(); }, 60000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
+  }, [supabase]);
+
   const loadProfile = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
     const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
@@ -112,7 +144,7 @@ export default function KavehApp() {
   if (!session || needsEmailPasswordSetup) return <LoginScreen supabase={supabase} configured={configured}/>;
   if (!supabase) return null;
 
-  return <div className={`app-frame ${dark ? 'theme-dark' : 'theme-light'}`}>
+  return <div className={`app-frame ${dark ? 'theme-dark' : 'theme-light'}`} style={{ '--remote-accent': appearance.accent, '--remote-background': appearance.background, '--remote-surface': appearance.surface, '--remote-radius': `${appearance.radius}px` } as CSSProperties}>
     <aside className="sidebar">
       <div className="sidebar-brand"><BrandMark/><div><strong>کاوه انتقامجو</strong><small>فضای ارتباطی مستقل</small></div></div>
       <div className="side-label">فضای شما</div>
