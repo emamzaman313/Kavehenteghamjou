@@ -1,6 +1,7 @@
 package com.kaveh.avenger.ui.screens
 
 import android.net.Uri
+import android.media.MediaPlayer
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.ui.viewinterop.AndroidView
@@ -33,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -420,6 +422,109 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                             Spacer(Modifier.width(6.dp))
                             Text(if (card.likedByMe) "لغو پسند" else "پسندیدن")
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Serializable
+private data class AudioTrackRow(
+    val id: String,
+    val title: String,
+    val artist: String,
+    @SerialName("audio_path") val audioPath: String
+)
+
+@Serializable
+private data class DailyTitleRow(
+    val id: String,
+    val title: String,
+    val body: String,
+    val category: String,
+    @SerialName("starts_at") val startsAt: String
+)
+
+@Composable
+fun AudioAndDailyScreen(supabase: SupabaseClient) {
+    val scope = rememberCoroutineScope()
+    val tracks = remember { mutableStateListOf<AudioTrackRow>() }
+    val titles = remember { mutableStateListOf<DailyTitleRow>() }
+    var loading by remember { mutableStateOf(true) }
+    var playingTrack by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
+
+    suspend fun refresh() {
+        loading = true
+        error = null
+        try {
+            val loadedTracks = supabase.postgrest["audio_tracks"].select {
+                filter { eq("is_active", true) }
+                order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                limit(60)
+            }.decodeList<AudioTrackRow>()
+            val loadedTitles = supabase.postgrest["daily_titles"].select {
+                filter { eq("is_published", true); lte("starts_at", java.time.Instant.now().toString()) }
+                order(column = "starts_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                limit(30)
+            }.decodeList<DailyTitleRow>()
+            tracks.clear(); tracks.addAll(loadedTracks)
+            titles.clear(); titles.addAll(loadedTitles)
+        } catch (exception: Exception) {
+            error = exception.message ?: "دریافت رسانه و عنوان‌های روزانه ناموفق بود."
+        } finally {
+            loading = false
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { player?.release(); player = null }
+    }
+    LaunchedEffect(Unit) { refresh() }
+
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("موسیقی و عنوان‌های روزانه", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        if (loading) CircularProgressIndicator()
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Text("کتابخانه موسیقی", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        if (tracks.isEmpty() && !loading) Text("هنوز آهنگی اضافه نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(tracks, key = { it.id }) { track ->
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(track.title, fontWeight = FontWeight.SemiBold)
+                            Text(track.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Button(onClick = {
+                            if (playingTrack == track.id) {
+                                player?.pause()
+                                playingTrack = null
+                            } else {
+                                player?.release()
+                                val url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/post-media/" + track.audioPath
+                                player = MediaPlayer().apply {
+                                    setOnPreparedListener { start(); playingTrack = track.id }
+                                    setOnCompletionListener { playingTrack = null }
+                                    setOnErrorListener { _, _, _ -> playingTrack = null; true }
+                                    try { setDataSource(url); prepareAsync() } catch (exception: Exception) { error = exception.message }
+                                }
+                            }
+                        }) { Text(if (playingTrack == track.id) "توقف" else "پخش") }
+                    }
+                }
+            }
+            item { Text("عنوان‌های روزانه و اطلاعیه‌ها", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp)) }
+            if (titles.isEmpty() && !loading) item { Text("اطلاعیه‌ای منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            items(titles, key = { it.id }) { title ->
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(title.title, fontWeight = FontWeight.Bold)
+                        if (title.body.isNotBlank()) Text(title.body)
+                        Text(title.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
