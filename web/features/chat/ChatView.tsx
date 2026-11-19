@@ -252,7 +252,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const toggleConversationMute = async () => {
     if (!active || muteBusy) return;
     setMuteBusy(true);
-    const currentlyMuted = Date.parse(mutedUntilByConversation[active] ?? '') > Date.now();
+    const currentlyMuted = Boolean(mutedUntilByConversation[active]);
     const nextMutedUntil = currentlyMuted ? null : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase.from('conversation_members').update({ muted_until: nextMutedUntil, notifications_enabled: true }).eq('conversation_id', active).eq('user_id', userId);
     setMuteBusy(false);
