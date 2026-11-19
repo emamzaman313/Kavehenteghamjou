@@ -188,6 +188,9 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           'ثبت آهنگ در کتابخانه مرکزی ناموفق بود.';
         throw new Error(reason);
       }
+      // The Edge Function has linked both objects to a database row; do not
+      // remove them if a later list refresh fails.
+      uploadedPaths.length = 0;
 
       setNewTrackTitle('');
       setNewTrackArtist('');
@@ -677,7 +680,12 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
             </button>
           </div>}
           {mediaLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت کتابخانه موسیقی…</span></div> : audioTracks.length === 0 ? <p>هنوز آهنگی در کتابخانه ثبت نشده است.</p> : audioTracks.map((track) => <div className="admin-managed-user" key={track.id}>
-            <div className="admin-user-row"><span className="admin-user-avatar"><Music2 size={18}/></span><div className="admin-managed-user-info"><b>{track.title}</b><small>{track.artist} · {track.duration_seconds ? Math.floor(track.duration_seconds / 60) + ':' + String(track.duration_seconds % 60).padStart(2, '0') : 'مدت نامشخص'}</small><small>ثبت: {new Date(track.created_at).toLocaleDateString('fa-IR')} · {track.is_active ? 'در دسترس کاربران' : 'پنهان از کتابخانه عمومی'}</small></div></div>
+            <div className="admin-user-row">
+              {track.cover_path
+                ? <img src={supabase.storage.from('post-media').getPublicUrl(track.cover_path).data.publicUrl} alt={track.title} loading="lazy" style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover' }}/>
+                : <span className="admin-user-avatar"><Music2 size={18}/></span>}
+              <div className="admin-managed-user-info"><b>{track.title}</b><small>{track.artist} · {track.duration_seconds ? Math.floor(track.duration_seconds / 60) + ':' + String(track.duration_seconds % 60).padStart(2, '0') : 'مدت نامشخص'}</small><small>ثبت: {new Date(track.created_at).toLocaleDateString('fa-IR')} · {track.is_active ? 'در دسترس کاربران' : 'پنهان از کتابخانه عمومی'}</small></div>
+            </div>
             <div className="admin-user-actions"><button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void setAudioTrackActive(track.id, !track.is_active)}>{userBusy === track.id ? 'در حال ذخیره…' : track.is_active ? 'غیرفعال‌کردن آهنگ' : 'فعال‌کردن آهنگ'}</button></div>
           </div>)}
           <div className="admin-audit-heading" style={{ marginTop: 28 }}><strong>کتابخانه ریلز ({managedReels.length})</strong></div>
