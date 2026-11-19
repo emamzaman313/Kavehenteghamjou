@@ -53,6 +53,9 @@ private data class AdminActionRequest(
     val reportId: String? = null,
     val postId: String? = null,
     val visibility: String? = null,
+    val reelId: String? = null,
+    val trackId: String? = null,
+    val isActive: Boolean? = null,
     val status: String? = null,
     val userId: String? = null,
     val reason: String? = null,
@@ -109,6 +112,8 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     var overviewUsers by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var overviewPosts by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var auditRows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var adminReels by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var adminTracks by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
 
     val muteRestrictions = listOf(
         "message_send" to "ارسال همه پیام‌ها",
@@ -155,6 +160,44 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
             notice = if (enabled) "امکان فعال شد." else "امکان غیرفعال شد."
             loadFeatureFlags()
         } catch (exception: Exception) { error = exception.message ?: "تغییر امکان ناموفق بود." }
+        finally { busyId = null }
+    }
+
+    suspend fun loadReels() {
+        loading = true; error = null
+        try {
+            val result = callAdminConsole(supabase, AdminActionRequest(action = "reels_list"))
+            adminReels = result["reels"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+        } catch (exception: Exception) { error = exception.message ?: "دریافت ریلزها ناموفق بود." }
+        finally { loading = false }
+    }
+
+    suspend fun loadAudioTracks() {
+        loading = true; error = null
+        try {
+            val result = callAdminConsole(supabase, AdminActionRequest(action = "audio_tracks_list"))
+            adminTracks = result["tracks"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+        } catch (exception: Exception) { error = exception.message ?: "دریافت آهنگ‌ها ناموفق بود." }
+        finally { loading = false }
+    }
+
+    suspend fun deleteReel(reelId: String) {
+        busyId = reelId; error = null
+        try {
+            callAdminConsole(supabase, AdminActionRequest(action = "delete_reel", reelId = reelId))
+            notice = "ریلز حذف شد."
+            loadReels(); loadAudit()
+        } catch (exception: Exception) { error = exception.message ?: "حذف ریلز ناموفق بود." }
+        finally { busyId = null }
+    }
+
+    suspend fun setTrackActive(trackId: String, isActive: Boolean) {
+        busyId = trackId; error = null
+        try {
+            callAdminConsole(supabase, AdminActionRequest(action = "set_audio_track_active", trackId = trackId, isActive = isActive))
+            notice = if (isActive) "آهنگ فعال شد." else "آهنگ غیرفعال شد."
+            loadAudioTracks(); loadAudit()
+        } catch (exception: Exception) { error = exception.message ?: "تغییر وضعیت آهنگ ناموفق بود." }
         finally { busyId = null }
     }
 
@@ -235,6 +278,8 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
                 Button(onClick = { section = "users"; scope.launch { loadUsers() } }) { Text("کاربران") }
                 Button(onClick = { section = "content"; scope.launch { loadOverview() } }) { Text("مدیریت محتوا") }
                 Button(onClick = { section = "audit"; scope.launch { loadAudit() } }) { Text("فعالیت مدیران") }
+                Button(onClick = { section = "reels"; scope.launch { loadReels() } }) { Text("مدیریت ریلز") }
+                Button(onClick = { section = "audio"; scope.launch { loadAudioTracks() } }) { Text("مدیریت آهنگ‌ها") }
             }
         }
         if (section == "users" && role in listOf("owner", "admin")) {
@@ -351,6 +396,40 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
                 }
             }
             if(overviewPosts.isEmpty()) Text("پستی برای مدیریت وجود ندارد.")
+        } else if (section == "reels" && role in listOf("owner", "admin")) {
+            Text("مدیریت ریلزها",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+            adminReels.forEach { reel ->
+                val id=reel["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val caption=reel["caption"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val views=reel["views_count"]?.jsonPrimitive?.contentOrNull ?: "0"
+                Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)) {
+                    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Text(caption.ifBlank { "ریلز بدون توضیح" },fontWeight=FontWeight.SemiBold)
+                        Text("بازدید: $views",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(enabled=busyId==null,onClick={scope.launch{deleteReel(id)}}) { Text("حذف ریلز",color=MaterialTheme.colorScheme.error) }
+                    }
+                }
+            }
+            if(adminReels.isEmpty()) Text("ریلز ثبت‌شده‌ای وجود ندارد.")
+        } else if (section == "audio" && role in listOf("owner", "admin")) {
+            Text("مدیریت کتابخانه موسیقی",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+            adminTracks.forEach { track ->
+                val id=track["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val title=track["title"]?.jsonPrimitive?.contentOrNull ?: "آهنگ بدون عنوان"
+                val artist=track["artist"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val active=track["is_active"]?.jsonPrimitive?.booleanOrNull == true
+                Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Text(title,fontWeight=FontWeight.SemiBold)
+                            Text(artist,style=MaterialTheme.typography.bodySmall)
+                            Text(if(active) "فعال" else "غیرفعال",style=MaterialTheme.typography.labelSmall,color=if(active)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                        }
+                        androidx.compose.material3.Switch(checked=active,enabled=busyId==null,onCheckedChange={value->scope.launch{setTrackActive(id,value)}})
+                    }
+                }
+            }
+            if(adminTracks.isEmpty()) Text("آهنگی در کتابخانه ثبت نشده است.")
         } else if (section == "audit" && role in listOf("owner", "admin")) {
             Text("سوابق عملیات مدیران",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
             auditRows.forEach { event ->
