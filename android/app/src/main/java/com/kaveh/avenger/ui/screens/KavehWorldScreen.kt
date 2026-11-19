@@ -52,14 +52,19 @@ private data class WorldMissionRow(
     @SerialName("reward_points") val rewardPoints: Int,
     val active: Boolean,
     @SerialName("starts_at") val startsAt: String = "",
-    @SerialName("ends_at") val endsAt: String? = null
+    @SerialName("ends_at") val endsAt: String? = null,
+    @SerialName("created_by") val createdBy: String? = null,
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("updated_at") val updatedAt: String = ""
 )
 
 @Serializable
 private data class WorldProgressRow(
     @SerialName("mission_id") val missionId: String,
     @SerialName("progress_count") val progressCount: Int,
-    @SerialName("completed_at") val completedAt: String? = null
+    @SerialName("completed_at") val completedAt: String? = null,
+    @SerialName("reward_claimed_at") val rewardClaimedAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String = ""
 )
 
 @Serializable
@@ -115,7 +120,9 @@ private data class WorldBadgeRow(
 
 @Serializable
 private data class WorldUserBadgeRow(
-    @SerialName("badge_code") val badgeCode: String
+    @SerialName("badge_code") val badgeCode: String,
+    @SerialName("awarded_at") val awardedAt: String = "",
+    @SerialName("awarded_by") val awardedBy: String? = null
 )
 
 @Serializable
