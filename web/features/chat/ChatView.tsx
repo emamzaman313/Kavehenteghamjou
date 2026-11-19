@@ -283,7 +283,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const reviewJoinRequest = async (requestId: string, status: 'approved' | 'rejected') => {
     if (!active || memberActionBusy) return;
     setMemberActionBusy(true);
-    const { error } = await supabase.from('conversation_join_requests').update({ status, reviewed_at: new Date().toISOString() }).eq('id', requestId).eq('status', 'pending');
+    const { error } = await supabase.from('conversation_join_requests').update({ status, reviewed_at: new Date().toISOString(), reviewed_by: userId }).eq('id', requestId).eq('status', 'pending');
     setMemberActionBusy(false);
     if (error) { notify('بررسی درخواست عضویت ناموفق بود: ' + error.message, 'error'); return; }
     notify(status === 'approved' ? 'درخواست پذیرفته شد و کاربر عضو شد.' : 'درخواست رد شد.');
