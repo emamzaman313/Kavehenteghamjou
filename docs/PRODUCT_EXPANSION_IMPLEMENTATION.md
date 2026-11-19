@@ -189,3 +189,13 @@ These require a dedicated migration, verified RLS policies, server-side authoriz
 - This uses the existing support-ticket RLS and realtime refresh path; no database schema changes were required.
 - Validation on implementation commit `6f767804`: Web CI passed (TypeScript, ESLint, unit tests, Next.js production build); Android CI passed (unit tests, debug APK, AAB, artifact upload). Gitleaks and the web dependency audit passed; Dependency Review is unavailable until GitHub Dependency Graph is enabled.
 - No production database migrations, production data changes, secret modifications, or Vercel production promotion were performed.
+
+
+## 2026-11-19 implementation update — cross-platform support inbox triage
+
+- The web and Android support inboxes now provide search across ticket subject, requester label, category, and ticket ID.
+- Both clients provide ticket-status filters and counts for new/open, in progress, waiting for the user, resolved, and closed tickets.
+- Staff-only priority filters/counts distinguish urgent, high, normal, and low tickets; regular users do not receive staff priority controls and remain scoped to their own support tickets by existing RLS.
+- Existing realtime refresh, private support conversations, attachment handling, and server-side ticket creation are retained. No schema change was required.
+- Web CI passed on implementation commit `6f767804`; Android CI passed on that same commit. The additional web filter implementation is commit `0766ee07` and its fresh web/Android CI runs are pending at the time of this update.
+- No production database migrations, production data changes, secret modifications, or Vercel production promotion were performed.
