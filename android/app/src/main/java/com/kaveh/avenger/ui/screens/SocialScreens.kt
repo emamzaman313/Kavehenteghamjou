@@ -1653,7 +1653,7 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             }.decodeList<CommunityRequestRow>()
             val managerRequests = supabase.postgrest["conversation_join_requests"].select {
                 filter { eq("status", "pending") }
-                order("requested_at", io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                order(column = "requested_at", order = io.github.jan.supabase.postgrest.query.Order.ASCENDING)
                 limit(40)
             }.decodeList<CommunityJoinRequestRow>()
             communities.clear()
