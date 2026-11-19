@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -93,14 +94,16 @@ private data class SocialReactionRow(
 @Serializable
 private data class SocialFollowRow(
     @SerialName("follower_id") val followerId: String,
-    @SerialName("following_id") val followingId: String
+    @SerialName("following_id") val followingId: String,
+    val status: String = "pending"
 )
 
 private data class FeedCardState(
     val post: SocialPostRow,
     val author: String,
     val likeCount: Int,
-    val likedByMe: Boolean
+    val likedByMe: Boolean,
+    val followStatus: String? = null
 )
 
 @Composable
@@ -125,12 +128,16 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
             val reactions = if (posts.isEmpty()) emptyList() else supabase.postgrest["post_reactions"].select {
                 filter { isIn("post_id", posts.map { it.id }) }
             }.decodeList<SocialReactionRow>()
+            val follows = if (authorIds.isEmpty()) emptyList() else supabase.postgrest["follows"].select {
+                filter { eq("follower_id", userId); isIn("following_id", authorIds) }
+            }.decodeList<SocialFollowRow>()
+            val followByAuthor = follows.associate { it.followingId to it.status }
             val profileNames = profiles.associate { it.id to (it.displayName.ifBlank { it.username ?: "کاربر" }) }
             val reactionsByPost = reactions.groupBy { it.postId }
             cards.clear()
             cards.addAll(posts.map { post ->
                 val postReactions = reactionsByPost[post.id].orEmpty()
-                FeedCardState(post, profileNames[post.authorId] ?: "کاربر کاوه", postReactions.size, postReactions.any { it.userId == userId })
+                FeedCardState(post, profileNames[post.authorId] ?: "کاربر کاوه", postReactions.size, postReactions.any { it.userId == userId }, followByAuthor[post.authorId])
             })
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت فید ناموفق بود."
@@ -167,7 +174,34 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(card.author, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(card.author, fontWeight = FontWeight.Bold)
+                                if (card.post.authorId != userId) {
+                                    OutlinedButton(onClick = {
+                                        scope.launch {
+                                            busyPost = card.post.id
+                                            try {
+                                                if (card.followStatus != null) {
+                                                    supabase.postgrest["follows"].delete {
+                                                        filter { eq("follower_id", userId); eq("following_id", card.post.authorId) }
+                                                    }
+                                                } else {
+                                                    supabase.postgrest["follows"].insert(SocialFollowRow(userId, card.post.authorId, "pending"))
+                                                }
+                                                refresh()
+                                            } catch (exception: Exception) {
+                                                error = exception.message ?: "تغییر وضعیت دنبال‌کردن ناموفق بود."
+                                            } finally { busyPost = null }
+                                        }
+                                    }, enabled = busyPost != card.post.id) {
+                                        Text(when (card.followStatus) {
+                                            "accepted" -> "لغو دنبال‌کردن"
+                                            "pending" -> "لغو درخواست"
+                                            else -> "درخواست دنبال‌کردن"
+                                        })
+                                    }
+                                }
+                            }
                             Text(card.post.body, style = MaterialTheme.typography.bodyLarge)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 IconButton(
@@ -217,6 +251,8 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
     var bio by remember { mutableStateOf("") }
     var followers by remember { mutableStateOf(0) }
     var following by remember { mutableStateOf(0) }
+    val incomingRequests = remember { mutableStateListOf<SocialFollowRow>() }
+    val requestProfiles = remember { mutableStateListOf<SocialProfileRow>() }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -239,6 +275,18 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
             following = supabase.postgrest["follows"].select {
                 filter { eq("follower_id", userId); eq("status", "accepted") }
             }.decodeList<SocialFollowRow>().size
+            val requests = supabase.postgrest["follows"].select {
+                filter { eq("following_id", userId); eq("status", "pending") }
+            }.decodeList<SocialFollowRow>()
+            incomingRequests.clear()
+            incomingRequests.addAll(requests)
+            val requestIds = requests.map { it.followerId }.distinct()
+            requestProfiles.clear()
+            if (requestIds.isNotEmpty()) {
+                requestProfiles.addAll(supabase.postgrest["profiles"].select {
+                    filter { isIn("id", requestIds) }
+                }.decodeList<SocialProfileRow>())
+            }
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت پروفایل ناموفق بود."
         } finally {
@@ -263,6 +311,27 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         Text("$followers دنبال‌کننده")
                         Text("$following دنبال‌شونده")
+                    }
+                }
+            }
+            if (incomingRequests.isNotEmpty()) {
+                Text("درخواست‌های دنبال‌کردن", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                incomingRequests.forEach { request ->
+                    val requestName = requestProfiles.firstOrNull { it.id == request.followerId }?.displayName ?: "کاربر"
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(requestName)
+                        Button(onClick = {
+                            scope.launch {
+                                try {
+                                    supabase.postgrest["follows"].update({ set("status", "accepted") }) {
+                                        filter { eq("follower_id", request.followerId); eq("following_id", userId); eq("status", "pending") }
+                                    }
+                                    loadProfile()
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "پذیرش درخواست ناموفق بود."
+                                }
+                            }
+                        }) { Text("پذیرفتن") }
                     }
                 }
             }
