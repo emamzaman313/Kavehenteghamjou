@@ -10,7 +10,8 @@ type Ticket = {
   subject: string; category: string; status: string; priority: string; created_at: string; updated_at: string; last_message_at: string;
   requester?: { display_name: string; username: string | null } | null;
 };
-type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string };\ntype ReadCursor = { conversation_id: string; last_read_at: string | null };
+type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string };
+type ReadCursor = { conversation_id: string; last_read_at: string | null };
 
 const statusLabels: Record<string,string> = { open:'جدید', in_progress:'در حال بررسی', waiting_user:'منتظر پاسخ شما', resolved:'حل‌شده', closed:'بسته‌شده' };
 const categoryLabels: Record<string,string> = { general:'عمومی', account:'حساب کاربری', technical:'مشکل فنی', report:'گزارش تخلف', billing:'مالی', other:'سایر' };
@@ -18,7 +19,8 @@ const categoryLabels: Record<string,string> = { general:'عمومی', account:'�
 export default function SupportCenter({ supabase, userId, notify, staff = false }: {
   supabase: SupabaseClient; userId: string; notify: Notify; staff?: boolean;
 }) {
-  const [tickets,setTickets] = useState<Ticket[]>([]);\n  const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});
+  const [tickets,setTickets] = useState<Ticket[]>([]);
+  const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});
   const [active,setActive] = useState<string|null>(null);
   const [messages,setMessages] = useState<Message[]>([]);
   const [loading,setLoading] = useState(true);
