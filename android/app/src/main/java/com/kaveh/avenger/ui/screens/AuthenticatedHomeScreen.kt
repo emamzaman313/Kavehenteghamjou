@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -78,8 +79,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
     var adminRole by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(userId) {
         adminRole = runCatching {
-            SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()
-                ["role"]?.jsonPrimitive?.contentOrNull
+            SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()["role"]?.jsonPrimitive?.contentOrNull
         }.getOrNull()
     }
     val tabs = MainTab.entries.filter { it != MainTab.Admin || adminRole != null }
