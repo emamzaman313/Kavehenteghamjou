@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -166,6 +167,10 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     var loading by remember { mutableStateOf(true) }
     var busyPost by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedAuthorProfile by remember { mutableStateOf<SocialProfileRow?>(null) }
+    var selectedAuthorBadges by remember { mutableStateOf<List<String>>(emptyList()) }
+    var authorProfilePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var authorProfilePlaying by remember { mutableStateOf(false) }
     val commentsByPost = remember { mutableStateMapOf<String, List<SocialCommentRow>>() }
     val commentDrafts = remember { mutableStateMapOf<String, String>() }
     val expandedComments = remember { mutableStateMapOf<String, Boolean>() }
@@ -173,6 +178,27 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
     val replyTargets = remember { mutableStateMapOf<String, String?>() }
     val editingComments = remember { mutableStateMapOf<String, String?>() }
     val editDrafts = remember { mutableStateMapOf<String, String>() }
+    suspend fun openAuthorProfile(authorId: String) {
+        try {
+            val loaded = supabase.postgrest["profiles"].select {
+                filter { eq("id", authorId) }
+                limit(1)
+            }.decodeList<SocialProfileRow>().firstOrNull()
+            if (loaded == null) {
+                error = "این پروفایل خصوصی است یا دسترسی مشاهده آن را نداری."
+                return
+            }
+            selectedAuthorProfile = loaded
+            val codes = loaded.featuredBadges
+            selectedAuthorBadges = if (codes.isEmpty()) emptyList() else {
+                supabase.postgrest["badges"].select { filter { isIn("code", codes) } }
+                    .decodeList<JsonObject>().mapNotNull { it["title"]?.jsonPrimitive?.contentOrNull }
+            }
+        } catch (exception: Exception) {
+            error = exception.message ?: "دریافت پروفایل کاربر ناموفق بود."
+        }
+    }
+
     suspend fun refresh() {
         loading = true
         error = null
@@ -259,7 +285,7 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(card.author, fontWeight = FontWeight.Bold)
+                                TextButton(onClick = { scope.launch { openAuthorProfile(card.post.authorId) } }) { Text(card.author, fontWeight = FontWeight.Bold) }
                                 if (card.post.authorId != userId) {
                                     OutlinedButton(onClick = {
                                         scope.launch {
@@ -460,6 +486,67 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                 }
             }
         }
+    }
+    selectedAuthorProfile?.let { person ->
+        AlertDialog(
+            onDismissRequest = {
+                authorProfilePlayer?.release(); authorProfilePlayer = null; authorProfilePlaying = false
+                selectedAuthorProfile = null
+            },
+            title = { Text(person.displayName.ifBlank { person.username ?: "پروفایل کاربر" }) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(person.username?.let { "@$it" } ?: "کاربر کاوه", color = MaterialTheme.colorScheme.primary)
+                    Text(person.bio.ifBlank { "این کاربر هنوز توضیحی برای پروفایل ثبت نکرده است." })
+                    Text("حریم خصوصی: " + when(person.profileVisibility) { "private" -> "خصوصی"; "followers" -> "دنبال‌کنندگان"; else -> "عمومی" }, style = MaterialTheme.typography.labelSmall)
+                    Text("تم اختصاصی", fontWeight = FontWeight.SemiBold)
+                    Surface(
+                        color = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(person.profileTheme.surface)) }.getOrDefault(MaterialTheme.colorScheme.surface),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                            Text(person.displayName, color = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(person.profileTheme.text)) }.getOrDefault(MaterialTheme.colorScheme.onSurface), fontWeight = FontWeight.Bold)
+                            Text(person.bio.ifBlank { "پیش‌نمایش تم پروفایل" }, color = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(person.profileTheme.text)) }.getOrDefault(MaterialTheme.colorScheme.onSurface))
+                        }
+                    }
+                    if (person.coverPath != null) Text("کاور اختصاصی فعال است.", style = MaterialTheme.typography.bodySmall)
+                    if (selectedAuthorBadges.isNotEmpty()) {
+                        Text("ویترین دستاوردها", fontWeight = FontWeight.SemiBold)
+                        Text(selectedAuthorBadges.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (person.profileMusicPath != null) {
+                        OutlinedButton(onClick = {
+                            try {
+                                val current = authorProfilePlayer
+                                if (current?.isPlaying == true) {
+                                    current.pause(); authorProfilePlaying = false
+                                } else if (current != null) {
+                                    current.start(); authorProfilePlaying = true
+                                } else {
+                                    val url = supabase.storage["post-media"].publicUrl(person.profileMusicPath)
+                                    authorProfilePlayer = MediaPlayer().apply {
+                                        setDataSource(context, Uri.parse(url))
+                                        setOnPreparedListener { it.start(); authorProfilePlaying = true }
+                                        setOnCompletionListener { it.seekTo(0); authorProfilePlaying = false }
+                                        prepareAsync()
+                                    }
+                                }
+                            } catch (exception: Exception) {
+                                error = exception.message ?: "پخش موسیقی پروفایل ناموفق بود."
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (authorProfilePlaying) "توقف موسیقی پروفایل" else "پخش موسیقی پروفایل")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    authorProfilePlayer?.release(); authorProfilePlayer = null; authorProfilePlaying = false
+                    selectedAuthorProfile = null
+                }) { Text("بستن") }
+            }
+        )
     }
 }
 
