@@ -63,6 +63,7 @@ import io.ktor.http.ContentType
 import java.util.UUID
 import java.io.File
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -1333,6 +1334,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
     var body by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var publishing by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf<Float?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -1387,6 +1389,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                         TextButton(onClick = { selectedMedia = selectedMedia.filterIndexed { itemIndex, _ -> itemIndex != index } }, enabled = !publishing) { Text("حذف") }
                     }
                 }
+                if (publishing && uploadProgress != null) {
+                    Text("پیشرفت بارگذاری رسانه: ${(uploadProgress!! * 100).toInt()}٪", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
                 if (message != null) {
                     Text(message!!, color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                 }
@@ -1419,7 +1424,17 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                     val tempFile = copyUriToBoundedCacheFile(context, uri, mime)
                                     try {
                                         val path = "$userId/$postId/${UUID.randomUUID()}"
-                                        supabase.storage.from("post-media").upload(path, tempFile, upsert = false)
+                                        val resumableUpload = supabase.storage["post-media"].resumable.createOrContinueUpload(path, tempFile)
+                                        val progressMonitor = scope.launch {
+                                            resumableUpload.stateFlow
+                                                .takeWhile { !it.isDone }
+                                                .collect { state -> uploadProgress = state.progress }
+                                        }
+                                        try {
+                                            resumableUpload.startOrResumeUploading()
+                                        } finally {
+                                            progressMonitor.cancel()
+                                        }
                                         uploadedPaths.add(path)
                                         val displayName = contentDisplayName(context, uri, "media-${index + 1}")
                                         supabase.postgrest["post_attachments"].insert(
@@ -1431,6 +1446,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                 }
                                 body = ""
                                 selectedMedia = emptyList()
+                                uploadProgress = null
                                 message = "پست و رسانه‌های پیوست‌شده با موفقیت منتشر شدند."
                             } catch (exception: Exception) {
                                 var cleanupFailed = false
@@ -1451,6 +1467,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                     }
                                 }
                                 failed = true
+                                uploadProgress = null
                                 val baseMessage = exception.message ?: "انتشار پست انجام نشد. دوباره تلاش کن."
                                 message = if (cleanupFailed) {
                                     "$baseMessage پاک‌سازی خودکار کامل نشد؛ لطفاً این عملیات را دوباره بررسی کن."
