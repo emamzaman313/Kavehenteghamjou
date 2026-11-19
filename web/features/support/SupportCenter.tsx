@@ -21,6 +21,9 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   supabase: SupabaseClient; userId: string; notify: Notify; staff?: boolean;
 }) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
+  const [ticketSearch,setTicketSearch] = useState('');
+  const [statusFilter,setStatusFilter] = useState('all');
+  const [priorityFilter,setPriorityFilter] = useState('all');
   const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});
   const [attachments,setAttachments] = useState<Record<string,{file:SupportAttachment;url:string}[]>>({});
   const [uploading,setUploading] = useState(false);
@@ -34,6 +37,14 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   const [reply,setReply] = useState('');
   const [creating,setCreating] = useState(false);
   const [showNew,setShowNew] = useState(false);
+
+  const filteredTickets = tickets.filter(ticket => {
+    const searchable = [ticket.subject, ticket.requester?.display_name, ticket.requester?.username, ticket.requester_id, ticket.category, ticket.id]
+      .filter(Boolean).join(' ').toLocaleLowerCase();
+    return (statusFilter === 'all' || ticket.status === statusFilter) &&
+      (!staff || priorityFilter === 'all' || ticket.priority === priorityFilter) &&
+      (!ticketSearch.trim() || searchable.includes(ticketSearch.trim().toLocaleLowerCase()));
+  });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -240,8 +251,28 @@ const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).j
     </form>}
     <div className="support-center-layout">
       <div className="panel-card support-ticket-list" style={{padding:12,minWidth:0}}>
-        <strong style={{display:'block',padding:8,marginBottom:6}}>درخواست‌ها ({tickets.length})</strong>
-        {loading ? <p>در حال دریافت…</p> : tickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>هنوز درخواستی ثبت نشده است.</p> : tickets.map(ticket=><button className="support-ticket-item" key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
+        <strong style={{display:'block',padding:8,marginBottom:6}}>درخواست‌ها ({filteredTickets.length} از {tickets.length})</strong>
+        <input
+          className="field-input"
+          value={ticketSearch}
+          onChange={event=>setTicketSearch(event.target.value)}
+          placeholder={staff?'جست‌وجو بر اساس موضوع، کاربر یا شناسه…':'جست‌وجو در درخواست‌ها…'}
+          aria-label="جست‌وجو در درخواست‌های پشتیبانی"
+          style={{width:'100%',marginBottom:9}}
+        />
+        <div style={{display:'flex',gap:6,overflowX:'auto',padding:'2px 2px 9px',marginBottom:4}}>
+          {([{value:'all',label:'همه'},{value:'open',label:'جدید'},{value:'in_progress',label:'در حال بررسی'},{value:'waiting_user',label:'منتظر پاسخ'},{value:'resolved',label:'حل‌شده'},{value:'closed',label:'بسته'}] as const).map(item=>{
+            const count = item.value==='all' ? tickets.length : tickets.filter(ticket=>ticket.status===item.value).length;
+            return <button key={item.value} type="button" className={statusFilter===item.value?'button button-primary':'button button-quiet'} onClick={()=>setStatusFilter(item.value)} style={{whiteSpace:'nowrap',fontSize:10,padding:'6px 9px',minHeight:32}}>{item.label} {count}</button>;
+          })}
+        </div>
+        {staff && <div style={{display:'flex',gap:6,overflowX:'auto',padding:'2px 2px 9px',marginBottom:4}}>
+          {([{value:'all',label:'همه اولویت‌ها'},{value:'urgent',label:'فوری'},{value:'high',label:'بالا'},{value:'normal',label:'عادی'},{value:'low',label:'پایین'}] as const).map(item=>{
+            const count = item.value==='all' ? tickets.length : tickets.filter(ticket=>ticket.priority===item.value).length;
+            return <button key={item.value} type="button" className={priorityFilter===item.value?'button button-primary':'button button-quiet'} onClick={()=>setPriorityFilter(item.value)} style={{whiteSpace:'nowrap',fontSize:10,padding:'6px 9px',minHeight:32}}>{item.label} {count}</button>;
+          })}
+        </div>}
+        {loading ? <p>در حال دریافت…</p> : filteredTickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>{tickets.length===0?'هنوز درخواستی ثبت نشده است.':'درخواستی با این فیلتر یا عبارت جست‌وجو پیدا نشد.'}</p> : filteredTickets.map(ticket=><button className="support-ticket-item" key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
           <span style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><strong style={{fontSize:12}}>{ticket.subject}</strong>{unreadTickets[ticket.id] && <span aria-label="پیام خوانده‌نشده" style={{fontSize:9,background:'var(--accent)',color:'#fff',borderRadius:999,padding:'3px 7px',whiteSpace:'nowrap'}}>جدید</span>}</span>
           {staff && <small style={{color:'var(--muted)'}}>{ticket.requester?.display_name ?? ticket.requester_id.slice(0,8)}{ticket.requester?.username?' · @'+ticket.requester.username:''}</small>}
           <span style={{fontSize:10,color:'var(--muted)'}}>{categoryLabels[ticket.category]??ticket.category} · {statusLabels[ticket.status]??ticket.status} · اولویت {ticket.priority==='urgent'?'فوری':ticket.priority==='high'?'بالا':ticket.priority==='low'?'پایین':'عادی'}</span>
