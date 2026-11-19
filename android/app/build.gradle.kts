@@ -47,6 +47,10 @@ android {
         buildConfigField("String", "SUPABASE_URL", asBuildConfig(localValue("SUPABASE_URL")))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", asBuildConfig(localValue("SUPABASE_PUBLISHABLE_KEY")))
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", asBuildConfig(localValue("GOOGLE_WEB_CLIENT_ID")))
+        buildConfigField("String", "FIREBASE_APP_ID", asBuildConfig(localValue("FIREBASE_APP_ID")))
+        buildConfigField("String", "FIREBASE_API_KEY", asBuildConfig(localValue("FIREBASE_API_KEY")))
+        buildConfigField("String", "FIREBASE_PROJECT_ID", asBuildConfig(localValue("FIREBASE_PROJECT_ID")))
+        buildConfigField("String", "FIREBASE_SENDER_ID", asBuildConfig(localValue("FIREBASE_SENDER_ID")))
     }
 
     signingConfigs {
@@ -104,6 +108,8 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     implementation("io.ktor:ktor-client-android:3.4.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation(platform("com.google.firebase:firebase-bom:35.2.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
