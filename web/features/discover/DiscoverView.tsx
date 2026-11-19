@@ -17,6 +17,19 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   const [joining, setJoining] = useState<string | null>(null);
   const [followStatusByUser, setFollowStatusByUser] = useState<Record<string, string>>({});
   const [followBusy, setFollowBusy] = useState<string | null>(null);
+  const [communityQuery, setCommunityQuery] = useState('');
+  const [communityFilter, setCommunityFilter] = useState<'all' | 'groups' | 'channels' | 'joined'>('all');
+  const [communitiesRefreshing, setCommunitiesRefreshing] = useState(false);
+  const filteredCommunities = communities.filter((item) => {
+    const matchesQuery = (item.title + ' ' + item.description + ' ' + (item.username ?? '')).toLocaleLowerCase('fa').includes(communityQuery.trim().toLocaleLowerCase('fa'));
+    const matchesType = communityFilter === 'all' || (communityFilter === 'groups' && item.kind === 'group') || (communityFilter === 'channels' && item.kind === 'channel') || (communityFilter === 'joined' && item.membership !== 'none');
+    return matchesQuery && matchesType;
+  });
+  const refreshCommunities = async () => {
+    setCommunitiesRefreshing(true);
+    await loadCommunities();
+    setCommunitiesRefreshing(false);
+  };
 
   const loadCommunities = async () => {
     const { data, error } = await supabase.rpc('discover_communities');
@@ -154,12 +167,23 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
         <div><button className="button button-primary button-small" onClick={() => void startChat(item.profile.id)}><MessageCircle size={15}/> گفتگو</button><button className="button button-quiet button-small" disabled={followBusy === item.profile.id} onClick={() => void follow(item.profile.id)}>{followBusy === item.profile.id ? 'در حال ثبت…' : followStatusByUser[item.profile.id] === 'accepted' ? 'دنبال می‌کنی' : followStatusByUser[item.profile.id] === 'pending' ? 'در انتظار' : 'دنبال‌کردن'}</button></div>
       </article>)}</div>
     </section>}
-    <section className="page-stack">
-      <h3><Users size={18}/> گروه‌ها و کانال‌های قابل پیوستن</h3>
-      {communities.length === 0 ? <EmptyState icon={<Compass/>} title="فضای عمومی‌ای پیدا نشد" description="گروه‌ها و کانال‌های عمومی اینجا نمایش داده می‌شوند."/> : <div className="people-grid">{communities.map((item) => <article className="person-card" key={item.conversation_id}>
-        <strong>{item.title}</strong><span>{item.kind === 'channel' ? 'کانال' : 'گروه'}{item.username ? ' · @' + item.username : ''}</span>
-        <p>{item.description || 'بدون توضیحات'}</p><small>{item.member_count} عضو</small>
-        {item.membership === 'member' ? <span className="status-line">عضو هستید</span> : item.membership === 'pending' ? <span className="status-line">درخواست ارسال شده</span> : <button className="button button-primary button-small" disabled={joining === item.conversation_id} onClick={() => void joinCommunity(item.conversation_id)}>{joining === item.conversation_id ? 'در حال ارسال…' : item.join_approval_required ? 'درخواست عضویت' : 'پیوستن'}</button>}
+    <section className="community-discovery page-stack">
+      <div className="community-discovery-heading">
+        <div><span className="eyebrow">KAVEH COMMUNITIES</span><h3><Users size={19}/> اجتماعات کاوه</h3><p>فضاهای موردعلاقه‌ات را پیدا کن، عضو شو و در گفتگوهای مشترک شرکت کن.</p></div>
+        <button type="button" className="button button-quiet button-small" onClick={() => void refreshCommunities()} disabled={communitiesRefreshing}><span aria-hidden="true">{communitiesRefreshing ? '◌' : '↻'}</span> {communitiesRefreshing ? 'در حال همگام‌سازی' : 'تازه‌سازی'}</button>
+      </div>
+      <div className="community-discovery-tools">
+        <label className="community-search"><Search size={17}/><input value={communityQuery} onChange={(event) => setCommunityQuery(event.target.value)} placeholder="جست‌وجوی نام، موضوع یا شناسه اجتماع…"/></label>
+        <div className="community-filters" role="group" aria-label="فیلتر اجتماعات">
+          {([{id:'all',label:'همه'},{id:'groups',label:'گروه‌ها'},{id:'channels',label:'کانال‌ها'},{id:'joined',label:'عضویت‌های من'}] as const).map((item) => <button type="button" key={item.id} className={communityFilter===item.id?'active':''} onClick={() => setCommunityFilter(item.id)}>{item.label}</button>)}
+        </div>
+      </div>
+      <div className="community-results-meta"><strong>{filteredCommunities.length.toLocaleString('fa-IR')} اجتماع</strong><span>{communities.length.toLocaleString('fa-IR')} فضای عمومی در دسترس</span></div>
+      {communities.length === 0 ? <EmptyState icon={<Compass/>} title="هنوز اجتماع عمومی‌ای ساخته نشده" description="وقتی گروه‌ها و کانال‌های عمومی ایجاد شوند، اینجا قابل کشف خواهند بود."/> : filteredCommunities.length === 0 ? <EmptyState icon={<Search/>} title="نتیجه‌ای پیدا نشد" description="عبارت جست‌وجو یا فیلتر را تغییر بده."/> : <div className="community-grid">{filteredCommunities.map((item) => <article className="community-card" key={item.conversation_id}>
+        <div className="community-card-top"><span className={item.kind === 'channel' ? 'community-kind channel' : 'community-kind'}>{item.kind === 'channel' ? 'کانال عمومی' : 'گروه اجتماعی'}</span><span className="community-member-count">{item.member_count.toLocaleString('fa-IR')} عضو</span></div>
+        <strong>{item.title}</strong><span className="community-handle">{item.username ? '@' + item.username : 'اجتماع کاوه'}</span>
+        <p>{item.description || 'این اجتماع هنوز توضیحی ثبت نکرده است.'}</p>
+        <div className="community-card-footer">{item.membership === 'member' ? <span className="community-state joined">✓ عضو هستی</span> : item.membership === 'pending' ? <span className="community-state pending">درخواست در انتظار بررسی</span> : <button className="button button-primary button-small" disabled={joining === item.conversation_id} onClick={() => void joinCommunity(item.conversation_id)}>{joining === item.conversation_id ? 'در حال ارسال…' : item.join_approval_required ? 'درخواست عضویت' : 'پیوستن به اجتماع'}</button>}</div>
       </article>)}</div>}
     </section>
   </div>;
