@@ -38,10 +38,10 @@ Deno.serve(async (request: Request) => {
   } catch { return respond({ ok: false, reason: "invalid_request" }, 400, origin); }
 
   async function beginAudit(
-    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report",
+    action: "moderate_post" | "delete_post" | "warn_user" | "ban_user" | "unban_user" | "set_admin_role" | "remove_admin_role" | "review_report" | "appearance_publish" | "appearance_rollback",
     targetId: string,
     details: Record<string, unknown> = {},
-    targetType: "post" | "user" | "report" = "post",
+    targetType: "post" | "user" | "report" | "appearance" = "post",
   ) {
     const { data, error } = await admin.from("admin_audit_logs").insert({
       actor_id: authData.user.id,
@@ -61,6 +61,60 @@ Deno.serve(async (request: Request) => {
       completed_at: new Date().toISOString(),
     }).eq("id", id);
     return !error;
+  }
+
+
+  if (body.action === "appearance_history") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    const { data, error } = await admin.from("platform_appearance_versions")
+      .select("id,version,config,is_published,created_by,created_at")
+      .order("version", { ascending: false })
+      .limit(30);
+    if (error) return respond({ ok: false, reason: "appearance_history_failed" }, 500, origin);
+    return respond({ ok: true, versions: data ?? [] }, 200, origin);
+  }
+
+  if (body.action === "appearance_publish" || body.action === "appearance_rollback") {
+    if (!["owner", "admin"].includes(String(adminRow.role))) return respond({ ok: false, reason: "insufficient_role" }, 403, origin);
+    let sourceConfig: unknown = body.config;
+    if (body.action === "appearance_rollback") {
+      if (adminRow.role !== "owner") return respond({ ok: false, reason: "owner_only_rollback" }, 403, origin);
+      const version = Number(body.version);
+      if (!Number.isSafeInteger(version) || version < 1) return respond({ ok: false, reason: "invalid_version" }, 400, origin);
+      const { data: previous, error: previousError } = await admin.from("platform_appearance_versions")
+        .select("config").eq("version", version).maybeSingle();
+      if (previousError || !previous) return respond({ ok: false, reason: "version_not_found" }, 404, origin);
+      sourceConfig = previous.config;
+    }
+    if (!sourceConfig || typeof sourceConfig !== "object" || Array.isArray(sourceConfig)) return respond({ ok: false, reason: "invalid_config" }, 400, origin);
+    const raw = sourceConfig as Record<string, unknown>;
+    const appearance = raw.appearance && typeof raw.appearance === "object" && !Array.isArray(raw.appearance)
+      ? raw.appearance as Record<string, unknown> : {};
+    const hex = (value: unknown, fallback: string) => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : fallback;
+    const radius = Number(appearance.radius);
+    const config = {
+      appearance: {
+        accent: hex(appearance.accent, "#168bff"),
+        background: hex(appearance.background, "#07111f"),
+        surface: hex(appearance.surface, "#101b2c"),
+        radius: Number.isFinite(radius) ? Math.min(28, Math.max(8, Math.round(radius))) : 16,
+      },
+    };
+    const action = body.action === "appearance_rollback" ? "appearance_rollback" : "appearance_publish";
+    const audit = await beginAudit(action, authData.user.id, {
+      source_version: body.action === "appearance_rollback" ? Number(body.version) : null,
+    }, "appearance");
+    if (!audit.id) return respond({ ok: false, reason: "audit_log_unavailable" }, 500, origin);
+    const { data: published, error: publishError } = await admin.rpc("publish_platform_appearance", {
+      p_config: config,
+      p_actor: authData.user.id,
+    });
+    if (publishError || !Array.isArray(published) || !published[0]?.id) {
+      await finishAudit(audit.id, "failed");
+      return respond({ ok: false, reason: "appearance_publish_failed" }, 500, origin);
+    }
+    const auditRecorded = await finishAudit(audit.id, "succeeded");
+    return respond({ ok: true, appearance: published[0], auditRecorded }, 200, origin);
   }
 
   if (body.action === "audit_logs") {
