@@ -173,9 +173,11 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
       return;
     }
     setScheduledSaving(true);
+    const { data: authResult } = await supabase.auth.getUser();
+    if (!authResult.user) { setScheduledSaving(false); notify('برای ثبت اعلان باید دوباره وارد حساب مدیر شوید.', 'error'); return; }
     const { error } = await supabase.from('scheduled_notifications').insert({
       title, body, audience: announcementAudience, recipient_ids: announcementAudience === 'specific' ? recipientIds : [],
-      scheduled_at: scheduledAt.toISOString(),
+      scheduled_at: scheduledAt.toISOString(), created_by: authResult.user.id,
     });
     setScheduledSaving(false);
     if (error) { notify('ثبت اعلان زمان‌بندی‌شده انجام نشد؛ سطح دسترسی مدیر را بررسی کنید.', 'error'); return; }
