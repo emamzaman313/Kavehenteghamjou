@@ -192,10 +192,10 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const send = async (event: FormEvent) => {
     event.preventDefault(); if (!active || !draft.trim()) return;
     const text = draft.trim(); setDraft(''); setSending(true);
-    const { error } = await supabase.from('messages').insert({ conversation_id: active, sender_id: userId, body: text, format: 'plain' });
+    const { data: sentMessage, error } = await supabase.from('messages').insert({ conversation_id: active, sender_id: userId, body: text, format: 'plain' }).select('id').single();
     setSending(false);
     if (error) { setDraft(text); notify(`ارسال پیام ناموفق بود: ${error.message}`, 'error'); }
-    else { void loadMessages(active); void loadConversations(); }
+    else { if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch', { body: { message_id: sentMessage.id } }); void loadMessages(active); void loadConversations(); }
   };
 
   const downloadAttachment = async (file: FileAsset) => {
@@ -229,6 +229,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       const { error: attachmentError } = await supabase.from('message_attachments').insert({ message_id: message.id, file_asset_id: asset.id, display_order: 0 });
       if (attachmentError) throw attachmentError;
       notify('فایل به گفتگو پیوست شد.');
+      void supabase.functions.invoke('notification-dispatch', { body: { message_id: message.id } });
       void loadMessages(active);
     } catch (error) {
       if (createdMessageId) await supabase.from('messages').delete().eq('id', createdMessageId);
