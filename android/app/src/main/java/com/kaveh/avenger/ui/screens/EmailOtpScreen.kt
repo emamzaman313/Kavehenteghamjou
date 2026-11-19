@@ -103,7 +103,13 @@ fun EmailOtpScreen(
                 authRepository.setAccountPassword(password)
                 infoMessage = "ثبت‌نام با موفقیت تکمیل شد. از این پس با ایمیل و رمز عبور وارد شوید."
             } catch (error: Exception) {
-                errorMessage = error.message ?: "ذخیره رمز عبور انجام نشد. دوباره تلاش کنید."
+                val providerMessage = error.message.orEmpty().lowercase()
+                errorMessage = when {
+                    "weak_password" in providerMessage || ("password" in providerMessage && "weak" in providerMessage) ->
+                        if ("pwned" in providerMessage) "این رمز در نشت‌های اطلاعاتی شناخته‌شده دیده شده است. رمز دیگری انتخاب کنید."
+                        else "رمز عبور پذیرفته نشد. حداقل ۱۰ نویسه و ترکیب حروف کوچک و بزرگ انگلیسی، عدد و نماد را رعایت کنید."
+                    else -> error.message ?: "ذخیره رمز عبور انجام نشد. دوباره تلاش کنید."
+                }
             } finally {
                 isLoading = false
                 password = ""
