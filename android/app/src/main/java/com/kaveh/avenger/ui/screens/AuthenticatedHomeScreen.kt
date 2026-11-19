@@ -220,7 +220,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                 MainTab.Communities -> CommunitiesScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.Notifications -> NotificationsScreen(supabase = SupabaseClientProvider.client, userId = userId)
                 MainTab.World -> KavehWorldScreen(supabase = SupabaseClientProvider.client, userId = userId, isAdmin = adminRole in setOf("owner", "admin", "moderator"))
-                MainTab.Admin -> AdminConsoleScreen(supabase = SupabaseClientProvider.client, role = adminRole ?: "support")
+                MainTab.Admin -> AdminConsoleScreen(supabase = SupabaseClientProvider.client, role = adminRole ?: "support", onFeatureFlagChanged = { key, enabled -> featureFlags = featureFlags + (key to enabled) })
                 MainTab.Profile -> EditableProfileScreen(supabase = SupabaseClientProvider.client, userId = userId, email = email)
             }
             Spacer(Modifier.height(18.dp))
