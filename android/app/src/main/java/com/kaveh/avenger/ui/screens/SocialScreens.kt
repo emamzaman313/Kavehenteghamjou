@@ -1,5 +1,13 @@
 package com.kaveh.avenger.ui.screens
 
+import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.height
+import com.kaveh.avenger.BuildConfig
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -276,6 +284,145 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
             ) { Text(if (saving) "در حال ذخیره…" else "ذخیره تغییرات") }
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
+
+
+@Serializable
+private data class ReelRow(
+    val id: String,
+    @SerialName("author_id") val authorId: String,
+    val caption: String,
+    @SerialName("video_path") val videoPath: String,
+    @SerialName("views_count") val viewsCount: Long = 0,
+    @SerialName("published_at") val publishedAt: String
+)
+
+@Serializable
+private data class ReelReactionRow(
+    @SerialName("reel_id") val reelId: String,
+    @SerialName("user_id") val userId: String,
+    val reaction: String
+)
+
+private data class ReelCardState(
+    val reel: ReelRow,
+    val author: String,
+    val likeCount: Int,
+    val likedByMe: Boolean
+)
+
+@Composable
+fun ReelsScreen(supabase: SupabaseClient, userId: String) {
+    val scope = rememberCoroutineScope()
+    val cards = remember { mutableStateListOf<ReelCardState>() }
+    var loading by remember { mutableStateOf(true) }
+    var busyReel by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    suspend fun refresh() {
+        loading = true
+        error = null
+        try {
+            val reels = supabase.postgrest["reels"].select {
+                order(column = "published_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                limit(40)
+            }.decodeList<ReelRow>()
+            val authors = reels.map { it.authorId }.distinct()
+            val profiles = if (authors.isEmpty()) emptyList() else supabase.postgrest["profiles"].select {
+                filter { isIn("id", authors) }
+            }.decodeList<SocialProfileRow>()
+            val reactions = if (reels.isEmpty()) emptyList() else supabase.postgrest["reel_reactions"].select {
+                filter { isIn("reel_id", reels.map { it.id }) }
+            }.decodeList<ReelReactionRow>()
+            val names = profiles.associate { it.id to (it.displayName.ifBlank { it.username ?: "کاربر" }) }
+            val byReel = reactions.groupBy { it.reelId }
+            cards.clear()
+            cards.addAll(reels.map { reel ->
+                val list = byReel[reel.id].orEmpty()
+                ReelCardState(reel, names[reel.authorId] ?: "کاربر کاوه", list.size, list.any { it.userId == userId })
+            })
+        } catch (exception: Exception) {
+            error = exception.message ?: "دریافت ریلز ناموفق بود."
+        } finally {
+            loading = false
+        }
+    }
+
+    LaunchedEffect(userId) { refresh() }
+
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("ویدئوهای کوتاه", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            IconButton(onClick = { scope.launch { refresh() } }) {
+                Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
+            }
+        }
+        if (loading) CircularProgressIndicator()
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (!loading && cards.isEmpty() && error == null) Text("هنوز ریلزی منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            items(cards, key = { it.reel.id }) { card ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(card.author, fontWeight = FontWeight.SemiBold)
+                        val videoUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/post-media/" + card.reel.videoPath
+                        AndroidView(
+                            modifier = Modifier.fillMaxWidth().height(250.dp),
+                            factory = { context ->
+                                VideoView(context).apply {
+                                    val controller = MediaController(context)
+                                    controller.setAnchorView(this)
+                                    setMediaController(controller)
+                                    setVideoURI(Uri.parse(videoUrl))
+                                }
+                            },
+                            update = { view ->
+                                if (view.tag != videoUrl) {
+                                    view.tag = videoUrl
+                                    view.setVideoURI(Uri.parse(videoUrl))
+                                }
+                            }
+                        )
+                        if (card.reel.caption.isNotBlank()) Text(card.reel.caption)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${card.reel.viewsCount} بازدید", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${card.likeCount} پسند", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busyReel = card.reel.id
+                                    try {
+                                        if (card.likedByMe) {
+                                            supabase.postgrest["reel_reactions"].delete {
+                                                filter { eq("reel_id", card.reel.id); eq("user_id", userId) }
+                                            }
+                                        } else {
+                                            supabase.postgrest["reel_reactions"].insert(ReelReactionRow(card.reel.id, userId, "❤️"))
+                                        }
+                                        refresh()
+                                    } catch (exception: Exception) {
+                                        error = exception.message ?: "ثبت پسند ناموفق بود."
+                                    } finally {
+                                        busyReel = null
+                                    }
+                                }
+                            },
+                            enabled = busyReel != card.reel.id
+                        ) {
+                            Icon(Icons.Outlined.Favorite, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (card.likedByMe) "لغو پسند" else "پسندیدن")
+                        }
+                    }
+                }
+            }
         }
     }
 }
