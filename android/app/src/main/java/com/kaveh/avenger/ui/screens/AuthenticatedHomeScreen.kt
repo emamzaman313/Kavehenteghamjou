@@ -65,7 +65,6 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.time.Instant
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -80,9 +79,6 @@ private enum class MainTab(val title: String) {
 
 @Serializable
 private data class MobileFeatureFlagRow(val key:String,val enabled:Boolean)
-
-@Serializable
-private data class MobilePresenceRow(@SerialName("user_id") val userId:String,@SerialName("last_seen_at") val lastSeenAt:String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,22 +97,10 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
             SupabaseClientProvider.client.postgrest.rpc("my_kaveh_ranks").decodeAs<kotlinx.serialization.json.JsonArray>()
                 .mapNotNull { item -> item.jsonObject["name_fa"]?.jsonPrimitive?.contentOrNull }
         }.getOrDefault(emptyList())
-        runCatching {
-            SupabaseClientProvider.client.postgrest["user_presence"].insert(
-                MobilePresenceRow(userId, Instant.now().toString()),
-                upsert = true,
-                onConflict = "user_id"
-            )
-        }
+        runCatching { SupabaseClientProvider.client.postgrest.rpc("touch_user_presence") }
         while (true) {
             delay(30_000)
-            runCatching {
-                SupabaseClientProvider.client.postgrest["user_presence"].insert(
-                    MobilePresenceRow(userId, Instant.now().toString()),
-                    upsert = true,
-                    onConflict = "user_id"
-                )
-            }
+            runCatching { SupabaseClientProvider.client.postgrest.rpc("touch_user_presence") }
             adminRole = runCatching {
                 SupabaseClientProvider.client.postgrest.rpc("my_admin_role").decodeAs<JsonObject>()["role"]?.jsonPrimitive?.contentOrNull
             }.getOrNull()
