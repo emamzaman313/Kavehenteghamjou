@@ -44,6 +44,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     active_mutes?: { id: string; restriction: string; reason: string; created_at: string; expires_at: string | null }[];
   }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [adminRoleDrafts, setAdminRoleDrafts] = useState<Record<string, string>>({});
   const [userReasons, setUserReasons] = useState<Record<string, string>>({});
@@ -516,6 +517,11 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
     notify('تنظیمات ورود با کد ذخیره شد.');
   };
 
+  const normalizedUserSearch = userSearch.trim().toLocaleLowerCase();
+  const visibleManagedUsers = normalizedUserSearch
+    ? managedUsers.filter((user) => [user.display_name, user.email ?? '', user.username ?? '', user.id].some((value) => value.toLocaleLowerCase().includes(normalizedUserSearch)))
+    : managedUsers;
+
   return (
     <div className="page-stack">
       <SectionHeader
@@ -575,9 +581,11 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           </div>
         </div>}
         {adminTab === 'users' && <div className="admin-console-card">
-          <div className="admin-audit-heading"><strong>مدیریت کاربران ({managedUsers.length})</strong><button className="button button-quiet" type="button" onClick={() => void refreshUsers()}><Activity size={15}/> تازه‌سازی</button></div>
+          <div className="admin-audit-heading"><strong>مدیریت کاربران ({visibleManagedUsers.length} از {managedUsers.length})</strong><button className="button button-quiet" type="button" onClick={() => void refreshUsers()}><Activity size={15}/> تازه‌سازی</button></div>
+          <label className="field-label" htmlFor="admin-user-search">جستجوی سریع کاربر</label>
+          <input id="admin-user-search" className="text-input" type="search" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="نام، ایمیل، نام کاربری یا شناسه کاربر…" autoComplete="off"/>
           <p className="admin-user-policy-note">اخطار فقط در سوابق ثبت می‌شود. مسدودسازی ورود، ورود و تمدید نشست‌های جدید را متوقف می‌کند؛ نشست‌های دارای توکن فعال ممکن است تا زمان انقضای توکن دسترسی فعلی کار کنند. حساب‌های مدیریتی از این عملیات محافظت شده‌اند.</p>
-          {usersLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت کاربران…</span></div> : managedUsers.length === 0 ? <p>کاربری برای نمایش پیدا نشد.</p> : managedUsers.map((user) => {
+          {usersLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت کاربران…</span></div> : managedUsers.length === 0 ? <p>کاربری برای نمایش پیدا نشد.</p> : visibleManagedUsers.length === 0 ? <p>کاربری با این عبارت در نتایج بارگذاری‌شده پیدا نشد.</p> : visibleManagedUsers.map((user) => {
             const isBanned = user.is_banned;
             const roleLabel = user.admin_role === 'owner' ? 'مالک' : user.admin_role === 'admin' ? 'مدیر' : user.admin_role === 'moderator' ? 'ناظر' : user.admin_role === 'support' ? 'پشتیبانی' : '';
             return <div className="admin-managed-user" key={user.id}>
