@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -331,11 +332,37 @@ private data class ReelReactionRow(
     val reaction: String
 )
 
+@Serializable
+private data class ReelCommentRow(
+    val id: String,
+    @SerialName("reel_id") val reelId: String,
+    @SerialName("author_id") val authorId: String,
+    val body: String,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Serializable
+private data class ReelCommentInsertRow(
+    @SerialName("reel_id") val reelId: String,
+    @SerialName("author_id") val authorId: String,
+    val body: String
+)
+
+@Serializable
+private data class ReelReportInsertRow(
+    @SerialName("reporter_id") val reporterId: String,
+    @SerialName("target_type") val targetType: String = "reel",
+    @SerialName("target_id") val targetId: String,
+    val reason: String = "گزارش ریلز نامناسب",
+    val status: String = "open"
+)
+
 private data class ReelCardState(
     val reel: ReelRow,
     val author: String,
     val likeCount: Int,
-    val likedByMe: Boolean
+    val likedByMe: Boolean,
+    val comments: List<ReelCommentRow> = emptyList()
 )
 
 @Composable
@@ -368,12 +395,18 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
             val reactions = if (reels.isEmpty()) emptyList() else supabase.postgrest["reel_reactions"].select {
                 filter { isIn("reel_id", reels.map { it.id }) }
             }.decodeList<ReelReactionRow>()
+            val comments = if (reels.isEmpty()) emptyList() else supabase.postgrest["reel_comments"].select {
+                filter { isIn("reel_id", reels.map { it.id }) }
+                order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                limit(200)
+            }.decodeList<ReelCommentRow>()
             val names = profiles.associate { it.id to (it.displayName.ifBlank { it.username ?: "کاربر" }) }
             val byReel = reactions.groupBy { it.reelId }
+            val commentsByReel = comments.groupBy { it.reelId }
             cards.clear()
             cards.addAll(reels.map { reel ->
                 val list = byReel[reel.id].orEmpty()
-                ReelCardState(reel, names[reel.authorId] ?: "کاربر کاوه", list.size, list.any { it.userId == userId })
+                ReelCardState(reel, names[reel.authorId] ?: "کاربر کاوه", list.size, list.any { it.userId == userId }, commentsByReel[reel.id].orEmpty())
             })
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت ریلز ناموفق بود."
@@ -468,10 +501,44 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                             onRelease = { view -> view.stopPlayback() }
                         )
                         if (card.reel.caption.isNotBlank()) Text(card.reel.caption)
+                        if (card.reel.allowComments) {
+                            Text("دیدگاه‌ها (" + card.comments.size + ")", fontWeight = FontWeight.SemiBold)
+                            card.comments.takeLast(8).forEach { comment ->
+                                Text(comment.body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            var commentDraft by remember(card.reel.id) { mutableStateOf("") }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(value = commentDraft, onValueChange = { commentDraft = it.take(1000) }, label = { Text("نوشتن دیدگاه") }, modifier = Modifier.weight(1f), maxLines = 2)
+                                TextButton(onClick = {
+                                    val body = commentDraft.trim()
+                                    if (body.isNotEmpty()) scope.launch {
+                                        busyReel = card.reel.id
+                                        try {
+                                            supabase.postgrest["reel_comments"].insert(ReelCommentInsertRow(card.reel.id, userId, body))
+                                            commentDraft = ""
+                                            refresh()
+                                        } catch (exception: Exception) {
+                                            error = exception.message ?: "ارسال دیدگاه ناموفق بود."
+                                        } finally { busyReel = null }
+                                    }
+                                }, enabled = commentDraft.trim().isNotEmpty() && busyReel != card.reel.id) { Text("ارسال") }
+                            }
+                        }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("${card.reel.viewsCount} بازدید", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("${card.likeCount} پسند", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        TextButton(onClick = {
+                            scope.launch {
+                                busyReel = card.reel.id
+                                try {
+                                    supabase.postgrest["reports"].insert(ReelReportInsertRow(userId, targetId = card.reel.id))
+                                    error = null
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "ثبت گزارش ناموفق بود."
+                                } finally { busyReel = null }
+                            }
+                        }, enabled = busyReel != card.reel.id) { Text("گزارش ریلز") }
                         Button(
                             onClick = {
                                 scope.launch {
