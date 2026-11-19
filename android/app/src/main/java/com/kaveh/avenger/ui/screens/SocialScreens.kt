@@ -40,6 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +68,7 @@ import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -86,6 +88,9 @@ private data class SocialPostRow(
 )
 
 @Serializable
+private data class ProfileThemeRow(val accent:String="#168bff", val surface:String="#101b2c", val text:String="#f4f1eb")
+
+@Serializable
 private data class SocialProfileRow(
     val id: String,
     @SerialName("display_name") val displayName: String,
@@ -94,6 +99,10 @@ private data class SocialProfileRow(
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("cover_path") val coverPath: String? = null,
     @SerialName("profile_visibility") val profileVisibility: String = "public",
+    @SerialName("profile_theme") val profileTheme: ProfileThemeRow = ProfileThemeRow(),
+    @SerialName("profile_music_path") val profileMusicPath: String? = null,
+    @SerialName("profile_music_title") val profileMusicTitle: String? = null,
+    @SerialName("featured_badges") val featuredBadges: List<String> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null
 )
 
@@ -472,8 +481,17 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedCover by remember { mutableStateOf<Uri?>(null) }
+    var selectedMusic by remember { mutableStateOf<Uri?>(null) }
+    var profileVisibility by remember { mutableStateOf("public") }
+    var themeAccent by remember { mutableStateOf("#168bff") }
+    var themeSurface by remember { mutableStateOf("#101b2c") }
+    var themeText by remember { mutableStateOf("#f4f1eb") }
+    var musicTitle by remember { mutableStateOf("") }
+    var featuredBadges by remember { mutableStateOf(setOf<String>()) }
+    var availableBadges by remember { mutableStateOf<List<Pair<String,String>>>(emptyList()) }
     val context = LocalContext.current
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedCover = it }
+    val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedMusic = it }
 
     suspend fun loadProfile() {
         loading = true
@@ -486,6 +504,22 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
             profile = loaded
             displayName = loaded?.displayName.orEmpty()
             bio = loaded?.bio.orEmpty()
+            profileVisibility = loaded?.profileVisibility ?: "public"
+            themeAccent = loaded?.profileTheme?.accent ?: "#168bff"
+            themeSurface = loaded?.profileTheme?.surface ?: "#101b2c"
+            themeText = loaded?.profileTheme?.text ?: "#f4f1eb"
+            musicTitle = loaded?.profileMusicTitle.orEmpty()
+            featuredBadges = loaded?.featuredBadges?.toSet() ?: emptySet()
+            val earned = supabase.postgrest["user_badges"].select { filter { eq("user_id", userId) } }
+                .decodeList<JsonObject>()
+            val earnedCodes = earned.mapNotNull { it["badge_code"]?.jsonPrimitive?.contentOrNull }
+            availableBadges = if (earnedCodes.isEmpty()) emptyList() else supabase.postgrest["badges"].select {
+                filter { isIn("code", earnedCodes) }
+            }.decodeList<JsonObject>().mapNotNull { row ->
+                val code = row["code"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val title = row["title"]?.jsonPrimitive?.contentOrNull ?: code
+                code to title
+            }
             followers = supabase.postgrest["follows"].select {
                 filter { eq("following_id", userId); eq("status", "accepted") }
             }.decodeList<SocialFollowRow>().size
@@ -603,6 +637,32 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                     }
                 }
             }
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("شخصی‌سازی پروفایل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("تم اختصاصی", color = MaterialTheme.colorScheme.primary)
+                    OutlinedTextField(value=themeAccent,onValueChange={themeAccent=it},label={Text("رنگ تأکیدی (#RRGGBB)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                    OutlinedTextField(value=themeSurface,onValueChange={themeSurface=it},label={Text("پس‌زمینه کارت (#RRGGBB)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                    OutlinedTextField(value=themeText,onValueChange={themeText=it},label={Text("رنگ نوشته (#RRGGBB)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                    Text("حریم خصوصی پروفایل", color = MaterialTheme.colorScheme.primary)
+                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        TextButton(onClick={profileVisibility="public"}) { Text(if(profileVisibility=="public") "✓ عمومی" else "عمومی") }
+                        TextButton(onClick={profileVisibility="followers"}) { Text(if(profileVisibility=="followers") "✓ دنبال‌کنندگان" else "دنبال‌کنندگان") }
+                        TextButton(onClick={profileVisibility="private"}) { Text(if(profileVisibility=="private") "✓ خصوصی" else "خصوصی") }
+                    }
+                    Text("موسیقی پروفایل", color = MaterialTheme.colorScheme.primary)
+                    OutlinedTextField(value=musicTitle,onValueChange={musicTitle=it.take(120)},label={Text("نام قطعه")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                    OutlinedButton(onClick={musicPicker::launch},modifier=Modifier.fillMaxWidth()) { Text(if(selectedMusic==null) "انتخاب فایل موسیقی" else "فایل موسیقی انتخاب شد") }
+                    Text("ویترین دستاوردها (حداکثر ۶ نشان)", color = MaterialTheme.colorScheme.primary)
+                    if(availableBadges.isEmpty()) Text("هنوز نشانی برای نمایش دریافت نکرده‌ای.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    availableBadges.forEach { (code,title) ->
+                        Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked=featuredBadges.contains(code),onCheckedChange={checked->featuredBadges=if(checked&&featuredBadges.size<6) featuredBadges+code else featuredBadges-code})
+                            Text(title,style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
             OutlinedTextField(value = displayName, onValueChange = { displayName = it }, label = { Text("نام نمایشی") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = bio, onValueChange = { bio = it.take(300) }, label = { Text("درباره من") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Button(
@@ -615,7 +675,7 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                             var coverPath = profile?.coverPath
                             selectedCover?.let { uri ->
                                 val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
-                                require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/avif")) { "فرمت تصویر کاور پشتیبانی نمی‌شود." }
+                                require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/avif", "image/gif")) { "فرمت تصویر کاور پشتیبانی نمی‌شود." }
                                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                                     ?: throw IllegalStateException("خواندن تصویر کاور ناموفق بود.")
                                 require(bytes.size in 1..5_000_000) { "حجم کاور باید حداکثر ۵ مگابایت باشد." }
@@ -625,14 +685,38 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                     upsert = false
                                 }
                             }
+                            var profileMusicPath = profile?.profileMusicPath
+                            selectedMusic?.let { uri ->
+                                val mime = context.contentResolver.getType(uri) ?: "audio/mpeg"
+                                require(mime.startsWith("audio/")) { "فایل موسیقی معتبر نیست." }
+                                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                    ?: throw IllegalStateException("خواندن موسیقی پروفایل ناموفق بود.")
+                                require(bytes.size in 1..20_000_000) { "حجم موسیقی باید حداکثر ۲۰ مگابایت باشد." }
+                                profileMusicPath = userId + "/profile-music/" + UUID.randomUUID().toString()
+                                supabase.storage.from("post-media").upload(profileMusicPath!!, bytes) {
+                                    contentType = ContentType.parse(mime)
+                                    upsert = false
+                                }
+                            }
+                            require(themeAccent.matches(Regex("^#[0-9a-fA-F]{6}$")) && themeSurface.matches(Regex("^#[0-9a-fA-F]{6}$")) && themeText.matches(Regex("^#[0-9a-fA-F]{6}$"))) { "کد رنگ باید به شکل #RRGGBB باشد." }
                             supabase.postgrest["profiles"].update({
                                 set("display_name", displayName.trim())
                                 set("bio", bio.trim())
                                 set("cover_path", coverPath)
+                                set("profile_visibility", profileVisibility)
+                                set("profile_theme", buildJsonObject {
+                                    put("accent", JsonPrimitive(themeAccent))
+                                    put("surface", JsonPrimitive(themeSurface))
+                                    put("text", JsonPrimitive(themeText))
+                                })
+                                set("profile_music_path", profileMusicPath)
+                                set("profile_music_title", if (profileMusicPath == null) null else musicTitle.trim().take(120))
+                                set("featured_badges", JsonArray(featuredBadges.take(6).map(::JsonPrimitive)))
                             }) {
                                 filter { eq("id", userId) }
                             }
                             selectedCover = null
+                            selectedMusic = null
                             message = "پروفایل ذخیره شد."
                             loadProfile()
                         } catch (exception: Exception) {
