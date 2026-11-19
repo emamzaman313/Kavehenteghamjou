@@ -19,6 +19,7 @@ import NotificationsView from '@/features/notifications/NotificationsView';
 import SettingsView from '@/features/settings/SettingsView';
 import SocialHubView from '@/features/social/SocialHubView';
 import AdminAccessCodePanel from '@/features/admin/AdminAccessCodePanel';
+import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
 
 type Toast = { id: number; text: string; tone?: ToastTone };
 type Tab = 'home' | 'chats' | 'files' | 'discover' | 'social' | 'profile' | 'notifications' | 'settings' | 'admin';
@@ -172,6 +173,7 @@ export default function KavehApp() {
       </div>
     </aside>
 
+    <GlobalAudioPlayer supabase={supabase}/>
     <main className="main-area">
       <header className="topbar">
         <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
