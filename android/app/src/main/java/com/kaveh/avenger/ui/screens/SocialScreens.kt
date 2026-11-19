@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import java.util.UUID
@@ -662,6 +663,106 @@ fun NotificationsScreen(supabase: SupabaseClient, userId: String) {
                                     } catch (exception: Exception) { error = exception.message ?: "علامت‌گذاری اعلان ناموفق بود." }
                                 }
                             }) { Text("خوانده شد") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Serializable
+private data class CommunityRow(
+    @SerialName("conversation_id") val conversationId: String,
+    val title: String,
+    val description: String,
+    val kind: String,
+    val username: String? = null,
+    @SerialName("join_approval_required") val joinApprovalRequired: Boolean,
+    @SerialName("member_count") val memberCount: Long
+)
+
+@Serializable
+private data class JoinCommunityArgs(
+    @SerialName("p_conversation_id") val conversationId: String
+)
+
+@Serializable
+private data class CommunityMemberRow(
+    @SerialName("conversation_id") val conversationId: String
+)
+
+@Serializable
+private data class CommunityRequestRow(
+    @SerialName("conversation_id") val conversationId: String
+)
+
+@Composable
+fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
+    val scope = rememberCoroutineScope()
+    val communities = remember { mutableStateListOf<CommunityRow>() }
+    val members = remember { mutableStateOf<Set<String>>(emptySet()) }
+    val pending = remember { mutableStateOf<Set<String>>(emptySet()) }
+    var loading by remember { mutableStateOf(true) }
+    var busyId by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    suspend fun refresh() {
+        loading = true
+        error = null
+        try {
+            val found = supabase.postgrest.rpc("discover_communities").decodeList<CommunityRow>()
+            val myMembers = supabase.postgrest["conversation_members"].select {
+                filter { eq("user_id", userId) }
+            }.decodeList<CommunityMemberRow>()
+            val myRequests = supabase.postgrest["conversation_join_requests"].select {
+                filter { eq("requester_id", userId); eq("status", "pending") }
+            }.decodeList<CommunityRequestRow>()
+            communities.clear()
+            communities.addAll(found)
+            members.value = myMembers.map { it.conversationId }.toSet()
+            pending.value = myRequests.map { it.conversationId }.toSet()
+        } catch (exception: Exception) {
+            error = exception.message ?: "دریافت گروه‌ها و کانال‌ها ناموفق بود."
+        } finally {
+            loading = false
+        }
+    }
+
+    LaunchedEffect(userId) { refresh() }
+
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("گروه‌ها و کانال‌ها", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            IconButton(onClick = { scope.launch { refresh() } }) { Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی") }
+        }
+        if (loading) CircularProgressIndicator()
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (!loading && communities.isEmpty() && error == null) Text("هنوز گروه یا کانال عمومی‌ای ساخته نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(communities, key = { it.conversationId }) { community ->
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(community.title, fontWeight = FontWeight.Bold)
+                        Text(if (community.kind == "channel") "کانال" else "گروه", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        if (community.description.isNotBlank()) Text(community.description)
+                        Text("${community.memberCount} عضو", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        when {
+                            community.conversationId in members.value -> Text("عضو هستید", color = MaterialTheme.colorScheme.primary)
+                            community.conversationId in pending.value -> Text("درخواست عضویت ارسال شده است.", color = MaterialTheme.colorScheme.secondary)
+                            else -> Button(enabled = busyId != community.conversationId, onClick = {
+                                scope.launch {
+                                    busyId = community.conversationId
+                                    try {
+                                        val result = supabase.postgrest.rpc("join_community", JoinCommunityArgs(community.conversationId)).decodeAs<String>()
+                                        if (result == "pending") pending.value = pending.value + community.conversationId
+                                        else members.value = members.value + community.conversationId
+                                    } catch (exception: Exception) {
+                                        error = exception.message ?: "عضویت ناموفق بود."
+                                    } finally { busyId = null }
+                                }
+                            }) { Text(if (busyId == community.conversationId) "در حال ارسال…" else if (community.joinApprovalRequired) "درخواست عضویت" else "پیوستن") }
                         }
                     }
                 }
