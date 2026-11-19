@@ -27,3 +27,5 @@ begin
 end; $$;
 revoke all on function private.distribute_platform_event_rewards() from public,anon,authenticated;
 create trigger trg_distribute_platform_event_rewards after update of status on public.platform_events for each row execute function private.distribute_platform_event_rewards();
+
+create index if not exists platform_event_reward_ledger_user_idx on private.platform_event_reward_ledger(user_id);
