@@ -652,7 +652,7 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                     }
                     Text("موسیقی پروفایل", color = MaterialTheme.colorScheme.primary)
                     OutlinedTextField(value=musicTitle,onValueChange={musicTitle=it.take(120)},label={Text("نام قطعه")},modifier=Modifier.fillMaxWidth(),singleLine=true)
-                    OutlinedButton(onClick={musicPicker::launch},modifier=Modifier.fillMaxWidth()) { Text(if(selectedMusic==null) "انتخاب فایل موسیقی" else "فایل موسیقی انتخاب شد") }
+                    OutlinedButton(onClick={musicPicker.launch("audio/*")},modifier=Modifier.fillMaxWidth()) { Text(if(selectedMusic==null) "انتخاب فایل موسیقی" else "فایل موسیقی انتخاب شد") }
                     Text("ویترین دستاوردها (حداکثر ۶ نشان)", color = MaterialTheme.colorScheme.primary)
                     if(availableBadges.isEmpty()) Text("هنوز نشانی برای نمایش دریافت نکرده‌ای.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     availableBadges.forEach { (code,title) ->
@@ -711,7 +711,7 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                 })
                                 set("profile_music_path", profileMusicPath)
                                 set("profile_music_title", if (profileMusicPath == null) null else musicTitle.trim().take(120))
-                                set("featured_badges", JsonArray(featuredBadges.take(6).map(::JsonPrimitive)))
+                                set("featured_badges", JsonArray(featuredBadges.take(6).map { JsonPrimitive(it) }))
                             }) {
                                 filter { eq("id", userId) }
                             }
