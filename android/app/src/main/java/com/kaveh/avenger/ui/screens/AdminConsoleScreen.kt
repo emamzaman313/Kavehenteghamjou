@@ -51,6 +51,8 @@ import kotlinx.serialization.json.jsonPrimitive
 private data class AdminActionRequest(
     val action: String,
     val reportId: String? = null,
+    val postId: String? = null,
+    val visibility: String? = null,
     val status: String? = null,
     val userId: String? = null,
     val reason: String? = null,
@@ -106,6 +108,7 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     var overviewActivity by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var overviewUsers by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var overviewPosts by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var auditRows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
 
     val muteRestrictions = listOf(
         "message_send" to "ارسال همه پیام‌ها",
@@ -155,6 +158,37 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
         finally { busyId = null }
     }
 
+    suspend fun loadAudit() {
+        loading = true; error = null
+        try {
+            val result = callAdminConsole(supabase, AdminActionRequest(action = "audit_logs"))
+            auditRows = result["events"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+        } catch (exception: Exception) { error = exception.message ?: "دریافت سوابق مدیران ناموفق بود." }
+        finally { loading = false }
+    }
+
+    suspend fun moderatePost(postId: String, visibility: String) {
+        busyId = postId; error = null
+        try {
+            callAdminConsole(supabase, AdminActionRequest(action = "moderate_post", postId = postId, visibility = visibility))
+            notice = "وضعیت نمایش پست تغییر کرد."
+            loadOverview()
+            loadAudit()
+        } catch (exception: Exception) { error = exception.message ?: "مدیریت پست ناموفق بود." }
+        finally { busyId = null }
+    }
+
+    suspend fun deletePost(postId: String) {
+        busyId = postId; error = null
+        try {
+            callAdminConsole(supabase, AdminActionRequest(action = "delete_post", postId = postId))
+            notice = "پست حذف شد."
+            loadOverview()
+            loadAudit()
+        } catch (exception: Exception) { error = exception.message ?: "حذف پست ناموفق بود." }
+        finally { busyId = null }
+    }
+
     suspend fun loadReports() {
         loading = true
         error = null
@@ -199,6 +233,8 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
             if (role in listOf("owner", "admin")) Button(onClick = { section = "features"; scope.launch { loadFeatureFlags() } }) { Text("کنترل امکانات") }
             if (role in listOf("owner", "admin")) {
                 Button(onClick = { section = "users"; scope.launch { loadUsers() } }) { Text("کاربران") }
+                Button(onClick = { section = "content"; scope.launch { loadOverview() } }) { Text("مدیریت محتوا") }
+                Button(onClick = { section = "audit"; scope.launch { loadAudit() } }) { Text("فعالیت مدیران") }
             }
         }
         if (section == "users" && role in listOf("owner", "admin")) {
@@ -293,6 +329,46 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
                     Text(body.take(100).ifBlank { "پست بدون متن" },style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        } else if (section == "content" && role in listOf("owner", "admin")) {
+            Text("مدیریت محتوای اخیر",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+            overviewPosts.forEach { post ->
+                val id=post["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val body=post["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val visibility=post["visibility"]?.jsonPrimitive?.contentOrNull ?: "public"
+                Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)) {
+                    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Text(body.take(180).ifBlank { "پست رسانه‌ای" },fontWeight=FontWeight.SemiBold)
+                        Text(if(visibility=="public") "عمومی" else "محدود / مخفی",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled=busyId==null,onClick={scope.launch{moderatePost(id,if(visibility=="public") "private" else "public")}}) {
+                                Text(if(visibility=="public") "مخفی‌کردن" else "عمومی‌کردن")
+                            }
+                            if(role in listOf("owner","admin")) TextButton(enabled=busyId==null,onClick={scope.launch{deletePost(id)}}) {
+                                Text("حذف",color=MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+            if(overviewPosts.isEmpty()) Text("پستی برای مدیریت وجود ندارد.")
+        } else if (section == "audit" && role in listOf("owner", "admin")) {
+            Text("سوابق عملیات مدیران",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+            auditRows.forEach { event ->
+                val action=event["action"]?.jsonPrimitive?.contentOrNull ?: "عملیات"
+                val target=event["target_type"]?.jsonPrimitive?.contentOrNull ?: "—"
+                val status=event["status"]?.jsonPrimitive?.contentOrNull ?: "—"
+                val actor=event["actor_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val created=event["created_at"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp)) {
+                    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Text(action,fontWeight=FontWeight.SemiBold)
+                        Text("نوع هدف: $target · وضعیت: $status",style=MaterialTheme.typography.bodySmall)
+                        Text("مدیر: " + actor.take(8) + "…",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(created,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if(auditRows.isEmpty()) Text("هنوز سابقه‌ای ثبت نشده است.")
         } else if (section == "features" && role in listOf("owner", "admin")) {
             Text("کنترل مرکزی امکانات",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
             featureFlags.forEach { flag ->
