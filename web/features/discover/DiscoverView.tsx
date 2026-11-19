@@ -12,6 +12,7 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   const [query, setQuery] = useState(initialSearch);
   const [people, setPeople] = useState<Profile[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
+  const [recommendations, setRecommendations] = useState<{ profile: Profile; score: number; rank: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [joining, setJoining] = useState<string | null>(null);
   const [followStatusByUser, setFollowStatusByUser] = useState<Record<string, string>>({});
@@ -30,6 +31,35 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   };
 
   useEffect(() => { void loadCommunities(); }, [supabase, userId]);
+
+  useEffect(() => {
+    let alive = true;
+    const loadActiveMembers = async () => {
+      const [{ data: scores, error: scoreError }, { data: rankLevels, error: rankError }] = await Promise.all([
+        supabase.from('user_rank_state').select('user_id,score,rank_code').neq('user_id', userId).order('score', { ascending: false }).limit(8),
+        supabase.from('rank_levels').select('code,title,min_score').order('min_score', { ascending: true }),
+      ]);
+      if (!alive) return;
+      if (scoreError || rankError) { notify('دریافت پیشنهاد اعضای فعال ناموفق بود.', 'error'); return; }
+      const ids = (scores ?? []).map((row) => row.user_id);
+      if (!ids.length) { setRecommendations([]); return; }
+      const [{ data: profiles, error: profileError }, { data: follows, error: followsError }] = await Promise.all([
+        supabase.from('profiles').select('*').in('id', ids),
+        supabase.from('follows').select('following_id,status').eq('follower_id', userId).in('following_id', ids),
+      ]);
+      if (!alive) return;
+      if (profileError || followsError) { notify('دریافت اطلاعات اعضای فعال ناموفق بود.', 'error'); return; }
+      const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile as Profile]));
+      const levelMap = new Map((rankLevels ?? []).map((level) => [level.code, level.title]));
+      setRecommendations((scores ?? []).flatMap((row) => {
+        const profile = profileMap.get(row.user_id);
+        return profile ? [{ profile, score: Number(row.score ?? 0), rank: levelMap.get(row.rank_code) ?? 'تازه‌وارد' }] : [];
+      }));
+      setFollowStatusByUser((current) => ({ ...current, ...Object.fromEntries((follows ?? []).map((row) => [row.following_id, row.status])) }));
+    };
+    void loadActiveMembers();
+    return () => { alive = false; };
+  }, [supabase, userId, notify]);
 
   const joinCommunity = async (id: string) => {
     setJoining(id);
@@ -116,6 +146,14 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
       <p>{p.bio || 'هنوز توضیحی برای این پروفایل ثبت نشده است.'}</p>
       <div><button className="button button-primary button-small" onClick={() => void startChat(p.id)}><MessageCircle size={15}/> گفتگو</button><button className="button button-quiet button-small" disabled={followBusy === p.id} onClick={() => void follow(p.id)}>{followBusy === p.id ? 'در حال ثبت…' : followStatusByUser[p.id] === 'accepted' ? 'لغو دنبال‌کردن' : followStatusByUser[p.id] === 'pending' ? 'لغو درخواست' : 'درخواست دنبال‌کردن'}</button></div>
     </article>)}</div> : <EmptyState icon={<Compass/>} title="کسی پیدا نشد" description="برای شروع، نام یا نام کاربری را جست‌وجو کن."/>}
+    {recommendations.length > 0 && <section className="page-stack">
+      <h3><Users size={18}/> اعضای فعال جامعه</h3>
+      <div className="people-grid">{recommendations.map((item) => <article className="person-card recommended-person" key={item.profile.id}>
+        <Avatar profile={item.profile} size="lg"/><strong>{item.profile.display_name}</strong><span>@{item.profile.username ?? 'بدون نام کاربری'}</span>
+        <p>{item.rank} · {item.score.toLocaleString('fa-IR')} امتیاز</p>
+        <div><button className="button button-primary button-small" onClick={() => void startChat(item.profile.id)}><MessageCircle size={15}/> گفتگو</button><button className="button button-quiet button-small" disabled={followBusy === item.profile.id} onClick={() => void follow(item.profile.id)}>{followBusy === item.profile.id ? 'در حال ثبت…' : followStatusByUser[item.profile.id] === 'accepted' ? 'دنبال می‌کنی' : followStatusByUser[item.profile.id] === 'pending' ? 'در انتظار' : 'دنبال‌کردن'}</button></div>
+      </article>)}</div>
+    </section>}
     <section className="page-stack">
       <h3><Users size={18}/> گروه‌ها و کانال‌های قابل پیوستن</h3>
       {communities.length === 0 ? <EmptyState icon={<Compass/>} title="فضای عمومی‌ای پیدا نشد" description="گروه‌ها و کانال‌های عمومی اینجا نمایش داده می‌شوند."/> : <div className="people-grid">{communities.map((item) => <article className="person-card" key={item.conversation_id}>
