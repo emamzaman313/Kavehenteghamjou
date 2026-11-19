@@ -501,7 +501,16 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
             title = { Text(person.displayName.ifBlank { person.username ?: "پروفایل کاربر" }) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(person.username?.let { "@$it" } ?: "کاربر کاوه", color = MaterialTheme.colorScheme.primary)
+                    person.avatarUrl?.let { avatar ->
+                        AsyncImage(
+                            model = avatar,
+                            imageLoader = profileImageLoader,
+                            contentDescription = "تصویر پروفایل",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.width(76.dp).height(76.dp)
+                        )
+                    }
+                    Text(person.username?.let { "@$it" } ?: "کاربر کاوه", color = runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(person.profileTheme.accent)) }.getOrDefault(MaterialTheme.colorScheme.primary))
                     Text(person.bio.ifBlank { "این کاربر هنوز توضیحی برای پروفایل ثبت نکرده است." })
                     person.coverPath?.let { path ->
                         AsyncImage(
@@ -529,6 +538,7 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                         Text(selectedAuthorBadges.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall)
                     }
                     if (person.profileMusicPath != null) {
+                        Text(person.profileMusicTitle?.takeIf { it.isNotBlank() } ?: "موسیقی اختصاصی پروفایل", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         OutlinedButton(onClick = {
                             try {
                                 val current = authorProfilePlayer
