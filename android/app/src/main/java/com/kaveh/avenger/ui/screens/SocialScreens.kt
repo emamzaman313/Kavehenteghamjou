@@ -300,7 +300,6 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
                                             try {
                                                 val intent = Intent(Intent.ACTION_VIEW).apply {
                                                     setDataAndType(Uri.parse(mediaUrl), mimeType.ifBlank { "*/*" })
-                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                 }
                                                 context.startActivity(intent)
                                             } catch (exception: Exception) {
@@ -1500,3 +1499,80 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                                     }
                                                 }
                                                 input.toByteReadChannel()
+                                            },
+                                            source = uri.toString(),
+                                            size = tempFile.length(),
+                                            path = path
+                                        ) {
+                                            contentType = ContentType.parse(mime)
+                                        }
+                                        val progressMonitor = scope.launch {
+                                            resumableUpload.stateFlow.collect { state ->
+                                                uploadProgress = state.progress
+                                            }
+                                        }
+                                        try {
+                                            resumableUpload.startOrResumeUploading()
+                                        } finally {
+                                            progressMonitor.cancel()
+                                        }
+                                        uploadedPaths.add(path)
+                                        val displayName = contentDisplayName(context, uri, "media-${index + 1}")
+                                        supabase.postgrest["post_attachments"].insert(
+                                            SocialPostAttachmentInsert(postId, userId, "post-media", path, displayName, mime, tempFile.length())
+                                        )
+                                    } finally {
+                                        tempFile.delete()
+                                    }
+                                }
+                                body = ""
+                                selectedMedia = emptyList()
+                                uploadProgress = null
+                                message = "پست و رسانه‌های پیوست‌شده با موفقیت منتشر شدند."
+                            } catch (exception: Exception) {
+                                var cleanupFailed = false
+                                if (uploadedPaths.isNotEmpty()) {
+                                    try {
+                                        supabase.storage["post-media"].delete(*uploadedPaths.toTypedArray())
+                                    } catch (_: Exception) {
+                                        cleanupFailed = true
+                                    }
+                                }
+                                if (postCreated) {
+                                    try {
+                                        supabase.postgrest["posts"].delete {
+                                            filter { eq("id", postId); eq("author_id", userId) }
+                                        }
+                                    } catch (_: Exception) {
+                                        cleanupFailed = true
+                                    }
+                                }
+                                failed = true
+                                uploadProgress = null
+                                val baseMessage = exception.message ?: "انتشار پست انجام نشد. دوباره تلاش کن."
+                                message = if (cleanupFailed) {
+                                    "$baseMessage پاک‌سازی خودکار کامل نشد؛ لطفاً این عملیات را دوباره بررسی کن."
+                                } else baseMessage
+                            } finally {
+                                publishing = false
+                            }
+                        }
+                    }
+                ) {
+                    if (publishing) CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp)
+                    else Text("انتشار در کاوه")
+                }
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f))
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("یادآوری حریم خصوصی", fontWeight = FontWeight.SemiBold)
+                Text("این نسخه پست را به‌صورت عمومی منتشر می‌کند؛ محتوا می‌تواند در اکتشاف و فید جامعه نمایش داده شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
