@@ -48,7 +48,8 @@ private data class AdminActionRequest(
     val status: String? = null,
     val userId: String? = null,
     val reason: String? = null,
-    val duration: String? = null
+    val duration: String? = null,
+    val role: String? = null
 )
 
 private suspend fun callAdminConsole(supabase: SupabaseClient, request: AdminActionRequest): JsonObject {
@@ -195,6 +196,35 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String) {
                             Text(email)
                             Text(if (banned) "حساب محدود شده" else "حساب فعال")
                             if (adminRole != null) Text("نقش مدیریتی: $adminRole")
+                            if (role == "owner" && id.isNotBlank() && adminRole != "owner") {
+                                Text("مدیریت نقش دسترسی", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf("admin" to "مدیر", "moderator" to "ناظر", "support" to "پشتیبانی").forEach { (newRole, label) ->
+                                        Button(enabled = busyId != id && adminRole != newRole, onClick = {
+                                            scope.launch {
+                                                busyId = id; error = null
+                                                try {
+                                                    callAdminConsole(supabase, AdminActionRequest("set_admin_role", userId = id, role = newRole))
+                                                    notice = "نقش $name به $label تغییر کرد."; loadUsers()
+                                                } catch (exception: Exception) { error = exception.message }
+                                                finally { busyId = null }
+                                            }
+                                        }) { Text(label) }
+                                    }
+                                    if (adminRole != null) {
+                                        Button(enabled = busyId != id, onClick = {
+                                            scope.launch {
+                                                busyId = id; error = null
+                                                try {
+                                                    callAdminConsole(supabase, AdminActionRequest("remove_admin_role", userId = id))
+                                                    notice = "دسترسی مدیریتی $name برداشته شد."; loadUsers()
+                                                } catch (exception: Exception) { error = exception.message }
+                                                finally { busyId = null }
+                                            }
+                                        }) { Text("حذف نقش") }
+                                    }
+                                }
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(enabled = busyId != id && reason.trim().length >= 3 && adminRole == null, onClick = {
                                     scope.launch {
