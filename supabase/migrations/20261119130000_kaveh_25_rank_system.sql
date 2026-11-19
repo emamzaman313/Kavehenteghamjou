@@ -1,0 +1,2 @@
+-- 25-rank schema and seed were applied to Supabase production on 2026-11-19.
+-- Source SQL is recorded in the deployment change; this marker keeps repository history discoverable.
