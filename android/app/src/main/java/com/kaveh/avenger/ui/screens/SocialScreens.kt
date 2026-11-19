@@ -13,6 +13,7 @@ import android.widget.VideoView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
 import com.kaveh.avenger.BuildConfig
 import coil.ImageLoader
 import coil.compose.AsyncImage
@@ -56,6 +57,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -1622,7 +1624,7 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             singleLine = true,
             label = { Text("جست‌وجوی نام یا موضوع اجتماع") }
         )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("all" to "همه", "group" to "گروه‌ها", "channel" to "کانال‌ها", "joined" to "عضویت‌های من").forEach { (key, label) ->
                 if (communityFilter == key) {
                     Button(onClick = { communityFilter = key }) { Text(label) }
