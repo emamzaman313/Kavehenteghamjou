@@ -1690,3 +1690,36 @@ button:disabled { cursor: not-allowed; }
 .profile-viewer-badges>div{display:flex;flex-wrap:wrap;gap:8px}
 .profile-viewer-badges span{padding:7px 10px;border:1px solid rgba(255,255,255,.16);border-radius:999px;font-size:12px}
 @media(max-width:600px){.profile-viewer-backdrop{padding:10px}.profile-viewer-cover{height:140px}.profile-viewer-content{padding:16px}}
+
+
+/* Community discovery — responsive, keyboard-friendly collection UI */
+.community-discovery { gap:16px; }
+.community-discovery-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; padding:22px; border:1px solid var(--line); border-radius:22px; background:radial-gradient(ellipse at 100% 0,rgba(55,151,235,.17),transparent 48%),linear-gradient(135deg,var(--surface),var(--surface-2)); }
+.community-discovery-heading h3 { display:flex; align-items:center; gap:9px; margin:7px 0 5px; font-size:20px; }
+.community-discovery-heading h3 svg { color:var(--accent-strong); }
+.community-discovery-heading p { color:var(--muted); font-size:11px; margin:0; line-height:1.8; }
+.community-discovery-tools { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; }
+.community-search { min-height:44px; display:flex; align-items:center; gap:10px; padding:0 13px; border:1px solid var(--line); border-radius:13px; background:var(--surface); color:var(--muted); }
+.community-search:focus-within { border-color:var(--accent-strong); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent); }
+.community-search input { width:100%; min-width:0; border:0; outline:0; background:transparent; color:var(--text); font-size:11px; }
+.community-filters { display:flex; flex-wrap:wrap; gap:6px; }
+.community-filters button { min-height:36px; padding:0 12px; border:1px solid var(--line); border-radius:11px; background:var(--surface); color:var(--muted); font-size:10px; }
+.community-filters button.active { color:var(--accent-strong); border-color:color-mix(in srgb,var(--accent) 45%,var(--line)); background:color-mix(in srgb,var(--accent) 12%,var(--surface)); }
+.community-results-meta { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:10px; padding:0 2px; }
+.community-results-meta strong { color:var(--text); font-size:12px; }
+.community-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; }
+.community-card { min-width:0; display:flex; flex-direction:column; gap:9px; padding:17px; border:1px solid var(--line); border-radius:18px; background:linear-gradient(160deg,var(--surface),color-mix(in srgb,var(--surface-2) 75%,transparent)); transition:transform .2s,border-color .2s,box-shadow .2s; }
+.community-card:hover { transform:translateY(-2px); border-color:color-mix(in srgb,var(--accent) 35%,var(--line)); box-shadow:var(--shadow); }
+.community-card-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.community-kind { color:#e6c58e; background:rgba(207,161,91,.11); border:1px solid rgba(207,161,91,.18); border-radius:999px; padding:4px 8px; font-size:9px; }
+.community-kind.channel { color:var(--accent-strong); background:rgba(69,168,255,.1); border-color:rgba(69,168,255,.2); }
+.community-member-count,.community-handle { color:var(--muted); font-size:9px; }
+.community-card>strong { font-size:14px; overflow-wrap:anywhere; }
+.community-card>p { min-height:42px; margin:0; color:var(--soft); font-size:10px; line-height:1.9; overflow-wrap:anywhere; }
+.community-card-footer { display:flex; align-items:center; justify-content:flex-start; min-height:34px; padding-top:9px; border-top:1px solid var(--line); margin-top:auto; }
+.community-state { font-size:10px; }
+.community-state.joined { color:var(--success); }
+.community-state.pending { color:var(--gold); }
+@media(max-width:1050px) { .community-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .community-discovery-tools { grid-template-columns:1fr; } }
+@media(max-width:560px) { .community-grid { grid-template-columns:1fr; } .community-discovery-heading { align-items:flex-start; flex-direction:column; } .community-discovery-heading>.button { align-self:stretch; } .community-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } .community-filters button { width:100%; } }
+@media(prefers-reduced-motion:reduce) { .community-card { transition:none; } .community-card:hover { transform:none; } }
