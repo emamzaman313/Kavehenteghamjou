@@ -1,6 +1,6 @@
 'use client';
 
-import { LifeBuoy, MessageCircle, Plus, Send, RefreshCw, CheckCircle2, Clock3 } from 'lucide-react';
+import { LifeBuoy, MessageCircle, Plus, Send, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
@@ -80,8 +80,18 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     const {data,error} = await supabase.from('messages').select('id,conversation_id,sender_id,body,created_at')
       .eq('conversation_id',ticket.conversation_id).is('deleted_at',null).order('created_at',{ascending:true}).limit(300);
     if (error) notify('دریافت پیام‌های پشتیبانی ناموفق بود: '+error.message,'error');
-    else setMessages((data ?? []) as Message[]);
-  },[supabase,tickets,notify]);
+    else {
+      const loaded = (data ?? []) as Message[];
+      setMessages(loaded);
+      const latestFetchedAt = loaded[loaded.length - 1]?.created_at;
+      if (latestFetchedAt) {
+        const {error:readError} = await supabase.from('conversation_members')
+          .update({last_read_at:latestFetchedAt})
+          .eq('conversation_id',ticket.conversation_id).eq('user_id',userId);
+        if (readError) console.warn('Could not advance support read cursor:',readError.message);
+      }
+    }
+  },[supabase,tickets,notify,userId]);
 
   useEffect(()=>{ void refresh(); },[refresh]);
   useEffect(()=>{
@@ -128,11 +138,14 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     await refresh();
   };
 
-  const updateStatus = async (status:string) => {
+  const updateTicketField = async (field:'status'|'priority', value:string) => {
     if (!active || !staff) return;
-    const {error} = await supabase.from('support_tickets').update({status,updated_at:new Date().toISOString(),...(status==='resolved'?{resolved_at:new Date().toISOString()}:{resolved_at:null})}).eq('id',active);
-    if (error) notify('تغییر وضعیت ناموفق بود: '+error.message,'error');
-    else { notify('وضعیت درخواست به‌روزرسانی شد.'); await refresh(); }
+    const patch = field==='status'
+      ? {status:value,updated_at:new Date().toISOString(),resolved_at:value==='resolved'?new Date().toISOString():null}
+      : {priority:value,updated_at:new Date().toISOString()};
+    const {error} = await supabase.from('support_tickets').update(patch).eq('id',active);
+    if (error) notify('به‌روزرسانی درخواست ناموفق بود: '+error.message,'error');
+    else { notify('درخواست به‌روزرسانی شد.'); await refresh(); }
   };
 
   const selected = tickets.find(x=>x.id===active);
@@ -164,7 +177,10 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
         {!selected ? <div style={{minHeight:220,display:'grid',placeItems:'center',color:'var(--muted)',textAlign:'center'}}><div><MessageCircle size={30}/><p>برای مشاهده گفتگو، یک درخواست را انتخاب کنید.</p></div></div> : <>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',borderBottom:'1px solid var(--line)',paddingBottom:12}}>
             <div><strong>{selected.subject}</strong><p style={{fontSize:10,color:'var(--muted)',margin:'5px 0 0'}}>وضعیت: {statusLabels[selected.status]??selected.status} · {categoryLabels[selected.category]??selected.category}</p></div>
-            {staff && <select aria-label="وضعیت درخواست" value={selected.status} onChange={e=>void updateStatus(e.target.value)} style={{maxWidth:155}}><option value="open">جدید</option><option value="in_progress">در حال بررسی</option><option value="waiting_user">منتظر پاسخ کاربر</option><option value="resolved">حل‌شده</option><option value="closed">بسته‌شده</option></select>}
+            {staff && <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+              <select aria-label="وضعیت درخواست" value={selected.status} onChange={e=>void updateTicketField('status',e.target.value)} style={{maxWidth:155}}><option value="open">جدید</option><option value="in_progress">در حال بررسی</option><option value="waiting_user">منتظر پاسخ کاربر</option><option value="resolved">حل‌شده</option><option value="closed">بسته‌شده</option></select>
+              <select aria-label="اولویت درخواست" value={selected.priority} onChange={e=>void updateTicketField('priority',e.target.value)} style={{maxWidth:125}}><option value="low">اولویت پایین</option><option value="normal">اولویت عادی</option><option value="high">اولویت بالا</option><option value="urgent">فوری</option></select>
+            </div>}
           </div>
           <div style={{display:'grid',gap:9,padding:'14px 0',maxHeight:430,overflowY:'auto'}}>
             {messages.map(message=><div key={message.id} style={{justifySelf:message.sender_id===userId?'end':'start',maxWidth:'88%',padding:'10px 12px',borderRadius:13,background:message.sender_id===userId?'rgba(22,139,255,.14)':'var(--surface-2,rgba(127,127,127,.12))',border:'1px solid var(--line)'}}>
