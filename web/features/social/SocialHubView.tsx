@@ -342,7 +342,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     {tab === 'reels' && <>
       <form className="panel-card page-stack" onSubmit={uploadReel}>
         <strong>انتشار ریلز جدید</strong>
-        <div className="creator-studio-intro"><span className="eyebrow">KAVEH CREATOR STUDIO</span><p>ویدئوی کوتاهت را آماده کن، جلد اختصاصی انتخاب کن و مشخص کن چه کسانی آن را ببینند.</p></div>
+        <div className="creator-studio-intro"><span className="eyebrow">KAVEH CREATOR STUDIO</span><p>ویدئوی کوتاهت را آماده کن، جلد اختصاصی انتخاب کن و پیش از انتشار مشخصات آن را بررسی کن.</p></div>
         <textarea className="field-input" rows={2} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="برای ویدئوی خود توضیح بنویس…"/>
         <div className="creator-studio-fields">
           <label className="creator-file-field"><Video size={17}/><span><strong>ویدئوی اصلی</strong><small>{video ? video.name + ' · ' + (video.size / 1048576).toFixed(1) + ' MB' : 'MP4، WebM و فرمت‌های پشتیبانی‌شده'}</small></span><input type="file" accept="video/*" onChange={(e: ChangeEvent<HTMLInputElement>) => { const file=e.target.files?.[0] ?? null; setVideo(file); setReelDuration(null); if(file){ const probe=document.createElement('video'); const url=URL.createObjectURL(file); probe.preload='metadata'; probe.onloadedmetadata=()=>{ setReelDuration(Number.isFinite(probe.duration)?Math.round(probe.duration):null); URL.revokeObjectURL(url); }; probe.onerror=()=>URL.revokeObjectURL(url); probe.src=url; } }}/></label>
