@@ -206,6 +206,21 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
     await refreshOverview();
   };
 
+  const deleteReel = async (reelId: string) => {
+    const candidateKey = 'reel:' + reelId;
+    if (deleteCandidate !== candidateKey) { setDeleteCandidate(candidateKey); return; }
+    setUserBusy(candidateKey);
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'delete_reel', reelId } });
+    setUserBusy(null);
+    setDeleteCandidate(null);
+    if (error || data?.ok !== true) {
+      notify(data?.reason === 'insufficient_role' ? 'حذف ریلز فقط برای مدیر و مالک مجاز است.' : 'حذف ریلز انجام نشد.', 'error');
+      return;
+    }
+    notify('ریلز و فایل ویدئویی آن حذف شد؛ دیدگاه‌ها، پسندها و بازدیدهای وابسته نیز پاک شدند.');
+    await Promise.all([refreshReports(), refreshAudit(), refreshOverview()]);
+  };
+
   useEffect(() => {
     let active = true;
     void supabase.functions.invoke('access-code-login', { body: { action: 'admin_get' } })
@@ -328,13 +343,14 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           <div className="admin-audit-heading"><strong>صف بررسی گزارش‌ها ({reportRows.length})</strong><button className="button button-quiet" type="button" onClick={() => void refreshReports()}><Activity size={15}/> تازه‌سازی</button></div>
           {reportsLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت گزارش‌ها…</span></div> : reportRows.length === 0 ? <p>گزارش ثبت‌شده‌ای برای بررسی وجود ندارد.</p> : reportRows.map((report) => <div className="admin-report-row" key={report.id}>
             <div className="admin-report-heading">
-              <b>{report.target_type === 'user' ? 'گزارش درباره کاربر' : report.target_type === 'post' ? 'گزارش درباره پست' : report.target_type === 'comment' ? 'گزارش درباره دیدگاه' : report.target_type === 'message' ? 'گزارش درباره پیام' : report.target_type === 'group' ? 'گزارش درباره گروه' : report.target_type === 'channel' ? 'گزارش درباره کانال' : report.target_type === 'file' ? 'گزارش درباره فایل' : 'گزارش تخلف'}</b>
+              <b>{report.target_type === 'user' ? 'گزارش درباره کاربر' : report.target_type === 'post' ? 'گزارش درباره پست' : report.target_type === 'comment' ? 'گزارش درباره دیدگاه' : report.target_type === 'reel' ? 'گزارش درباره ریلز' : report.target_type === 'message' ? 'گزارش درباره پیام' : report.target_type === 'group' ? 'گزارش درباره گروه' : report.target_type === 'channel' ? 'گزارش درباره کانال' : report.target_type === 'file' ? 'گزارش درباره فایل' : 'گزارش تخلف'}</b>
               <span className={`admin-report-status status-${report.status}`}>{report.status === 'open' ? 'باز' : report.status === 'reviewing' ? 'در حال بررسی' : report.status === 'resolved' ? 'تأیید و بسته‌شده' : 'ردشده'}</span>
             </div>
             <small>دلیل: {report.reason} · گزارش‌دهنده: {report.reporter_id.slice(0, 8)}… · شناسه هدف: {report.target_id.slice(0, 8)}…</small>
             {report.target_summary && <p className="admin-report-target">محتوای هدف: {report.target_summary}</p>}
             {report.details && <p className="admin-report-details">{report.details}</p>}
             <small>{new Date(report.created_at).toLocaleString('fa-IR')}</small>
+            {report.target_type === 'reel' && report.status !== 'resolved' && report.status !== 'rejected' && <div className="admin-report-actions"><button className="button button-quiet admin-ban-button" type="button" disabled={userBusy !== null} onClick={() => void deleteReel(report.target_id)}><Trash2 size={14}/>{deleteCandidate === 'reel:' + report.target_id ? 'برای تأیید دوباره بزن' : 'حذف ریلز'}</button></div>}
             {report.status !== 'resolved' && report.status !== 'rejected' && <div className="admin-report-actions">
               {report.status === 'open' && <button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void reviewReport(report.id, 'reviewing')}>شروع بررسی</button>}
               <button className="button button-quiet" type="button" disabled={userBusy !== null} onClick={() => void reviewReport(report.id, 'resolved')}>تأیید گزارش</button>
@@ -348,7 +364,7 @@ export default function AdminAccessCodePanel({ supabase, notify }: { supabase: S
           {auditLoading ? <div className="admin-loading"><span className="spinner"/><span>در حال دریافت گزارش‌ها…</span></div> : auditRows.length === 0 ? <p>هنوز عملیات مدیریتی ثبت نشده است.</p> : auditRows.map((entry) => <div className="admin-activity-row" key={entry.id}>
             <span className="admin-activity-dot"/>
             <div>
-              <b>{entry.action === 'delete_post' ? 'حذف پست' : entry.action === 'moderate_post' ? 'تغییر وضعیت پست' : entry.action === 'warn_user' ? 'اخطار به کاربر' : entry.action === 'ban_user' ? 'مسدودسازی کاربر' : entry.action === 'unban_user' ? 'رفع مسدودی کاربر' : entry.action === 'set_admin_role' ? 'تغییر نقش مدیریتی' : entry.action === 'remove_admin_role' ? 'لغو دسترسی مدیریتی' : entry.action === 'review_report' ? 'بررسی گزارش تخلف' : entry.action}</b>
+              <b>{entry.action === 'delete_reel' ? 'حذف ریلز گزارش‌شده' : entry.action === 'delete_post' ? 'حذف پست' : entry.action === 'moderate_post' ? 'تغییر وضعیت پست' : entry.action === 'warn_user' ? 'اخطار به کاربر' : entry.action === 'ban_user' ? 'مسدودسازی کاربر' : entry.action === 'unban_user' ? 'رفع مسدودی کاربر' : entry.action === 'set_admin_role' ? 'تغییر نقش مدیریتی' : entry.action === 'remove_admin_role' ? 'لغو دسترسی مدیریتی' : entry.action === 'review_report' ? 'بررسی گزارش تخلف' : entry.action}</b>
               <small>{entry.target_type === 'user' ? 'شناسه کاربر: ' : entry.target_type === 'report' ? 'شناسه گزارش: ' : 'شناسه محتوا: '}{entry.target_id.slice(0, 8)}… · مدیر: {entry.actor_id?.slice(0, 8) ?? 'نامشخص'} · {entry.status === 'succeeded' ? 'موفق' : entry.status === 'failed' ? 'ناموفق' : 'در حال اجرا'}</small>
               <small>{entry.details?.visibility ? 'وضعیت مقصد: ' + String(entry.details.visibility) + ' · ' : ''}{entry.details?.duration ? 'مدت محدودیت: ' + String(entry.details.duration) + ' · ' : ''}{entry.details?.role ? 'نقش: ' + String(entry.details.role) + ' · ' : ''}{entry.details?.previous_role ? 'نقش قبلی: ' + String(entry.details.previous_role) + ' · ' : ''}{entry.details?.reason ? 'دلیل: ' + String(entry.details.reason) + ' · ' : ''}{new Date(entry.created_at).toLocaleString('fa-IR')}</small>
             </div>
