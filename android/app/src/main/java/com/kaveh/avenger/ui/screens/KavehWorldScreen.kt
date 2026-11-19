@@ -72,6 +72,7 @@ private data class WorldEventRow(
     @SerialName("starts_at") val startsAt: String,
     @SerialName("ends_at") val endsAt: String? = null,
     @SerialName("points_reward") val pointsReward: Int,
+    @SerialName("participant_count") val participantCount: Int = 0,
     @SerialName("banner_path") val bannerPath: String? = null,
     @SerialName("created_by") val createdBy: String? = null,
     @SerialName("created_at") val createdAt: String = "",
@@ -257,7 +258,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(event.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             if (event.summary.isNotBlank()) Text(event.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("شروع: ${event.startsAt.take(16).replace("T", " ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("شروع: ${event.startsAt.take(16).replace("T", " ")} · ${event.participantCount} شرکت‌کننده", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (event.pointsReward > 0) Text("جایزه اعلام‌شده: ${event.pointsReward} XP", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                             if (event.status == "published") {
                                 OutlinedButton(
