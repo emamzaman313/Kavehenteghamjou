@@ -104,6 +104,36 @@ private data class WorldRankLevelRow(
 )
 
 @Serializable
+private data class WorldBadgeRow(
+    val code: String,
+    val title: String,
+    val description: String,
+    @SerialName("icon_key") val iconKey: String,
+    @SerialName("accent_token") val accentToken: String
+)
+
+@Serializable
+private data class WorldUserBadgeRow(
+    @SerialName("badge_code") val badgeCode: String
+)
+
+@Serializable
+private data class WorldBadgeInsert(
+    val code: String,
+    val title: String,
+    val description: String,
+    @SerialName("icon_key") val iconKey: String = "award",
+    @SerialName("accent_token") val accentToken: String = "gold"
+)
+
+@Serializable
+private data class WorldUserBadgeInsert(
+    @SerialName("user_id") val userId: String,
+    @SerialName("badge_code") val badgeCode: String,
+    @SerialName("awarded_by") val awardedBy: String
+)
+
+@Serializable
 private data class WorldMissionInsert(
     val code: String,
     val title: String,
@@ -143,6 +173,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
     val joined = remember { mutableStateListOf<String>() }
     val ranking = remember { mutableStateListOf<WorldRankRow>() }
     val rankLevels = remember { mutableStateListOf<WorldRankLevelRow>() }
+    val badges = remember { mutableStateListOf<WorldBadgeRow>() }
+    val myBadgeCodes = remember { mutableStateListOf<String>() }
     var score by remember { mutableStateOf(0L) }
     var rankTitle by remember { mutableStateOf("تازه‌وارد") }
     var loading by remember { mutableStateOf(true) }
@@ -157,6 +189,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
     var eventSummary by remember { mutableStateOf("") }
     var eventBody by remember { mutableStateOf("") }
     var eventCategory by remember { mutableStateOf("community") }
+    var badgeCode by remember { mutableStateOf("") }
+    var badgeTitle by remember { mutableStateOf("") }
+    var badgeDescription by remember { mutableStateOf("") }
+    var awardUserId by remember { mutableStateOf("") }
+    var selectedBadgeCode by remember { mutableStateOf("") }
 
     suspend fun refresh() {
         loading = true
@@ -179,6 +216,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                 limit(10)
             }.decodeList<WorldRankRow>()
             val levelRows = supabase.postgrest["rank_levels"].select().decodeList<WorldRankLevelRow>()
+            val badgeRows = supabase.postgrest["badges"].select().decodeList<WorldBadgeRow>()
+            val ownBadges = supabase.postgrest["user_badges"].select { filter { eq("user_id", userId) } }.decodeList<WorldUserBadgeRow>()
             val ownRank = rankRows.firstOrNull { it.userId == userId }
                 ?: supabase.postgrest["user_rank_state"].select {
                     filter { eq("user_id", userId) }
@@ -191,6 +230,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
             joined.clear(); joined.addAll(participantRows.map { it.eventId })
             ranking.clear(); ranking.addAll(rankRows)
             rankLevels.clear(); rankLevels.addAll(levelRows)
+            badges.clear(); badges.addAll(badgeRows)
+            myBadgeCodes.clear(); myBadgeCodes.addAll(ownBadges.map { it.badgeCode })
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت جهان کاوه ناموفق بود."
         } finally {
@@ -286,6 +327,18 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
+                item { Text("تالار افتخار", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+                items(badges, key = { it.code }) { badge ->
+                    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("🏅 ${badge.title}", fontWeight = FontWeight.Bold)
+                                if (badge.description.isNotBlank()) Text(badge.description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(if (myBadgeCodes.contains(badge.code)) "دریافت‌شده" else "ویژه", color = if (myBadgeCodes.contains(badge.code)) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
                 if (isAdmin) {
                     item {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -343,6 +396,35 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                     enabled = !busy && eventTitle.trim().length >= 3,
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("انتشار رویداد") }
+                                Spacer(Modifier.height(10.dp))
+                                Text("مدیریت نشان‌های افتخار", style = MaterialTheme.typography.titleMedium)
+                                OutlinedTextField(badgeCode, { badgeCode = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '-' || ch == '_' }.take(48) }, label = { Text("کد لاتین نشان") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                OutlinedTextField(badgeTitle, { badgeTitle = it }, label = { Text("عنوان نشان") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                OutlinedTextField(badgeDescription, { badgeDescription = it }, label = { Text("توضیحات نشان") }, modifier = Modifier.fillMaxWidth())
+                                Button(onClick = {
+                                    scope.launch {
+                                        if (badgeCode.length < 3 || badgeTitle.trim().length < 2) { error = "کد یا عنوان نشان معتبر نیست."; return@launch }
+                                        busy = true
+                                        try {
+                                            supabase.postgrest["badges"].insert(WorldBadgeInsert(badgeCode, badgeTitle.trim(), badgeDescription.trim()))
+                                            badgeCode = ""; badgeTitle = ""; badgeDescription = ""; refresh()
+                                        } catch (exception: Exception) { error = exception.message ?: "ساخت نشان ناموفق بود." }
+                                        finally { busy = false }
+                                    }
+                                }, enabled = !busy && badgeCode.length >= 3 && badgeTitle.trim().length >= 2, modifier = Modifier.fillMaxWidth()) { Text("ساخت نشان") }
+                                OutlinedTextField(awardUserId, { awardUserId = it.trim() }, label = { Text("شناسه UUID کاربر") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                OutlinedTextField(selectedBadgeCode, { selectedBadgeCode = it }, label = { Text("کد نشان برای اعطا") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                Button(onClick = {
+                                    scope.launch {
+                                        if (awardUserId.isBlank() || selectedBadgeCode.isBlank()) { error = "شناسه کاربر و کد نشان لازم است."; return@launch }
+                                        busy = true
+                                        try {
+                                            supabase.postgrest["user_badges"].insert(WorldUserBadgeInsert(awardUserId, selectedBadgeCode, userId))
+                                            awardUserId = ""; selectedBadgeCode = ""; refresh()
+                                        } catch (exception: Exception) { error = exception.message ?: "اعطای نشان ناموفق بود." }
+                                        finally { busy = false }
+                                    }
+                                }, enabled = !busy && awardUserId.isNotBlank() && selectedBadgeCode.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("اعطای نشان") }
                             }
                         }
                     }
