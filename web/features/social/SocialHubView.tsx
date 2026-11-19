@@ -277,7 +277,39 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     </>}
     {tab === 'music' && <>
       {isAdmin && <form className="panel-card page-stack" onSubmit={uploadTrack}><strong>افزودن آهنگ به کتابخانه (مدیر)</strong><input className="field-input" value={trackTitle} onChange={(e) => setTrackTitle(e.target.value)} placeholder="نام آهنگ" required/><input className="field-input" value={trackArtist} onChange={(e) => setTrackArtist(e.target.value)} placeholder="هنرمند"/><input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] ?? null)}/><button className="button button-primary" disabled={uploading || !audio || !trackTitle.trim()}><Plus size={16}/> افزودن آهنگ</button></form>}
-      <section className="panel-card page-stack"><strong>ساخت فهرست پخش</strong><form onSubmit={createPlaylist} className="inline-form"><input className="field-input" value={playlistTitle} onChange={(e) => setPlaylistTitle(e.target.value)} placeholder="نام فهرست پخش" required/><button className="button button-primary"><Plus size={16}/> ساخت</button></form>{playlists.length > 0 && <><select className="field-input" value={selectedPlaylist} onChange={(e) => setSelectedPlaylist(e.target.value)}><option value="">فهرست پخش را انتخاب کن</option>{playlists.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select><div className="inline-form"><select className="field-input" value={selectedTrack} onChange={(e) => setSelectedTrack(e.target.value)}><option value="">آهنگ را انتخاب کن</option>{tracks.map((t) => <option key={t.id} value={t.id}>{t.title} — {t.artist}</option>)}</select><button className="button button-quiet" onClick={() => void addTrackToPlaylist()} disabled={!selectedPlaylist || !selectedTrack}>افزودن به فهرست</button></div></>}</section>
+      <section className="panel-card page-stack">
+        <strong>فهرست‌های پخش</strong>
+        <form onSubmit={createPlaylist} className="page-stack">
+          <input className="field-input" value={playlistTitle} onChange={(e) => setPlaylistTitle(e.target.value)} placeholder="نام فهرست پخش" required/>
+          {isAdmin && <label className="setting-choice" style={{ justifyContent: 'flex-start', gap: 10 }}>
+            <input type="checkbox" checked={playlistPublic} onChange={(e) => setPlaylistPublic(e.target.checked)}/>
+            <span>انتشار به‌عنوان فهرست موسیقی عمومی برای همه کاربران</span>
+          </label>}
+          <button className="button button-primary"><Plus size={16}/> ساخت فهرست</button>
+        </form>
+        {playlists.length > 0 && <>
+          <select className="field-input" value={selectedPlaylist} onChange={(e) => { setSelectedPlaylist(e.target.value); void refreshPlaylistTracks(e.target.value); }}>
+            <option value="">فهرست پخش را انتخاب کن</option>
+            {playlists.map((p) => <option key={p.id} value={p.id}>{p.title}{p.is_public ? ' · عمومی' : ' · خصوصی'}</option>)}
+          </select>
+          {selectedPlaylist && playlists.find((p) => p.id === selectedPlaylist)?.owner_id === userId && <div className="inline-form">
+            <select className="field-input" value={selectedTrack} onChange={(e) => setSelectedTrack(e.target.value)}>
+              <option value="">آهنگ را انتخاب کن</option>
+              {tracks.map((t) => <option key={t.id} value={t.id}>{t.title} — {t.artist}</option>)}
+            </select>
+            <button type="button" className="button button-quiet" onClick={() => void addTrackToPlaylist()} disabled={!selectedPlaylist || !selectedTrack}>افزودن به فهرست</button>
+          </div>}
+          {selectedPlaylist && playlists.find((p) => p.id === selectedPlaylist)?.owner_id !== userId && <p className="admin-user-policy-note">این فهرست عمومی متعلق به مدیر یا کاربر دیگری است؛ می‌توانی آهنگ‌های منتشرشده‌اش را پخش کنی، اما ویرایش آن فقط برای سازنده مجاز است.</p>}
+          {selectedPlaylist && <div className="page-stack">
+            <strong>آهنگ‌های این فهرست ({selectedPlaylistTracks.length})</strong>
+            {selectedPlaylistTracks.length === 0 ? <p>هنوز آهنگی به این فهرست اضافه نشده است.</p> : selectedPlaylistTracks.map((item) => <div className="file-row" key={item.track.id}>
+              <div><strong>{item.track.title}</strong><small>{item.track.artist || 'هنرمند نامشخص'}</small></div>
+              <audio controls preload="none" src={publicUrl(item.track.audio_path)}/>
+              {playlists.find((p) => p.id === selectedPlaylist)?.owner_id === userId && <button type="button" className="button button-quiet" onClick={() => void removeTrackFromPlaylist(item.track.id)}>حذف از فهرست</button>}
+            </div>)}
+          </div>}
+        </>}
+      </section>
       {tracks.length === 0 ? <EmptyState icon={<Music2/>} title="کتابخانه موسیقی خالی است" description="مدیر سایت می‌تواند آهنگ‌های مجاز را اضافه کند."/> : <div className="panel-card page-stack"><strong>کتابخانه موسیقی</strong>{tracks.map((track) => <div className="file-row" key={track.id}><div><strong>{track.title}</strong><small>{track.artist || 'هنرمند نامشخص'}</small></div><audio controls preload="none" src={publicUrl(track.audio_path)}/></div>)}</div>}
     </>}
     {tab === 'daily' && <>
