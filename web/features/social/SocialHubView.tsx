@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Film, Music2, Megaphone, Heart, MessageCircle, Plus, Upload, ListMusic, RefreshCw, Send } from 'lucide-react';
+import { Film, Music2, Megaphone, Heart, Plus, Upload, RefreshCw, Send } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader, EmptyState } from '@/components/ui';
@@ -59,7 +59,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (!comments.error) { const grouped: Record<string, {id:string;author_id:string;body:string;created_at:string}[]> = {}; for (const item of comments.data ?? []) (grouped[item.reel_id] ??= []).push(item); setReelComments(grouped); }
     if (!scheduledRows.error) setScheduled((scheduledRows.data ?? []) as ScheduledNotice[]);
     setLoading(false);
-  }, [supabase, userId, notify]);
+  }, [supabase, userId, isAdmin, notify]);
 
   useEffect(() => { void load(); }, [load]);
 
