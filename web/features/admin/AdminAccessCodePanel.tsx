@@ -14,7 +14,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance' | 'ranks' | 'features'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'posts' | 'reports' | 'audit' | 'media' | 'notifications' | 'access' | 'appearance' | 'ranks' | 'features'>(role === 'moderator' ? 'reports' : 'overview');
   const [featureFlags, setFeatureFlags] = useState<{key:string;title:string;description:string;enabled:boolean;updated_at:string}[]>([]);
   const [featureFlagsLoading, setFeatureFlagsLoading] = useState(false);
   const [featureBusy, setFeatureBusy] = useState<string|null>(null);
@@ -119,7 +119,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   }, [supabase, notify]);
 
   useEffect(() => {
-    if(adminTab!=='overview') return;
+    if(adminTab!=='overview' || role === 'moderator') return;
     const channel=supabase.channel('admin-live-overview')
       .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>{void refreshOverview();})
       .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>{void refreshOverview();})
@@ -624,7 +624,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
           <div className="admin-stat"><Megaphone/><span>اعلان‌های ثبت‌شده (۷ روز)</span><strong>{overview?.stats.notifications_7d ?? '—'}</strong></div>
         </div>
         <div className="admin-tabs">
-          <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>
+          {role !== 'moderator' && <button className={adminTab === 'overview' ? 'active' : ''} onClick={() => setAdminTab('overview')}><Activity size={15}/> نمای کلی</button>}
           {role !== 'moderator' && <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}><Users size={15}/> کاربران</button>}
           <button className={adminTab === 'posts' ? 'active' : ''} onClick={() => setAdminTab('posts')}><LayoutDashboard size={15}/> مدیریت پست‌ها</button>
           <button className={adminTab === 'reports' ? 'active' : ''} onClick={() => setAdminTab('reports')}><Flag size={15}/> گزارش تخلف‌ها</button>
