@@ -5,6 +5,7 @@ import { Film, Music2, Megaphone, Heart, Plus, Upload, RefreshCw, Send, ImagePlu
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader, EmptyState } from '@/components/ui';
+import { validateReelUpload } from '@/lib/reel-media';
 
 type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean; views_count: number; visibility?: 'public' | 'followers' | 'private'; duration_seconds?: number | null };
 type Track = { id: string; title: string; artist: string; audio_path: string; duration_seconds: number | null };
@@ -100,11 +101,8 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   });
   const uploadReel = async (event: FormEvent) => {
     event.preventDefault();
-    if (!video || !video.type.startsWith('video/')) return notify('یک فایل ویدیویی معتبر انتخاب کنید.', 'error');
-    if (video.size > 50 * 1024 * 1024) return notify('حداکثر حجم ویدئو ۵۰ مگابایت است.', 'error');
-    if (cover && !cover.type.startsWith('image/')) return notify('تصویر جلد باید یک فایل تصویری معتبر باشد.', 'error');
-    if (cover && cover.size > 10 * 1024 * 1024) return notify('حجم تصویر جلد نباید بیشتر از ۱۰ مگابایت باشد.', 'error');
-    if (reelDuration !== null && (reelDuration < 1 || reelDuration > 600)) return notify('مدت ریلز باید حداکثر ۱۰ دقیقه باشد.', 'error');
+    const validationError = validateReelUpload(video, cover, reelDuration);
+    if (validationError) return notify(validationError, 'error');
     setUploading(true);
     const safeName = (file: File) => file.name.replace(/[^\w.\-]/g, '_');
     const path = userId + '/reels/' + crypto.randomUUID() + '-' + safeName(video);
