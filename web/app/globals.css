@@ -1979,3 +1979,49 @@ html[data-kaveh-density="compact"] .settings-mini-preview-card { padding:8px; }
 @keyframes operation-pulse{50%{opacity:.48;box-shadow:0 0 0 7px rgba(128,216,255,.04)}}
 @media(max-width:650px){.operation-progress-stack{inset-block-start:8px;inset-inline:8px}.operation-progress-card{width:min(300px,100%);padding:9px 11px}}
 @media(prefers-reduced-motion:reduce){.operation-pulse,.operation-progress-track>i.operation-indeterminate{animation:none}}
+
+
+/* Kaveh signature registration experience */
+.auth-screen{isolation:isolate;background:radial-gradient(ellipse at 50% 8%,rgba(54,157,255,.18),transparent 34%),radial-gradient(ellipse at 85% 78%,rgba(20,94,174,.12),transparent 35%),linear-gradient(145deg,#060c16 0%,#0a1728 52%,#070c15 100%);padding:clamp(14px,3vw,34px)}
+.auth-screen:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(140,198,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(140,198,255,.06) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent 82%)}
+.auth-card{width:min(100%,510px);padding:clamp(24px,5vw,44px);border-radius:30px;background:linear-gradient(155deg,rgba(21,40,63,.94),rgba(8,18,32,.97));border:1px solid rgba(141,202,255,.2);box-shadow:0 35px 100px rgba(0,0,0,.48),inset 0 1px rgba(255,255,255,.07);text-align:right}
+.auth-card>.brand-mark,.auth-card>.eyebrow,.auth-card>h1,.auth-card>.auth-copy,.auth-card>.auth-features{text-align:center}
+.auth-card .brand-mark{margin-inline:auto}
+.auth-mode-switch{padding:5px;border:1px solid rgba(139,193,239,.17);background:rgba(3,11,21,.55);border-radius:15px}
+.auth-mode-switch button{min-height:46px;border-radius:11px;font-size:12px}
+.auth-mode-switch button.active{background:linear-gradient(135deg,rgba(37,144,230,.32),rgba(30,77,130,.3));border-color:rgba(125,207,255,.35);color:#eff9ff;box-shadow:0 6px 20px rgba(0,111,205,.13),inset 0 1px rgba(255,255,255,.08)}
+.auth-form{gap:12px}
+.auth-label{font-size:12px;color:#e2efff;margin-top:4px}
+.auth-input{height:54px;border-radius:14px;background:rgba(4,14,27,.62);border:1px solid rgba(145,193,234,.2);font-size:14px;padding:0 16px;transition:border-color .2s,box-shadow .2s,background .2s}
+.auth-input:focus{background:rgba(10,28,49,.9);border-color:#65c7ff;box-shadow:0 0 0 4px rgba(63,168,244,.12),0 8px 24px rgba(0,100,190,.1)}
+.auth-input::placeholder{font-size:11px;color:#8298b0}
+.auth-form .google-button{min-height:56px;border-radius:15px;font-size:13px;font-weight:800;box-shadow:0 10px 28px rgba(31,126,204,.18)}
+.auth-code-hint{font-size:12px;line-height:2;color:#b1c2d5}
+.auth-code-hint b{color:#9cdbff}
+.signup-password-form{gap:11px}
+.signup-step-kicker{display:flex;align-items:center;justify-content:space-between;color:#8faac6;font-size:10px;font-weight:800;padding:0 2px}
+.signup-step-kicker span:first-child{color:#91d5ff}
+.signup-password-hero{display:grid;justify-items:center;gap:9px;padding:21px 16px 19px;margin:1px 0 7px;border:1px solid rgba(115,190,255,.18);border-radius:19px;background:radial-gradient(ellipse at 50% 0,rgba(48,151,236,.18),transparent 75%),rgba(5,16,30,.45);text-align:center}
+.signup-password-symbol{display:grid;place-items:center;width:52px;height:52px;border-radius:17px;background:linear-gradient(145deg,#173f66,#0b1b30);border:1px solid rgba(137,215,255,.42);color:#9edfff;box-shadow:0 0 26px rgba(37,151,235,.15)}
+.signup-password-hero strong{font-size:17px;color:#f0f7ff}
+.signup-password-hero small{font-size:11px;line-height:1.9;color:#a9bbd0;overflow-wrap:anywhere}
+.signup-password-hero b{color:#a6ddff}
+.signup-password-control{position:relative;display:flex;align-items:center}
+.signup-password-control .auth-input{padding-inline-end:52px}
+.signup-password-control>button{position:absolute;inset-inline-end:10px;display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:10px;background:rgba(130,190,240,.1);color:#9bcdf1;cursor:pointer}
+.signup-password-control>button:disabled{opacity:.45}
+.signup-password-meter{height:5px;border-radius:99px;background:rgba(136,171,205,.13);overflow:hidden;margin-top:-5px}
+.signup-password-meter i{display:block;height:100%;width:0;border-radius:inherit;transition:width .25s,background .25s}
+.signup-password-meter i.weak{width:30%;background:#e4a15d}
+.signup-password-meter i.good{width:68%;background:#65bdf1}
+.signup-password-meter i.strong{width:100%;background:#65d5a0}
+.signup-password-help{font-size:10px;color:#91a7bf;line-height:1.8;margin:-5px 0 2px}
+.signup-password-mismatch{font-size:10px;color:#ffb5a9;margin:0}
+.signup-password-match{display:flex;align-items:center;gap:6px;font-size:10px;color:#8fe0b4;margin:0}
+.signup-finish-button{margin-top:7px!important;background:linear-gradient(110deg,#1769a8,#268fc9 55%,#42a7cf)!important;color:#fff!important}
+.signup-finish-button:disabled{opacity:.42}
+.auth-foot{margin-top:24px;color:#8ca2ba}
+.auth-foot svg{color:#7fd4ac}
+.auth-card .notice{border-radius:13px;font-size:11px;line-height:1.9}
+.auth-version{color:rgba(167,200,229,.38);letter-spacing:2px}
+@media(max-width:650px){.auth-screen{align-items:start;padding:16px 12px 28px;min-height:100svh}.auth-card{margin:auto 0;padding:24px 18px;border-radius:25px}.auth-card h1{font-size:31px}.signup-password-hero{padding:17px 12px}.auth-input{height:52px}}

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -30,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.auth.EmailOtpRepository
@@ -59,6 +62,8 @@ fun EmailOtpScreen(
     var errorMessage by remember { mutableStateOf(initialMessage.orEmpty()) }
     var infoMessage by remember { mutableStateOf(if (passwordSetupRequired) "ایمیل شما تأیید شده است؛ برای تکمیل ثبت‌نام رمز عبور بسازید." else "") }
     var resendSeconds by remember { mutableStateOf(0) }
+    var showPassword by remember { mutableStateOf(false) }
+    var showPasswordConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(resendSeconds) {
         if (resendSeconds > 0) {
@@ -117,8 +122,8 @@ fun EmailOtpScreen(
     }
 
     fun savePassword() {
-        if (password.length < 10 || !password.any { it in 'a'..'z' } || !password.any { it in 'A'..'Z' } || !password.any { it.isDigit() } || !password.any { !it.isLetterOrDigit() }) {
-            errorMessage = "رمز عبور باید حداقل ۱۰ نویسه و شامل حروف کوچک و بزرگ انگلیسی، عدد و نماد باشد."
+        if (password.length < 8) {
+            errorMessage = "رمز عبور باید حداقل ۸ نویسه داشته باشد. استفاده از حروف فارسی یا انگلیسی، عدد و نماد آزاد است."
             return
         }
         if (password != passwordConfirm) {
@@ -129,11 +134,13 @@ fun EmailOtpScreen(
             isLoading = true
             errorMessage = ""
             infoMessage = ""
+            var passwordSaved = false
             try {
                 OperationProgressController.run("تکمیل ثبت‌نام و ساخت رمز") { progress ->
                     progress.advance(18, "اعتبارسنجی قدرت و تطابق رمز عبور")
                     progress.advance(48, "ذخیره رمز در سرویس امن احراز هویت")
                     authRepository.setAccountPassword(password)
+                    passwordSaved = true
                     progress.advance(90, "رمز ذخیره شد؛ حساب آماده ورود است")
                 }
                 infoMessage = "ثبت‌نام با موفقیت تکمیل شد. از این پس با ایمیل و رمز عبور وارد شوید."
@@ -147,8 +154,10 @@ fun EmailOtpScreen(
                 }
             } finally {
                 isLoading = false
-                password = ""
-                passwordConfirm = ""
+                if (passwordSaved) {
+                    password = ""
+                    passwordConfirm = ""
+                }
             }
         }
     }
@@ -159,7 +168,7 @@ fun EmailOtpScreen(
     ) {
         OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -196,8 +205,10 @@ fun EmailOtpScreen(
                         label = { Text(if (setupPasswordMode) "انتخاب رمز عبور" else "رمز عبور") },
                         placeholder = { Text(if (setupPasswordMode) "۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" else "رمز حساب شما") },
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        supportingText = { if (setupPasswordMode) Text("حداقل ۸ نویسه؛ حروف فارسی و انگلیسی قابل استفاده‌اند.") },
+                        trailingIcon = { androidx.compose.material3.TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "پنهان" else "نمایش") } }
                     )
                     if (setupPasswordMode) {
                         Spacer(Modifier.height(10.dp))
@@ -208,8 +219,9 @@ fun EmailOtpScreen(
                             label = { Text("تکرار رمز عبور") },
                             placeholder = { Text("دقیقاً همان رمز را دوباره وارد کنید") },
                             singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                            visualTransformation = if (showPasswordConfirm) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = { androidx.compose.material3.TextButton(onClick = { showPasswordConfirm = !showPasswordConfirm }) { Text(if (showPasswordConfirm) "پنهان" else "نمایش") } }
                         )
                     }
                 } else if (codeSent) {
@@ -264,7 +276,7 @@ fun EmailOtpScreen(
                         }
                     },
                     enabled = !isLoading && when {
-                        setupPasswordMode -> password.length >= 10 && password == passwordConfirm
+                        setupPasswordMode -> password.length >= 8 && password == passwordConfirm
                         passwordLoginMode -> email.contains("@") && password.isNotBlank()
                         codeSent -> code.length == 6
                         else -> email.contains("@") && email.substringAfter("@").contains(".")

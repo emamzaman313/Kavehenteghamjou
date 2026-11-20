@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, File, KeyRound, Mail, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, File, KeyRound, Mail, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -18,6 +18,8 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const [emailOtp, setEmailOtp] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupPasswordConfirm, setShowSignupPasswordConfirm] = useState(false);
   const [accessEnabled, setAccessEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -139,8 +141,8 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const finishRegistration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!supabase || busy) return;
-    if (password.length < 10 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-      setError('رمز عبور باید حداقل ۱۰ نویسه و شامل حروف کوچک و بزرگ انگلیسی، عدد و نماد باشد.');
+    if (password.length < 8) {
+      setError('رمز عبور باید حداقل ۸ نویسه داشته باشد. می‌توانید از حروف فارسی یا انگلیسی، عدد و نماد استفاده کنید.');
       return;
     }
     if (password !== passwordConfirm) {
@@ -150,6 +152,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setBusy(true);
     setError('');
     setNotice('');
+    let passwordSaved = false;
     try {
       await runOperation('تکمیل ثبت‌نام و ساخت رمز', async (advance) => {
         advance(18, 'اعتبارسنجی قدرت رمز عبور و تطابق تکرار آن');
@@ -159,6 +162,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
           data: { account_password_ready: true },
         });
         if (updateError) throw updateError;
+        passwordSaved = true;
         advance(88, 'رمز ذخیره شد؛ حساب آماده ورود است');
       });
       setNotice('ثبت‌نام با موفقیت تکمیل شد. حساب شما اکنون با ایمیل و رمز عبور قابل ورود است.');
@@ -166,8 +170,10 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       setError(authErrorMessage(cause));
     } finally {
       setBusy(false);
-      setPassword('');
-      setPasswordConfirm('');
+      if (passwordSaved) {
+        setPassword('');
+        setPasswordConfirm('');
+      }
     }
   };
 
@@ -299,14 +305,18 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         </div>
       </div>}
 
-      {step === 'setup' && <form className="auth-form" onSubmit={(event) => void finishRegistration(event)}>
-        <p className="auth-code-hint">ایمیل <b dir="ltr">{email}</b> تأیید شده است. یک رمز امن بسازید تا دفعات بعد بدون کد ایمیل وارد شوید.</p>
-        <label className="auth-label" htmlFor="signup-password">انتخاب رمز عبور</label>
-        <input id="signup-password" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={10} placeholder="حداقل ۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/>
+      {step === 'setup' && <form className="auth-form signup-password-form" onSubmit={(event) => void finishRegistration(event)}>
+        <div className="signup-step-kicker"><span>مرحلهٔ آخر</span><span>۳ از ۳</span></div>
+        <div className="signup-password-hero"><span className="signup-password-symbol"><ShieldCheck size={25}/></span><strong>حساب خودت را امن کن</strong><small>ایمیل <b dir="ltr">{email}</b> با موفقیت تأیید شد. حالا رمز دلخواهت را انتخاب کن.</small></div>
+        <label className="auth-label" htmlFor="signup-password">رمز عبور دلخواه</label>
+        <div className="signup-password-control"><input id="signup-password" className="auth-input" type={showSignupPassword ? 'text' : 'password'} autoComplete="new-password" dir="auto" minLength={8} placeholder="یک رمز حداقل ۸ نویسه‌ای بسازید" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/><button type="button" aria-label={showSignupPassword ? 'پنهان کردن رمز' : 'نمایش رمز'} onClick={() => setShowSignupPassword((value) => !value)} disabled={busy}>{showSignupPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div>
+        <div className="signup-password-meter" aria-label="قدرت رمز عبور"><i className={password.length >= 12 ? 'strong' : password.length >= 8 ? 'good' : password.length ? 'weak' : ''}/></div>
+        <p className="signup-password-help">حداقل ۸ نویسه. انتخاب حروف فارسی یا انگلیسی، عدد و نماد آزاد است.</p>
         <label className="auth-label" htmlFor="signup-password-confirm">تکرار رمز عبور</label>
-        <input id="signup-password-confirm" className="auth-input" type="password" autoComplete="new-password" dir="ltr" minLength={10} placeholder="دقیقاً همان رمز را دوباره وارد کنید" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} required disabled={busy}/>
-        {passwordConfirm && password !== passwordConfirm && <p className="auth-code-hint">دو رمز با هم یکسان نیستند.</p>}
-        <button className="google-button" type="submit" disabled={busy || password.length < 10 || password !== passwordConfirm}>
+        <div className="signup-password-control"><input id="signup-password-confirm" className="auth-input" type={showSignupPasswordConfirm ? 'text' : 'password'} autoComplete="new-password" dir="auto" minLength={8} placeholder="همان رمز را یک بار دیگر وارد کنید" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} required disabled={busy}/><button type="button" aria-label={showSignupPasswordConfirm ? 'پنهان کردن تکرار رمز' : 'نمایش تکرار رمز'} onClick={() => setShowSignupPasswordConfirm((value) => !value)} disabled={busy}>{showSignupPasswordConfirm ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div>
+        {passwordConfirm && password !== passwordConfirm && <p className="signup-password-mismatch">رمزها یکسان نیستند؛ دوباره بررسی کن.</p>}
+        {password.length >= 8 && password === passwordConfirm && <p className="signup-password-match"><ShieldCheck size={14}/> رمزها با هم مطابقت دارند.</p>}
+        <button className="google-button signup-finish-button" type="submit" disabled={busy || password.length < 8 || password !== passwordConfirm}>
           {busy ? <span className="spinner small"/> : <ShieldCheck size={18}/>}
           <span>{busy ? 'در حال ساخت حساب…' : 'تکمیل ثبت‌نام و ساخت حساب'}</span><ArrowLeft size={17}/>
         </button>
