@@ -1,0 +1,51 @@
+name: Chat E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  three-account-chat:
+    name: Three-account Supabase chat, Realtime and private file authorization test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://slwzjufipavuwcbwoyro.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ef-LNkOiNzxg_9d0b1To4Q_awu1BoV7
+      KAVEH_E2E_USER_A_EMAIL: ${{ secrets.KAVEH_E2E_USER_A_EMAIL }}
+      KAVEH_E2E_USER_A_PASSWORD: ${{ secrets.KAVEH_E2E_USER_A_PASSWORD }}
+      KAVEH_E2E_USER_B_EMAIL: ${{ secrets.KAVEH_E2E_USER_B_EMAIL }}
+      KAVEH_E2E_USER_B_PASSWORD: ${{ secrets.KAVEH_E2E_USER_B_PASSWORD }}
+      KAVEH_E2E_USER_C_EMAIL: ${{ secrets.KAVEH_E2E_USER_C_EMAIL }}
+      KAVEH_E2E_USER_C_PASSWORD: ${{ secrets.KAVEH_E2E_USER_C_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+
+      - name: Validate test account secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in KAVEH_E2E_USER_A_EMAIL KAVEH_E2E_USER_A_PASSWORD KAVEH_E2E_USER_B_EMAIL KAVEH_E2E_USER_B_PASSWORD KAVEH_E2E_USER_C_EMAIL KAVEH_E2E_USER_C_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required GitHub Actions secret $name is missing. See docs/chat-e2e-setup.md."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run three-account chat and authorization acceptance test
+        run: npm run test:e2e:chat

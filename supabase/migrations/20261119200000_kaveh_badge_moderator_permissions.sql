@@ -1,0 +1,10 @@
+drop policy if exists badges_admin_insert on public.badges;
+create policy badges_admin_insert on public.badges for insert to authenticated with check(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin','moderator')));
+drop policy if exists badges_admin_update on public.badges;
+create policy badges_admin_update on public.badges for update to authenticated using(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin','moderator'))) with check(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin','moderator')));
+drop policy if exists badges_admin_delete on public.badges;
+create policy badges_admin_delete on public.badges for delete to authenticated using(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin','moderator')));
+drop policy if exists user_badges_admin_insert on public.user_badges;
+create policy user_badges_admin_insert on public.user_badges for insert to authenticated with check(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin','moderator')));
+drop policy if exists user_badges_admin_delete on public.user_badges;
+create policy user_badges_admin_delete on public.user_badges for delete to authenticated using(exists(select 1 from public.site_access_admins a where a.user_id=(select auth.uid()) and a.role in('owner','admin','moderator')));

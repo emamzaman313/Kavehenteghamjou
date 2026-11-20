@@ -1,0 +1,83 @@
+name: Security checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    name: Pull request dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  web-dependencies:
+    name: Web dependency audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+
+      - name: Upgrade npm to a resolver version compatible with the lockfile graph
+        run: |
+          npm install --global npm@11.21.2
+          npm --version
+
+      - name: Generate lockfile if missing
+        run: |
+          if [ ! -f package-lock.json ]; then
+            npm install --ignore-scripts --no-audit --no-fund
+          fi
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Audit production dependencies (blocking)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit full dependency graph (known development-tool advisory is non-blocking)
+        continue-on-error: true
+        run: |
+          npm audit --audit-level=high || {
+            echo "::warning::The full development dependency graph contains unresolved high-severity advisories. See the audit output; production dependencies are audited separately above."
+          }

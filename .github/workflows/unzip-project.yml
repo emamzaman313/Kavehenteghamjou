@@ -1,0 +1,34 @@
+name: Extract project ZIP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract project archive
+        run: |
+          set -euo pipefail
+          test -f kaveh-avenger-stage-5-ci-source.zip
+          mkdir -p /tmp/kaveh-project
+          unzip -q -o kaveh-avenger-stage-5-ci-source.zip -d /tmp/kaveh-project
+          # The connected GitHub App cannot push new workflow files.
+          # Keep the existing extractor and skip archived workflow files.
+          rm -rf /tmp/kaveh-project/.github/workflows
+          cp -a /tmp/kaveh-project/. .
+
+      - name: Commit extracted files
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Extract project source ZIP" || echo "No changes to commit"
+          git push
