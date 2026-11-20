@@ -162,6 +162,10 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       setError('رمز عبور باید حداقل ۸ نویسه داشته باشد. می‌توانید از حروف فارسی یا انگلیسی، عدد و نماد استفاده کنید.');
       return;
     }
+    if (!/[A-Za-z\\u0600-\\u06FF]/.test(password) || !/\\d/.test(password)) {
+      setError('برای امنیت بیشتر، رمز عبور باید دست‌کم یک حرف و یک عدد داشته باشد.');
+      return;
+    }
     if (password !== passwordConfirm) {
       setError('تکرار رمز عبور دقیقاً با رمز اول یکسان نیست.');
       return;
@@ -172,17 +176,32 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     let passwordSaved = false;
     try {
       await runOperation('تکمیل ثبت‌نام و ساخت رمز', async (advance) => {
-        advance(18, 'اعتبارسنجی قدرت رمز عبور و تطابق تکرار آن');
-        advance(46, 'ثبت رمز در سرویس امن احراز هویت');
-        const { error: updateError } = await supabase.auth.updateUser({
+        advance(14, 'بررسی نشست تأییدشدهٔ ایمیل');
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session?.access_token || !sessionData.session.user.email) {
+          throw new Error('نشست تأیید ایمیل منقضی شده است. دوباره کد تأیید ایمیل را دریافت و وارد کنید.');
+        }
+        advance(30, 'اعتبارسنجی قدرت رمز و تطابق تکرار آن');
+        advance(52, 'ثبت رمز در سرویس امن احراز هویت');
+        const { data: updateData, error: updateError } = await supabase.auth.updateUser({
           password,
           data: { account_password_ready: true },
         });
         if (updateError) throw updateError;
+        if (updateData.user?.user_metadata?.account_password_ready !== true) {
+          throw new Error('سرور رمز را دریافت کرد، اما تأیید نهایی ثبت حساب انجام نشد. دوباره تلاش کنید.');
+        }
+        advance(78, 'بررسی ثبت نهایی رمز روی حساب');
+        const { data: verifiedUser, error: verifyError } = await supabase.auth.getUser();
+        if (verifyError) throw verifyError;
+        if (verifiedUser.user?.id !== sessionData.session.user.id ||
+            verifiedUser.user.user_metadata?.account_password_ready !== true) {
+          throw new Error('ثبت رمز روی حساب تأیید نشد. اتصال را بررسی و دوباره تلاش کنید.');
+        }
         passwordSaved = true;
-        advance(88, 'رمز ذخیره شد؛ حساب آماده ورود است');
+        advance(94, 'رمز ثبت و از سرور تأیید شد؛ ورود به کاوه انجام می‌شود');
       });
-      setNotice('ثبت‌نام با موفقیت تکمیل شد. حساب شما اکنون با ایمیل و رمز عبور قابل ورود است.');
+      setNotice('رمز عبور با موفقیت در حساب شما ثبت و از سرور تأیید شد. در حال ورود به فضای کاوه…');
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
