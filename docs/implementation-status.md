@@ -226,3 +226,13 @@
 - The E2E workflow still requires three dedicated test accounts and six GitHub Actions secrets. It has not been executed against live accounts; do not treat CI build success as E2E success.
 - Android Release signing, physical-device tests, and owner-approved deployment of the Edge Function config remain outstanding.
 - No live Supabase data/schema changes, Production migration, Vercel Production promotion, or PR merge were made in this continuation.
+
+---
+
+## Phase 2 continuation — resilient Kaveh World loading (20 November 2026)
+
+- Web Kaveh World refresh now reports failures from all eight parallel data queries instead of silently treating some failed queries as empty state.
+- Profile lookup failures for leaderboard labels are surfaced separately.
+- Unexpected exceptions during the multi-query refresh are caught and reported, and the loading state is always released in a `finally` block so a transient network/client exception cannot leave the page stuck in its loading state.
+- Implementation commit: `599e83c578a8bc50a5d4e3b2cd4100a52c1c2782`.
+- Fresh Web, Android and Security CI for this exact code commit must pass before this slice is considered CI-validated. No database schema, RLS policy, production data, deployment, or merge was changed.
