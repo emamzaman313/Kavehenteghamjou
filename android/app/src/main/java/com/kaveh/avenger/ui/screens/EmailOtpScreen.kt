@@ -149,7 +149,7 @@ fun EmailOtpScreen(
                 errorMessage = when {
                     "weak_password" in providerMessage || ("password" in providerMessage && "weak" in providerMessage) ->
                         if ("pwned" in providerMessage) "این رمز در نشت‌های اطلاعاتی شناخته‌شده دیده شده است. رمز دیگری انتخاب کنید."
-                        else "رمز عبور پذیرفته نشد. حداقل ۱۰ نویسه و ترکیب حروف کوچک و بزرگ انگلیسی، عدد و نماد را رعایت کنید."
+                        else "رمز عبور پذیرفته نشد. حداقل ۸ نویسه انتخاب کنید و دوباره تلاش کنید."
                     else -> error.message ?: "ذخیره رمز عبور انجام نشد. دوباره تلاش کنید."
                 }
             } finally {
@@ -203,7 +203,7 @@ fun EmailOtpScreen(
                         onValueChange = { password = it; errorMessage = "" },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(if (setupPasswordMode) "انتخاب رمز عبور" else "رمز عبور") },
-                        placeholder = { Text(if (setupPasswordMode) "۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" else "رمز حساب شما") },
+                        placeholder = { Text(if (setupPasswordMode) "حداقل ۸ نویسه؛ رمز دلخواه شما" else "رمز حساب شما") },
                         singleLine = true,
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
