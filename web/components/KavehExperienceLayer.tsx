@@ -24,6 +24,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
   const [open, setOpen] = useState(false);
   const [visualOpen, setVisualOpen] = useState(false);
   const [prefs, setPrefs] = useState({ pointerGlow: true, cardTilt: true, ambientMotion: true, focusMode: false });
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -90,16 +91,18 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
         setPrefs((current) => ({ ...current, ...parsed }));
       }
     } catch { /* Keep accessible defaults when storage is unavailable. */ }
+    finally { setPrefsLoaded(true); }
   }, []);
 
   useEffect(() => {
+    if (!prefsLoaded) return;
     const root = document.documentElement;
     root.dataset.kavehPointerGlow = prefs.pointerGlow ? 'on' : 'off';
     root.dataset.kavehCardTilt = prefs.cardTilt ? 'on' : 'off';
     root.dataset.kavehAmbientMotion = prefs.ambientMotion ? 'on' : 'off';
     root.dataset.kavehFocus = prefs.focusMode ? 'on' : 'off';
     try { window.localStorage.setItem('kaveh-experience-preferences', JSON.stringify(prefs)); } catch { /* Preferences remain active for this session. */ }
-  }, [prefs]);
+  }, [prefs, prefsLoaded]);
 
   useEffect(() => { if (open) { setActiveIndex(0); window.requestAnimationFrame(() => inputRef.current?.focus()); } }, [open]);
 
