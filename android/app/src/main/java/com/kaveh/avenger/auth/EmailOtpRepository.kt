@@ -29,6 +29,9 @@ class EmailOtpRepository(private val supabase: SupabaseClient) {
                 put("account_password_ready", true)
             }
         }
+        // Refresh the authenticated session so MainActivity receives the
+        // server-confirmed account_password_ready metadata and opens the app.
+        supabase.auth.refreshCurrentSession()
     }
 
     suspend fun loginWithPassword(email: String, password: String) {
