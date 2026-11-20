@@ -38,7 +38,15 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
         setOpen(true);
         return;
       }
-      if (!open) return;
+      if (!open) {
+        const target = event.target as HTMLElement | null;
+        const isTyping = Boolean(target?.closest('input,textarea,select,[contenteditable="true"]'));
+        if (!isTyping && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+          const shortcut = destinations.find((item) => item.key.toLowerCase() === event.key.toLowerCase() && (item.id !== 'admin' || isAdmin));
+          if (shortcut) onNavigate(shortcut.id);
+        }
+        return;
+      }
       if (event.key === 'Escape') { setOpen(false); setQuery(''); }
       if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((n) => Math.min(n + 1, Math.max(0, filtered.length - 1))); }
       if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((n) => Math.max(0, n - 1)); }
@@ -49,7 +57,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [activeIndex, filtered, onNavigate, open]);
+  }, [activeIndex, filtered, isAdmin, onNavigate, open]);
 
   useEffect(() => { if (open) { setActiveIndex(0); window.requestAnimationFrame(() => inputRef.current?.focus()); } }, [open]);
 
