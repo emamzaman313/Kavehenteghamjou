@@ -44,6 +44,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
         return;
       }
       if (!open) {
+        if (event.key === 'Escape' && visualOpen) { setVisualOpen(false); return; }
         const target = event.target as HTMLElement | null;
         const isTyping = Boolean(target?.closest('input,textarea,select,[contenteditable="true"]'));
         if (!isTyping && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
@@ -81,7 +82,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [activeIndex, filtered, isAdmin, onNavigate, open]);
+  }, [activeIndex, filtered, isAdmin, onNavigate, open, visualOpen]);
 
   useEffect(() => {
     try {
