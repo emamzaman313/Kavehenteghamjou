@@ -211,3 +211,18 @@
 - Code commits: `2253615420e563d7aeef49e74450acbc40ea16fb` (function config) and `9d1003ac05e2d62cf27b55fe369c7f43694f4dfd` (configuration regression test).
 - Exact-head CI on `9d1003ac05e2d62cf27b55fe369c7f43694f4dfd`: Android CI success (unit tests + Debug APK/AAB), Web CI success (TypeScript, ESLint, tests including function config, Next.js production build), and Security checks success (Dependency Review, dependency audit and Gitleaks).
 - Owner action: authorize the one-function deployment after reviewing this PR. No Production deployment or PR merge was performed.
+
+
+---
+
+## Phase 1 continuation — CI verification and E2E authorization hardening (20 November 2026)
+
+- Active development branch: `feat/kaveh-premium-experience`.
+- Latest branch commit at this update: `55e2db63d29fe32c1fcce66d61015e24ee692b90` (strengthens the three-account chat E2E test).
+- PR #3 remains Draft/Open; no merge or production deployment was performed.
+- On the immediately preceding commit `973b53f255bc0059ad76c66e3a97d8aabdb08170`, Web CI run `44696753170` passed (TypeScript, ESLint, unit tests, Next.js production build) and Android CI run `44696753201` passed (Android unit tests, Debug APK and Debug AAB build/upload).
+- Security Checks run `44696753208` for that preceding commit was still pending at the time of verification; it is not counted as passed.
+- The E2E outsider-membership assertion was tightened: Account C now queries all visible membership rows for the private conversation and must receive an empty result. The earlier assertion only queried C's own user ID and could miss accidental visibility of A/B membership rows.
+- The E2E workflow still requires three dedicated test accounts and six GitHub Actions secrets. It has not been executed against live accounts; do not treat CI build success as E2E success.
+- Android Release signing, physical-device tests, and owner-approved deployment of the Edge Function config remain outstanding.
+- No live Supabase data/schema changes, Production migration, Vercel Production promotion, or PR merge were made in this continuation.
