@@ -7,6 +7,7 @@ import type { Notify } from '@/lib/ui-types';
 import { formatBytes, formatDate, safeDisplayName, validateUpload } from '@/lib/format';
 import { hashFile, saveBlobAs, verifyBlobIntegrity } from '@/lib/files';
 import { EmptyState, SectionHeader } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 export default function FilesView({ supabase, userId, notify }: { supabase: SupabaseClient; userId: string; notify: Notify }) {
   const [files, setFiles] = useState<FileAsset[]>([]);
@@ -17,6 +18,7 @@ export default function FilesView({ supabase, userId, notify }: { supabase: Supa
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<'all' | 'image' | 'video' | 'document' | 'other'>('all');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { runOperation } = useOperationProgress();
   const load = useCallback(async () => {
     setLoading(true); const { data, error } = await supabase.from('file_assets').select('*').eq('owner_id', userId).order('created_at', { ascending: false }).limit(100);
     if (error) notify(`دریافت فایل‌ها ناموفق بود: ${error.message}`, 'error'); else setFiles((data ?? []) as FileAsset[]); setLoading(false);
@@ -25,41 +27,67 @@ export default function FilesView({ supabase, userId, notify }: { supabase: Supa
 
   const uploadFiles = async (selected: FileList | File[]) => {
     const list = Array.from(selected); if (!list.length) return;
-    const invalid = list.find((f) => validateUpload(f));
+    const invalid = list.find((file) => validateUpload(file));
     if (invalid) { notify(`${safeDisplayName(invalid.name)}: ${validateUpload(invalid)}`, 'error'); return; }
     setUploading(true); setProgress(0);
     let succeeded = 0; let failed = 0;
-    for (let i = 0; i < list.length; i++) {
-      const file = list[i]; const path = `${userId}/${crypto.randomUUID()}`;
-      try {
-        const sha256Hex = await hashFile(file);
-        const { error: uploadError } = await supabase.storage.from('user-files').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
-        if (uploadError) throw uploadError;
-        const { error: insertError } = await supabase.from('file_assets').insert({ owner_id: userId, bucket_id: 'user-files', object_path: path, original_name: safeDisplayName(file.name), mime_type: file.type || null, byte_size: file.size, sha256_hex: sha256Hex, status: 'ready' });
-        if (insertError) { await supabase.storage.from('user-files').remove([path]); throw insertError; }
-        succeeded += 1;
-        setProgress(Math.round(((i + 1) / list.length) * 100));
-      } catch (error) { failed += 1; const message = error instanceof Error ? error.message : 'خطای ناشناخته'; notify(`آپلود ${file.name} ناموفق بود: ${message}`, 'error'); }
+    try {
+      await runOperation(`بارگذاری ${list.length.toLocaleString('fa-IR')} فایل در فضای خصوصی`, async (advance) => {
+        advance(10, 'اعتبارسنجی نوع و سقف اندازه همه فایل‌ها');
+        for (let i = 0; i < list.length; i++) {
+          const file = list[i]; const path = `${userId}/${crypto.randomUUID()}`;
+          const stageBase = 12 + Math.round((i / list.length) * 78);
+          try {
+            advance(stageBase, `محاسبه SHA-256 فایل ${i + 1} از ${list.length}`);
+            const sha256Hex = await hashFile(file);
+            advance(Math.min(92, stageBase + 12), `ارسال فایل ${i + 1} از ${list.length} به Storage خصوصی`);
+            const { error: uploadError } = await supabase.storage.from('user-files').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
+            if (uploadError) throw uploadError;
+            advance(Math.min(94, stageBase + 23), `ثبت مالکیت و اثرانگشت فایل ${i + 1} از ${list.length}`);
+            const { error: insertError } = await supabase.from('file_assets').insert({
+              owner_id: userId, bucket_id: 'user-files', object_path: path,
+              original_name: safeDisplayName(file.name), mime_type: file.type || null,
+              byte_size: file.size, sha256_hex: sha256Hex, status: 'ready',
+            });
+            if (insertError) {
+              await supabase.storage.from('user-files').remove([path]);
+              throw insertError;
+            }
+            succeeded += 1;
+          } catch (error) {
+            failed += 1;
+            const message = error instanceof Error ? error.message : 'خطای ناشناخته';
+            notify(`آپلود ${file.name} ناموفق بود: ${message}`, 'error');
+          }
+          setProgress(Math.round(((i + 1) / list.length) * 100));
+          advance(Math.min(94, 12 + Math.round(((i + 1) / list.length) * 80)), `پردازش ${i + 1} از ${list.length} فایل به پایان رسید`);
+        }
+        if (failed > 0) throw new Error(`${succeeded} فایل موفق و ${failed} فایل ناموفق بود.`);
+        advance(96, 'همه فایل‌ها و metadata با موفقیت ثبت شدند');
+      });
+    } catch {
+      // Detailed per-file and summary notices are shown below.
+    } finally {
+      setUploading(false);
+      await load();
     }
-    setUploading(false); await load();
     if (failed === 0) notify(`${succeeded} فایل با موفقیت بارگذاری شد.`);
     else notify(`بارگذاری پایان یافت: ${succeeded} موفق، ${failed} ناموفق.`, 'error');
   };
   const download = async (file: FileAsset) => {
-    const { data: blob, error } = await supabase.storage.from(file.bucket_id).download(file.object_path);
-    if (error || !blob) {
-      notify(`دریافت فایل از مخزن خصوصی ناموفق بود: ${error?.message ?? 'خطای نامشخص'}`, 'error');
-      return;
-    }
     try {
-      const verified = await verifyBlobIntegrity(blob, file.byte_size, file.sha256_hex);
-      if (!verified) {
-        notify('سلامت فایل تأیید نشد؛ حجم یا اثرانگشت فایل با اطلاعات ثبت‌شده مطابقت ندارد.', 'error');
-        return;
-      }
-      saveBlobAs(blob, safeDisplayName(file.original_name));
+      await runOperation('دانلود امن فایل', async (advance) => {
+        advance(24, 'بررسی مجوز دسترسی به فایل خصوصی');
+        const { data: blob, error } = await supabase.storage.from(file.bucket_id).download(file.object_path);
+        if (error || !blob) throw error ?? new Error('فایل از مخزن خصوصی دریافت نشد.');
+        advance(68, 'فایل دریافت شد؛ بررسی حجم و SHA-256');
+        const verified = await verifyBlobIntegrity(blob, file.byte_size, file.sha256_hex);
+        if (!verified) throw new Error('سلامت فایل تأیید نشد؛ حجم یا اثرانگشت فایل مطابقت ندارد.');
+        advance(92, 'سلامت فایل تأیید شد؛ آماده ذخیره روی دستگاه');
+        saveBlobAs(blob, safeDisplayName(file.original_name));
+      });
     } catch (cause) {
-      notify(cause instanceof Error ? cause.message : 'بررسی سلامت فایل ناموفق بود.', 'error');
+      notify(cause instanceof Error ? cause.message : 'دانلود یا بررسی سلامت فایل ناموفق بود.', 'error');
     }
   };
   const filteredFiles = files.filter((file) => {
