@@ -159,7 +159,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+      const { error: loginError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
