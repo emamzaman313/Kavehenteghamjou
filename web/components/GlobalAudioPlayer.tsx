@@ -31,7 +31,7 @@ export default function GlobalAudioPlayer({ supabase }: { supabase: SupabaseClie
     const load = async () => {
       const { data, error } = await supabase.from('global_audio_settings').select('track_id,enabled,volume').eq('id', 1).maybeSingle();
       if (error || !active) return;
-      if (!data?.track_id || !data.enabled) { setSetting(data ? { ...data, track: null } : null); setPlaying(false); setNeedsGesture(false); return; }
+      if (!data?.track_id || !data.enabled) { setSetting(data ? { ...data, track: null } : null); setPlaying(false);  return; }
       const { data: track } = await supabase.from('audio_tracks').select('title,artist,audio_path').eq('id', data.track_id).eq('is_active', true).maybeSingle();
       if (!active) return;
       setSetting({ ...data, track: track ?? null });
@@ -55,24 +55,24 @@ export default function GlobalAudioPlayer({ supabase }: { supabase: SupabaseClie
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (!source) { audio.pause(); audio.removeAttribute('src'); audio.load(); setPlaying(false); setNeedsGesture(false); return; }
+    if (!source) { audio.pause(); audio.removeAttribute('src'); audio.load(); setPlaying(false);  return; }
     audio.volume = Math.min(1, Math.max(0, Number(setting?.volume ?? 0.35)));
     if (audio.src !== source) { audio.src = source; audio.loop = true; audio.load(); }
-    void audio.play().then(() => { setPlaying(true); setNeedsGesture(false); }).catch(() => { setPlaying(false); setNeedsGesture(true); });
+    void audio.play().then(() => { setPlaying(true);  }).catch(() => { setPlaying(false); });
   }, [source, setting?.volume]);
 
   if (!source || !setting?.track) return null;
   const start = async () => {
     const audio = audioRef.current;
     if (!audio) return;
-    try { await audio.play(); setPlaying(true); setNeedsGesture(false); }
-    catch { setNeedsGesture(true); }
+    try { await audio.play(); setPlaying(true);  }
+    catch { /* Playback stays stopped until the user retries. */ }
   };
   return <>
     {collapsed && <button type="button" className="global-audio-reopen" aria-label="نمایش دوبارهٔ پخش‌کنندهٔ موسیقی" onClick={() => setCollapsed(false)} onPointerDown={(event) => { gesture.current = { y: event.clientY, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const start = gesture.current; gesture.current = null; if (start && event.clientY - start.y < -35) setCollapsed(false); }}><Music2 size={17}/><span>نمایش موسیقی</span><ChevronUp size={15}/></button>}
     <div className={`global-audio-dock ${collapsed ? 'is-collapsed' : ''}`} role="region" aria-label="موسیقی سراسری" aria-hidden={collapsed}>
       <div className="global-audio-grip" role="button" tabIndex={collapsed ? -1 : 0} aria-label="برای پنهان‌کردن پخش‌کننده، به پایین بکشید یا Enter بزنید" title="برای پنهان‌کردن به پایین بکشید" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { gesture.current = null; }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setCollapsed(true); } }}><i/></div>
-    <audio ref={audioRef} preload="auto" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={(e) => { e.currentTarget.currentTime = 0; void e.currentTarget.play().catch(() => setNeedsGesture(true)); }}/>
+    <audio ref={audioRef} preload="auto" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={(e) => { e.currentTarget.currentTime = 0; void e.currentTarget.play().catch(() => ); }}/>
     <span className={`global-audio-disc ${playing ? "is-playing" : ""}`}><Music2 size={19}/></span>
     <span className="global-audio-meta"><strong>{setting.track.title}</strong><small>{setting.track.artist || 'موسیقی سراسری کاوه'} <i className={playing ? 'audio-status is-playing' : 'audio-status'}/>{playing ? 'در حال پخش' : 'متوقف'}</small></span>
     <button type="button" className="global-audio-control" aria-label={playing ? "توقف موسیقی" : "پخش موسیقی"} onClick={() => { const a = audioRef.current; if (!a) return; if (a.paused) void start(); else a.pause(); }}>{playing ? <Pause size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}</button>
