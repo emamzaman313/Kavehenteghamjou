@@ -95,18 +95,27 @@ class FileUploadRepository(private val supabase: SupabaseClient) {
         }
 
         // Keep the exact original filename (including Persian/Unicode) only as metadata.
-        val insertedAsset = supabase.postgrest.from("file_assets").insert(
-            FileAssetInsert(
-                owner_id = ownerId,
-                object_path = objectPath,
-                original_name = originalName,
-                mime_type = mimeType,
-                byte_size = bytes.size.toLong(),
-                sha256_hex = sha256
-            )
-        ) {
-            select()
-        }.decodeList<FileAssetIdRow>().single()
+        // If metadata creation fails after Storage accepts the object, remove the object
+        // so failed uploads do not leave inaccessible orphaned files in the private bucket.
+        val insertedAsset = try {
+            supabase.postgrest.from("file_assets").insert(
+                FileAssetInsert(
+                    owner_id = ownerId,
+                    object_path = objectPath,
+                    original_name = originalName,
+                    mime_type = mimeType,
+                    byte_size = bytes.size.toLong(),
+                    sha256_hex = sha256
+                )
+            ) {
+                select()
+            }.decodeList<FileAssetIdRow>().single()
+        } catch (exception: Exception) {
+            runCatching {
+                supabase.storage.from("user-files").delete(objectPath)
+            }
+            throw exception
+        }
 
         return UploadedFile(
             fileAssetId = insertedAsset.id,
