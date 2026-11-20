@@ -9,7 +9,6 @@ type GlobalAudioRow = { track_id: string | null; enabled: boolean; volume: numbe
 export default function GlobalAudioPlayer({ supabase }: { supabase: SupabaseClient }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [setting, setSetting] = useState<GlobalAudioRow | null>(null);
-  const [needsGesture, setNeedsGesture] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const gesture = useRef<{ y: number; pointerId: number } | null>(null);
