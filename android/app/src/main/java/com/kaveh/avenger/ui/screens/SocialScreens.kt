@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -1028,6 +1029,8 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
     val cards = remember { mutableStateListOf<ReelCardState>() }
     var loading by remember { mutableStateOf(true) }
     var busyReel by remember { mutableStateOf<String?>(null) }
+    var showOnlyMyReels by remember { mutableStateOf(false) }
+    var cinemaMode by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val viewedReels = remember { mutableSetOf<String>() }
 
@@ -1170,17 +1173,31 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                 }
             }, enabled = selectedVideo != null && !uploading) { Text(if (uploading) "در حال بارگذاری…" else "انتشار ریلز") }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text("ویدئوهای کوتاه", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { scope.launch { refresh() } }) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
             }
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            FilterChip(selected = !showOnlyMyReels, onClick = { showOnlyMyReels = false }, label = { Text("همه ویدئوها") })
+            FilterChip(selected = showOnlyMyReels, onClick = { showOnlyMyReels = true }, label = { Text("ویدئوهای من") })
+            Spacer(modifier = Modifier.weight(1f))
+            TextButton(onClick = { cinemaMode = !cinemaMode }) {
+                Text(if (cinemaMode) "نمای عادی" else "نمای سینمایی")
+            }
+        }
+        val visibleReels = if (showOnlyMyReels) cards.filter { it.reel.authorId == userId } else cards
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (!loading && cards.isEmpty() && error == null) Text("هنوز ریلزی منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!loading && cards.isNotEmpty() && visibleReels.isEmpty()) Text("هنوز ریلزی از شما منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(cards, key = { it.reel.id }) { card ->
+            items(visibleReels, key = { it.reel.id }) { card ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
@@ -1198,7 +1215,7 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                             )
                         }
                         AndroidView(
-                            modifier = Modifier.fillMaxWidth().height(250.dp),
+                            modifier = Modifier.fillMaxWidth().height(if (cinemaMode) 390.dp else 250.dp),
                             factory = { viewContext ->
                                 VideoView(viewContext).apply {
                                     tag = videoUrl

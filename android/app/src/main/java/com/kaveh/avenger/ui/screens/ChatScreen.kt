@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -189,6 +190,8 @@ fun ChatScreen(
     var loadingOlderMessages by remember { mutableStateOf(false) }
     var showNewConversation by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var inboxQuery by remember { mutableStateOf("") }
+    var inboxFilter by remember { mutableStateOf("all") }
     val searchResults = remember { mutableStateListOf<ProfileRow>() }
     var searchingPeople by remember { mutableStateOf(false) }
     var creatingConversationFor by remember { mutableStateOf<String?>(null) }
@@ -773,6 +776,34 @@ fun ChatScreen(
             }
         }
 
+        if (activeConversation == null && !showNewConversation) {
+            OutlinedTextField(
+                value = inboxQuery,
+                onValueChange = { inboxQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("جست‌وجو در گفتگوها") },
+                placeholder = { Text("نام گفتگو یا متن آخرین پیام…") }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = inboxFilter == "all",
+                    onClick = { inboxFilter = "all" },
+                    label = { Text("همه") }
+                )
+                FilterChip(
+                    selected = inboxFilter == "unread",
+                    onClick = { inboxFilter = "unread" },
+                    label = { Text("خوانده‌نشده") }
+                )
+                FilterChip(
+                    selected = inboxFilter == "spaces",
+                    onClick = { inboxFilter = "spaces" },
+                    label = { Text("گروه و کانال") }
+                )
+            }
+        }
+
         if (activeConversation == null) {
             when {
                 loading -> CircularProgressIndicator()
@@ -787,8 +818,33 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(conversations, key = { it.id }) { conversation ->
+                else -> {
+                    val query = inboxQuery.trim()
+                    val visibleConversations = conversations.filter { conversation ->
+                        val matchesQuery = query.isBlank()
+                            || conversation.title.contains(query, ignoreCase = true)
+                            || conversation.lastMessagePreview.orEmpty().contains(query, ignoreCase = true)
+                        val matchesFilter = when (inboxFilter) {
+                            "unread" -> conversation.unreadCount > 0
+                            "spaces" -> conversation.kind != "direct"
+                            else -> true
+                        }
+                        matchesQuery && matchesFilter
+                    }
+                    if (visibleConversations.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                "گفتگویی با این فیلتر پیدا نشد.",
+                                modifier = Modifier.padding(18.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(visibleConversations, key = { it.id }) { conversation ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -832,6 +888,7 @@ fun ChatScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }
