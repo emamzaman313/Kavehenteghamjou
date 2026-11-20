@@ -1806,3 +1806,50 @@ button,a,input,textarea,select { touch-action:manipulation; }
   }
   .skip-link { border:1px solid ButtonText; }
 }
+
+
+
+/* Shared operation progress — percentages advance only when a real stage completes. */
+.operation-progress-stack {
+  position:fixed;
+  z-index:2500;
+  inset-block-start:14px;
+  inset-inline:14px;
+  display:grid;
+  justify-items:end;
+  gap:9px;
+  pointer-events:none;
+}
+.operation-progress-card {
+  width:min(410px,100%);
+  padding:13px 15px;
+  border:1px solid var(--line,rgba(255,255,255,.12));
+  border-radius:17px;
+  background:color-mix(in srgb,var(--surface,#111827) 94%,transparent);
+  color:var(--text,#f4f1eb);
+  box-shadow:0 16px 44px rgba(0,0,0,.24);
+  backdrop-filter:blur(18px);
+  pointer-events:auto;
+}
+.operation-progress-heading { display:flex; align-items:center; gap:10px; }
+.operation-progress-icon { display:grid; place-items:center; width:30px; height:30px; flex:none; color:var(--accent-strong,#80d8ff); }
+.operation-progress-copy { display:grid; gap:4px; min-width:0; flex:1; }
+.operation-progress-copy strong { font-size:12px; font-weight:800; }
+.operation-progress-copy small { font-size:10px; line-height:1.6; color:var(--muted,#929097); }
+.operation-progress-heading>b { flex:none; font-size:13px; font-variant-numeric:tabular-nums; }
+.operation-progress-track { height:6px; overflow:hidden; margin-top:11px; border-radius:999px; background:var(--surface-3,#202025); }
+.operation-progress-track>i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--accent,#168bff),var(--accent-strong,#80d8ff)); transition:width 220ms ease; }
+.operation-success .operation-progress-icon,.operation-success .operation-progress-heading>b { color:var(--success,#65b88a); }
+.operation-success .operation-progress-track>i { background:var(--success,#65b88a); }
+.operation-error .operation-progress-icon,.operation-error .operation-progress-heading>b { color:var(--danger,#e46f70); }
+.operation-error .operation-progress-track>i { background:var(--danger,#e46f70); }
+.operation-spinner { animation:operation-spin 1s linear infinite; }
+@keyframes operation-spin { to { transform:rotate(360deg); } }
+@media(max-width:650px) {
+  .operation-progress-stack { inset-block-start:8px; inset-inline:8px; }
+  .operation-progress-card { width:100%; padding:11px 13px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .operation-spinner { animation:none; }
+  .operation-progress-track>i { transition:none; }
+}
