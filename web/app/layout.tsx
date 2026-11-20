@@ -4,6 +4,7 @@ import './globals.css';
 import './experience.css';
 import './command-dock.css';
 import './page-stage.css';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
 export const metadata: Metadata = {
   title: 'کاوه انتقامجو',
@@ -20,5 +21,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <html lang="fa" dir="rtl"><body>{children}</body></html>;
+  return <html lang="fa" dir="rtl"><body>{children}<ServiceWorkerRegistration/></body></html>;
 }

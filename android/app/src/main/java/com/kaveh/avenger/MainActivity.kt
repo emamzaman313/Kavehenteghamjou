@@ -1,8 +1,8 @@
 package com.kaveh.avenger
 
-import android.os.Bundle
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.os.Bundle
 import android.os.Build
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,8 +35,11 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 class MainActivity : ComponentActivity() {
+    private val notificationClickUrl = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        notificationClickUrl.value = intent?.getStringExtra("kaveh_notification_click_url")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel("kaveh_general_notifications", "اعلان‌های کاوه", NotificationManager.IMPORTANCE_DEFAULT))
@@ -50,12 +54,26 @@ class MainActivity : ComponentActivity() {
                 .build()
             FirebaseApp.initializeApp(this, options)
         }
-        setContent { KavehRoot() }
+        setContent {
+            KavehRoot(
+                notificationClickUrl = notificationClickUrl.value,
+                onNotificationClickConsumed = { notificationClickUrl.value = null },
+            )
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationClickUrl.value = intent.getStringExtra("kaveh_notification_click_url")
     }
 }
 
 @Composable
-private fun KavehRoot() {
+private fun KavehRoot(
+    notificationClickUrl: String?,
+    onNotificationClickConsumed: () -> Unit,
+) {
     KavehTheme {
         Box(modifier = Modifier.fillMaxSize()) {
         if (!SupabaseClientProvider.isConfigured) {
@@ -86,7 +104,9 @@ private fun KavehRoot() {
                         AuthenticatedHomeScreen(
                             email = user?.email,
                             userId = user?.id.orEmpty(),
-                            onSignOut = { supabase.auth.signOut() }
+                            onSignOut = { supabase.auth.signOut() },
+                            notificationClickUrl = notificationClickUrl,
+                            onNotificationClickConsumed = onNotificationClickConsumed,
                         )
                     }
                 }
