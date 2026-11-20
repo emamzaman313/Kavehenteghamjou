@@ -225,11 +225,13 @@ function KavehAppContent() {
   },[tab,featureFlags,canBypassFeatureFlags]);
 
   if (!authReady) return <div className="boot-screen"><BrandMark/><span className="spinner"/><p>کاوه در حال آماده‌سازی است…</p></div>;
+  const signupPasswordPending = typeof window !== 'undefined' &&
+    window.sessionStorage.getItem('kaveh.signup.password.pending') === '1';
   const needsEmailPasswordSetup = Boolean(
     session?.user.email &&
-    session.user.app_metadata?.provider === 'email' &&
     session.user.user_metadata?.access_method !== 'shared_code' &&
-    session.user.user_metadata?.account_password_ready !== true
+    session.user.user_metadata?.account_password_ready !== true &&
+    (session.user.app_metadata?.provider === 'email' || signupPasswordPending)
   );
   if (!session || needsEmailPasswordSetup) return <LoginScreen supabase={supabase} configured={configured}/>;
   if (!supabase) return null;
