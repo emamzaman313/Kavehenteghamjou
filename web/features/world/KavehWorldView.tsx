@@ -79,8 +79,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     if (firstInitialError) notify('بخشی از اطلاعات جهان کاوه بارگذاری نشد (' + firstInitialError[0] + '): ' + firstInitialError[1]?.message, 'error');
     if (!missionResult.error) setMissions((missionResult.data ?? []) as Mission[]);
     if (!progressResult.error) setProgress((progressResult.data ?? []) as Progress[]);
-    if (eventResult.error) notify('بارگذاری رویدادها ناموفق بود: ' + eventResult.error.message, 'error');
-    else setEvents((eventResult.data ?? []) as EventRow[]);
+    if (!eventResult.error) setEvents((eventResult.data ?? []) as EventRow[]);
     if (!joinedResult.error) setJoined(new Set((joinedResult.data ?? []).map((row) => row.event_id)));
     const rankLevels = (levelResult.data ?? []) as RankLevel[];
     setLevels(rankLevels);
