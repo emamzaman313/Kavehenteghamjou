@@ -75,6 +75,10 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [appearanceLoading, setAppearanceLoading] = useState(false);
   const [appearanceSaving, setAppearanceSaving] = useState(false);
   const [canRollbackAppearance, setCanRollbackAppearance] = useState(false);
+  const [homeSpotlightText, setHomeSpotlightText] = useState('');
+  const [homeSpotlightImagePath, setHomeSpotlightImagePath] = useState<string | null>(null);
+  const [homeSpotlightImageFile, setHomeSpotlightImageFile] = useState<File | null>(null);
+  const [homeSpotlightRemoveImage, setHomeSpotlightRemoveImage] = useState(false);
 
 
   const refreshOverview = useCallback(async () => {
@@ -405,10 +409,29 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const publishAppearance = async () => {
     if (appearanceSaving) return;
     setAppearanceSaving(true);
-    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'appearance_publish', config: { appearance: appearanceDraft } } });
+    let imagePath = homeSpotlightRemoveImage ? null : homeSpotlightImagePath;
+    let uploadedPath: string | null = null;
+    if (homeSpotlightImageFile) {
+      if (!homeSpotlightImageFile.type.startsWith('image/') || homeSpotlightImageFile.size > 5 * 1024 * 1024) {
+        setAppearanceSaving(false); notify('تصویر باید معتبر و حداکثر ۵ مگابایت باشد.', 'error'); return;
+      }
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) { setAppearanceSaving(false); notify('نشست مدیر معتبر نیست؛ دوباره وارد شوید.', 'error'); return; }
+      uploadedPath = `${authData.user.id}/platform-home/${crypto.randomUUID()}-${homeSpotlightImageFile.name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(-70)}`;
+      const upload = await supabase.storage.from('post-media').upload(uploadedPath, homeSpotlightImageFile, { contentType: homeSpotlightImageFile.type, cacheControl: '3600', upsert: false });
+      if (upload.error) { setAppearanceSaving(false); notify('بارگذاری تصویر بخش خانه ناموفق بود.', 'error'); return; }
+      imagePath = uploadedPath;
+    }
+    const { data, error } = await supabase.functions.invoke('admin-console', { body: { action: 'appearance_publish', config: { appearance: appearanceDraft, homeSpotlight: { text: homeSpotlightText.trim(), image_path: imagePath } } } });
     setAppearanceSaving(false);
-    if (error || data?.ok !== true) { notify('انتشار تنظیمات ظاهری انجام نشد.', 'error'); return; }
-    notify(`نسخه ${data.appearance.version} از ظاهر سایت منتشر شد.`);
+    if (error || data?.ok !== true) {
+      if (uploadedPath) await supabase.storage.from('post-media').remove([uploadedPath]);
+      notify('انتشار تنظیمات و محتوای بخش خانه انجام نشد.', 'error'); return;
+    }
+    setHomeSpotlightImagePath(imagePath);
+    setHomeSpotlightImageFile(null);
+    setHomeSpotlightRemoveImage(false);
+    notify(`نسخه ${data.appearance.version} از تنظیمات و محتوای خانه منتشر شد.`);
     await refreshAppearance();
   };
 
