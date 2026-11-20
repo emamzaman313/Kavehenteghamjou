@@ -1,6 +1,6 @@
 'use client';
 import { ArrowDownToLine, ArrowLeft, Check, File, MessageCircle, Paperclip, Plus, Search, Send } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Conversation, FileAsset, Message, Profile } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
@@ -11,6 +11,8 @@ import { useOperationProgress } from '@/components/OperationProgress';
 
 export default function ChatView({ supabase, userId, notify }: { supabase: SupabaseClient; userId: string; notify: Notify }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationQuery, setConversationQuery] = useState('');
+  const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'spaces'>('all');
   const [members, setMembers] = useState<Record<string, Profile>>({});
   const [rankTitles, setRankTitles] = useState<Record<string, string>>({});
   const [peerByConversation, setPeerByConversation] = useState<Record<string, string>>({});
@@ -413,6 +415,20 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       notify('ساخت گروه یا کانال انجام نشد: ' + (error instanceof Error ? error.message : 'خطای نامشخص'), 'error');
     } finally { setCreatingSpace(false); }
   };
+  const visibleConversations = useMemo(() => {
+    const query = conversationQuery.trim().toLocaleLowerCase('fa-IR');
+    return conversations.filter((conversation) => {
+      const peer = members[peerByConversation[conversation.id] ?? ''];
+      const title = conversation.title || peer?.display_name || (conversation.kind === 'group' ? 'گروه کاوه' : conversation.kind === 'channel' ? 'کانال کاوه' : 'گفتگوی خصوصی');
+      const preview = lastMessageByConversation[conversation.id]?.body ?? '';
+      const matchesQuery = !query || [title, peer?.username ?? '', preview].join(' ').toLocaleLowerCase('fa-IR').includes(query);
+      const matchesFilter = conversationFilter === 'all'
+        || (conversationFilter === 'unread' && (unreadByConversation[conversation.id] ?? 0) > 0)
+        || (conversationFilter === 'spaces' && conversation.kind !== 'direct');
+      return matchesQuery && matchesFilter;
+    });
+  }, [conversations, conversationQuery, conversationFilter, members, peerByConversation, lastMessageByConversation, unreadByConversation]);
+
   const activeConversation = conversations.find((c) => c.id === active);
   const otherProfile = active ? members[peerByConversation[active] ?? ''] : null;
   return <div className="chat-layout"><section className="chat-list-panel"><div className="chat-list-heading"><div><span className="eyebrow">ارتباطات شما</span><h1>گفتگوها</h1></div><div className="admin-user-actions"><button className="button button-primary button-square" onClick={() => setShowNew((v) => !v)} title="گفتگوی جدید"><Plus size={19}/></button><button className="button button-ghost" onClick={() => { setShowCreateSpace((v) => !v); setShowNew(false); }}>گروه/کانال</button></div></div>
@@ -426,7 +442,15 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       {spaceType === "channel" && <small className="admin-security-note">کانال عمومی ساخته می‌شود؛ دسترسی نوشتن فعلاً فقط برای اعضای ثبت‌شده است.</small>}
       <div className="admin-user-actions"><button className="button button-primary" disabled={creatingSpace}>{creatingSpace ? "در حال ساخت…" : "ساخت"}</button><button type="button" className="button button-ghost" onClick={() => setShowCreateSpace(false)}>انصراف</button></div>
     </form>}
-    <div className="chat-list-scroll">{loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : conversations.length === 0 ? <EmptyState icon={<MessageCircle/>} title="گفتگویی نداری" description="از دکمهٔ + یک گفتگو با کاربر دیگری شروع کن."/> : conversations.map((c) => {
+    <div className="chat-inbox-tools">
+      <label className="chat-inbox-search"><Search size={15}/><input value={conversationQuery} onChange={(event) => setConversationQuery(event.target.value)} placeholder="جست‌وجوی گفتگوها…" aria-label="جست‌وجوی گفتگوها"/>{conversationQuery && <button type="button" onClick={() => setConversationQuery('')} aria-label="پاک‌کردن جست‌وجو">×</button>}</label>
+      <div className="chat-inbox-filters" role="group" aria-label="فیلتر گفتگوها">
+        <button type="button" className={conversationFilter === 'all' ? 'active' : ''} aria-pressed={conversationFilter === 'all'} onClick={() => setConversationFilter('all')}>همه <b>{conversations.length.toLocaleString('fa-IR')}</b></button>
+        <button type="button" className={conversationFilter === 'unread' ? 'active' : ''} aria-pressed={conversationFilter === 'unread'} onClick={() => setConversationFilter('unread')}>خوانده‌نشده</button>
+        <button type="button" className={conversationFilter === 'spaces' ? 'active' : ''} aria-pressed={conversationFilter === 'spaces'} onClick={() => setConversationFilter('spaces')}>گروه و کانال</button>
+      </div>
+    </div>
+    <div className="chat-list-scroll">{loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : conversations.length === 0 ? <EmptyState icon={<MessageCircle/>} title="گفتگویی نداری" description="از دکمهٔ + یک گفتگو با کاربر دیگری شروع کن."/> : visibleConversations.length === 0 ? <div className="chat-filter-empty"><Search size={20}/><strong>گفتگویی پیدا نشد</strong><span>فیلتر یا عبارت جست‌وجو را تغییر بده.</span></div> : visibleConversations.map((c) => {
       const p = members[peerByConversation[c.id] ?? ''];
       const title = c.title || (c.kind === 'direct' ? p?.display_name : c.kind === 'group' ? 'گروه کاوه' : 'کانال کاوه');
       return <button className={`conversation-row ${active === c.id ? 'selected' : ''}`} key={c.id} onClick={() => setActive(c.id)}><Avatar profile={{ display_name: title ?? 'گفتگو', avatar_url: p?.avatar_url }} size="md"/><span className="conversation-copy"><strong>{title ?? 'گفتگو'}</strong><small>{lastMessageByConversation[c.id]?.body || (c.kind === 'direct' ? 'گفتگوی خصوصی' : c.kind === 'group' ? 'گروه' : 'کانال')}</small></span><span className="conversation-time">{unreadByConversation[c.id] > 0 && <b className="unread-count">{unreadByConversation[c.id] > 99 ? '۹۹+' : unreadByConversation[c.id].toLocaleString('fa-IR')}</b>}{c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('fa-IR') : ''}</span></button>;
