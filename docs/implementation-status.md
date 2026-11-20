@@ -196,3 +196,18 @@
 - Supabase Security Advisor still reports leaked-password protection disabled and flags the authenticated `public.create_support_ticket` SECURITY DEFINER function for review. The function was read-only inspected: it requires `auth.uid()`, validates inputs, has an empty search path and has no anon execute grant. It was not changed in this pass; leaked-password protection remains an owner-level Auth setting to review.
 - Manual multi-account Web/Android E2E, cross-account negative authorization tests, physical-device checks, Android Release signing and manual screen-reader/keyboard verification remain pending. This file-integrity slice is CI-validated, not a claim that all of Phase 1 or all product modules are complete.
 - No production migration, production data mutation, merge, Vercel deployment or production promotion was performed.
+
+
+---
+
+## Edge Function authentication contract — guest access code
+
+- Read-only inspection of the live project found `access-code-login` active at version 7 with gateway `verify_jwt=true`; `admin-console` is active at version 34 with `verify_jwt=false`. `notification-dispatch` and `rank-management` remain gateway-JWT protected.
+- Web and Android client configuration use the modern Supabase publishable key. The access-code handler intentionally exposes only `status` and `login` as public actions. Its `admin_get` and `admin_update` branches verify the actual user token with Auth `getUser()` and enforce site-admin roles in the handler.
+- Added `supabase/config.toml` to declare the intended function contract explicitly: guest-code access is reachable without depending on gateway handling of publishable keys; `admin-console` keeps its in-handler JWT/RBAC checks; notification dispatch and rank management retain gateway JWT verification. The access-code function import map remains explicitly pinned to its existing `deno.json`.
+- Added `web/tests/edge-function-config.test.ts` so CI checks these four deployment settings and catches accidental auth-mode drift.
+- Supabase documentation updated 2026-11-18 explains that publishable/secret API keys are not user JWTs, should be sent on `apikey`, and that functions using handler-side authorization should set `verify_jwt=false`. The compatibility behavior of the gateway is documented separately; this finding is a configuration-contract hardening, not proof that the current guest login is failing on every client.
+- The live deployment remains unchanged: the currently active `access-code-login` still reports `verify_jwt=true` until the owner approves and performs a function deployment using this branch configuration. No Edge Function, database, or production setting was changed.
+- Code commits: `2253615420e563d7aeef49e74450acbc40ea16fb` (function config) and `9d1003ac05e2d62cf27b55fe369c7f43694f4dfd` (configuration regression test).
+- Exact-head CI on `9d1003ac05e2d62cf27b55fe369c7f43694f4dfd`: Android CI success (unit tests + Debug APK/AAB), Web CI success (TypeScript, ESLint, tests including function config, Next.js production build), and Security checks success (Dependency Review, dependency audit and Gitleaks).
+- Owner action: authorize the one-function deployment after reviewing this PR. No Production deployment or PR merge was performed.
