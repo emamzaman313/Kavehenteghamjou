@@ -92,6 +92,11 @@ Deno.serve(async (request: Request) => {
       ? raw.appearance as Record<string, unknown> : {};
     const hex = (value: unknown, fallback: string) => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : fallback;
     const radius = Number(appearance.radius);
+    const spotlight = raw.homeSpotlight && typeof raw.homeSpotlight === "object" && !Array.isArray(raw.homeSpotlight)
+      ? raw.homeSpotlight as Record<string, unknown> : {};
+    const spotlightText = typeof spotlight.text === "string" ? spotlight.text.trim().slice(0, 280) : "";
+    const imagePath = typeof spotlight.image_path === "string" && /^[0-9a-f-]{36}\/platform-home\/[A-Za-z0-9_.-]{1,140}$/i.test(spotlight.image_path)
+      ? spotlight.image_path : null;
     const config = {
       appearance: {
         accent: hex(appearance.accent, "#168bff"),
@@ -99,6 +104,7 @@ Deno.serve(async (request: Request) => {
         surface: hex(appearance.surface, "#101b2c"),
         radius: Number.isFinite(radius) ? Math.min(28, Math.max(8, Math.round(radius))) : 16,
       },
+      homeSpotlight: { text: spotlightText, image_path: imagePath },
     };
     const action = body.action === "appearance_rollback" ? "appearance_rollback" : "appearance_publish";
     const audit = await beginAudit(action, authData.user.id, {
