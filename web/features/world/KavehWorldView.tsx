@@ -5,6 +5,7 @@ import { Award, CalendarDays, Check, Crown, Flame, Flag, Medal, Plus, RefreshCw,
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 type Mission = { id: string; code: string; title: string; description: string; action_key: string; target_count: number; reward_points: number; reward_badge_code: string | null; active: boolean; starts_at: string; ends_at: string | null };
 type Progress = { mission_id: string; progress_count: number; completed_at: string | null; reward_claimed_at: string | null };
@@ -48,6 +49,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
   const [badgeDescription, setBadgeDescription] = useState('');
   const [awardUser, setAwardUser] = useState('');
   const [selectedBadgeCode, setSelectedBadgeCode] = useState('');
+  const { runOperation } = useOperationProgress();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -111,9 +113,22 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
   const joinEvent = async (event: EventRow) => {
     setBusy(event.id);
     const isJoined = joined.has(event.id);
-    const result = isJoined
-      ? await supabase.from('platform_event_participants').delete().eq('event_id', event.id).eq('user_id', userId)
-      : await supabase.from('platform_event_participants').insert({ event_id: event.id, user_id: userId });
+    let result: { error: { message: string } | null };
+    try {
+      result = await runOperation(isJoined ? 'خروج از رویداد' : 'ثبت‌نام در رویداد', async (advance) => {
+        advance(20, 'بررسی وضعیت عضویت فعلی');
+        const response = isJoined
+          ? await supabase.from('platform_event_participants').delete().eq('event_id', event.id).eq('user_id', userId)
+          : await supabase.from('platform_event_participants').insert({ event_id: event.id, user_id: userId });
+        if (response.error) throw response.error;
+        advance(88, 'تغییر عضویت در سرور ثبت شد');
+        return response;
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('تغییر عضویت رویداد انجام نشد: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
     if (result.error) { notify('تغییر عضویت رویداد انجام نشد: ' + result.error.message, 'error'); return; }
     setJoined((current) => { const next = new Set(current); if (isJoined) next.delete(event.id); else next.add(event.id); return next; });
@@ -124,13 +139,24 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     event.preventDefault();
     if (!missionTitle.trim()) return;
     setBusy('mission-create');
-    const { error } = await supabase.from('daily_missions').insert({
-      code: 'mission-' + Date.now(), title: missionTitle.trim(), description: missionDescription.trim(),
-      action_key: missionAction, target_count: Number(missionTarget), reward_points: Number(missionReward), reward_badge_code: missionBadgeCode || null,
-      active: true, starts_at: new Date().toISOString(), created_by: userId,
-    });
+    try {
+      await runOperation('ساخت مأموریت', async (advance) => {
+        advance(18, 'اعتبارسنجی عنوان، هدف و پاداش مأموریت');
+        advance(46, 'ثبت مأموریت در پایگاه داده');
+        const { error } = await supabase.from('daily_missions').insert({
+          code: 'mission-' + Date.now(), title: missionTitle.trim(), description: missionDescription.trim(),
+          action_key: missionAction, target_count: Number(missionTarget), reward_points: Number(missionReward), reward_badge_code: missionBadgeCode || null,
+          active: true, starts_at: new Date().toISOString(), created_by: userId,
+        });
+        if (error) throw error;
+        advance(88, 'مأموریت با مجوز سرور ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('ساخت مأموریت ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('ساخت مأموریت ناموفق بود: ' + error.message, 'error'); return; }
     setMissionTitle(''); setMissionDescription(''); setMissionTarget('1'); setMissionReward('25'); setMissionBadgeCode('');
     notify('مأموریت جدید منتشر شد.'); await refresh();
   };
@@ -144,37 +170,72 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     if (eventBanner && (!eventBanner.type.startsWith('image/') || eventBanner.size > 5 * 1024 * 1024)) { notify('بنر رویداد باید تصویر معتبر و حداکثر ۵ مگابایت باشد.', 'error'); return; }
     setBusy('event-create');
     let bannerPath: string | null = null;
-    if (eventBanner) {
-      const safeName = eventBanner.name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80) || 'event-cover';
-      bannerPath = userId + '/events/' + crypto.randomUUID() + '-' + safeName;
-      const upload = await supabase.storage.from('post-media').upload(bannerPath, eventBanner, { contentType: eventBanner.type, cacheControl: '3600', upsert: false });
-      if (upload.error) { setBusy(null); notify('بارگذاری بنر رویداد ناموفق بود: ' + upload.error.message, 'error'); return; }
+    try {
+      await runOperation('ایجاد و انتشار رویداد', async (advance) => {
+        advance(14, 'اعتبارسنجی زمان، دسته‌بندی و اطلاعات رویداد');
+        if (eventBanner) {
+          const safeName = eventBanner.name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80) || 'event-cover';
+          bannerPath = userId + '/events/' + crypto.randomUUID() + '-' + safeName;
+          advance(42, 'بارگذاری بنر رویداد');
+          const upload = await supabase.storage.from('post-media').upload(bannerPath, eventBanner, { contentType: eventBanner.type, cacheControl: '3600', upsert: false });
+          if (upload.error) throw upload.error;
+          advance(72, 'بنر ذخیره شد؛ ثبت جزئیات رویداد');
+        } else {
+          advance(56, 'آماده‌سازی جزئیات رویداد');
+        }
+        const { error } = await supabase.from('platform_events').insert({
+          title: eventTitle.trim(), summary: eventSummary.trim(), body: eventBody.trim(),
+          category: eventCategory, status: 'published', starts_at: startsAt, ends_at: endsAt,
+          points_reward: Number(eventReward), banner_path: bannerPath, created_by: userId,
+        });
+        if (error) throw error;
+        advance(92, 'رویداد در سرور منتشر شد');
+      });
+    } catch (cause) {
+      if (bannerPath) await supabase.storage.from('post-media').remove([bannerPath]);
+      setBusy(null);
+      notify('ساخت رویداد ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
     }
-    const { error } = await supabase.from('platform_events').insert({
-      title: eventTitle.trim(), summary: eventSummary.trim(), body: eventBody.trim(),
-      category: eventCategory, status: 'published', starts_at: startsAt, ends_at: endsAt,
-      points_reward: Number(eventReward), banner_path: bannerPath, created_by: userId,
-    });
     setBusy(null);
-    if (error) { if (bannerPath) await supabase.storage.from('post-media').remove([bannerPath]); notify('ساخت رویداد ناموفق بود: ' + error.message, 'error'); return; }
     setEventTitle(''); setEventSummary(''); setEventBody(''); setEventStart(''); setEventEnd(''); setEventReward('0'); setEventBanner(null);
     notify('رویداد در جهان کاوه منتشر شد.'); await refresh();
   };
 
   const toggleMission = async (mission: Mission) => {
     setBusy(mission.id);
-    const { error } = await supabase.from('daily_missions').update({ active: !mission.active }).eq('id', mission.id);
+    try {
+      await runOperation('به‌روزرسانی مأموریت', async (advance) => {
+        advance(30, 'بررسی مجوز و وضعیت فعلی مأموریت');
+        const { error } = await supabase.from('daily_missions').update({ active: !mission.active }).eq('id', mission.id);
+        if (error) throw error;
+        advance(88, 'وضعیت مأموریت در سرور ذخیره شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('تغییر وضعیت مأموریت ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('تغییر وضعیت مأموریت ناموفق بود: ' + error.message, 'error'); return; }
     notify(mission.active ? 'مأموریت متوقف شد.' : 'مأموریت دوباره فعال شد.'); await refresh();
   };
 
   const updateEventStatus = async (event: EventRow, status: string) => {
     if (status === 'archived' && !window.confirm('با پایان دادن به رویداد، امتیاز جایزه به تمام شرکت‌کنندگان ثبت‌شده اعطا می‌شود. ادامه می‌دهی؟')) return;
     setBusy(event.id);
-    const { error } = await supabase.from('platform_events').update({ status }).eq('id', event.id);
+    try {
+      await runOperation('تغییر وضعیت رویداد', async (advance) => {
+        advance(28, 'بررسی مجوز تغییر وضعیت');
+        const { error } = await supabase.from('platform_events').update({ status }).eq('id', event.id);
+        if (error) throw error;
+        advance(90, 'وضعیت جدید در سرور ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('تغییر وضعیت رویداد ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('تغییر وضعیت رویداد ناموفق بود.', 'error'); return; }
     notify('وضعیت رویداد به‌روزرسانی شد.'); await refresh();
   };
 
@@ -183,9 +244,19 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     const code = badgeCode.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     if (!code || !badgeTitle.trim()) return;
     setBusy('badge-create');
-    const { error } = await supabase.from('badges').insert({ code, title: badgeTitle.trim(), description: badgeDescription.trim(), icon_key: 'award', accent_token: 'gold' });
+    try {
+      await runOperation('ساخت نشان افتخار', async (advance) => {
+        advance(26, 'اعتبارسنجی شناسه و عنوان نشان');
+        const { error } = await supabase.from('badges').insert({ code, title: badgeTitle.trim(), description: badgeDescription.trim(), icon_key: 'award', accent_token: 'gold' });
+        if (error) throw error;
+        advance(90, 'نشان در تالار افتخار ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('ساخت نشان ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('ساخت نشان ناموفق بود: ' + error.message, 'error'); return; }
     setBadgeCode(''); setBadgeTitle(''); setBadgeDescription(''); notify('نشان جدید ساخته شد.'); await refresh();
   };
 
@@ -193,9 +264,19 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     event.preventDefault();
     if (!awardUser || !selectedBadgeCode) return;
     setBusy('badge-award');
-    const { error } = await supabase.from('user_badges').insert({ user_id: awardUser.trim(), badge_code: selectedBadgeCode, awarded_by: userId });
+    try {
+      await runOperation('اعطای نشان به کاربر', async (advance) => {
+        advance(24, 'بررسی شناسه کاربر و نشان انتخابی');
+        const { error } = await supabase.from('user_badges').insert({ user_id: awardUser.trim(), badge_code: selectedBadgeCode, awarded_by: userId });
+        if (error) throw error;
+        advance(90, 'اعطای نشان با مجوز مدیر ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('اعطای نشان ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('اعطای نشان ناموفق بود: ' + error.message, 'error'); return; }
     setAwardUser(''); setSelectedBadgeCode(''); notify('نشان با موفقیت اعطا شد.'); await refresh();
   };
 
