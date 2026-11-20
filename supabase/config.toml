@@ -1,0 +1,17 @@
+# Keep Edge Function gateway JWT verification aligned with each handler's
+# explicit authorization checks. Public guest-code requests must reach their
+# handler; admin actions still validate the user JWT and RBAC role in code.
+
+[functions.access-code-login]
+verify_jwt = false
+import_map = "./functions/access-code-login/deno.json"
+
+[functions.admin-console]
+# The handler authenticates every request itself via auth.getUser() and RBAC.
+verify_jwt = false
+
+[functions.notification-dispatch]
+verify_jwt = true
+
+[functions.rank-management]
+verify_jwt = true
