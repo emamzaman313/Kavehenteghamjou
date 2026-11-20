@@ -156,6 +156,9 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
+      // Persist the pending signup step before Supabase emits SIGNED_IN. The app shell
+      // can remount this screen as soon as OTP verification creates a session.
+      window.sessionStorage.setItem('kaveh.signup.password.pending', '1');
       const data = await runOperation('تأیید ایمیل', async (advance) => {
         advance(20, 'اعتبارسنجی قالب و کد واردشده');
         advance(48, 'بررسی کد یک‌بارمصرف با سرور');
@@ -226,6 +229,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     } finally {
       setBusy(false);
       if (passwordSaved) {
+        window.sessionStorage.removeItem('kaveh.signup.password.pending');
         setPassword('');
         setPasswordConfirm('');
         // Refresh from the persisted Supabase session so the app shell re-checks
