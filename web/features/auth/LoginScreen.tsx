@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { BrandMark } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { normalizeAccessCode } from '@/lib/access-code';
 
@@ -22,6 +23,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [resendIn, setResendIn] = useState(0);
+  const { runOperation } = useOperationProgress();
 
   const normalizeOtp = (value: string) => value
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
@@ -68,15 +70,16 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: { shouldCreateUser: true },
+      await runOperation('ارسال کد ثبت‌نام', async (advance) => {
+        advance(18, 'بررسی قالب و آدرس ایمیل');
+        advance(42, 'ارسال درخواست امن به سرویس احراز هویت');
+        const { error: authError } = await supabase.auth.signInWithOtp({
+          email: normalizedEmail,
+          options: { shouldCreateUser: true },
+        });
+        if (authError) throw authError;
+        advance(88, 'درخواست ارسال کد توسط سرور پذیرفته شد');
       });
-      if (authError) {
-        setError(authErrorMessage(authError));
-        if (Number((authError as { status?: unknown }).status) === 429) setResendIn(30);
-        return;
-      }
       setEmail(normalizedEmail);
       setEmailOtp('');
       setStep('sent');
@@ -84,6 +87,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       setNotice('کد تأیید به ایمیل ارسال شد. فقط کد آخرین ایمیل را وارد کنید.');
     } catch (cause) {
       setError(authErrorMessage(cause));
+      if (Number((cause as { status?: unknown })?.status) === 429) setResendIn(30);
     } finally {
       setBusy(false);
     }
@@ -96,19 +100,21 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: normalizeOtp(emailOtp),
-        type: 'email',
+      const data = await runOperation('تأیید ایمیل', async (advance) => {
+        advance(20, 'اعتبارسنجی قالب و کد واردشده');
+        advance(48, 'بررسی کد یک‌بارمصرف با سرور');
+        const result = await supabase.auth.verifyOtp({
+          email: email.trim().toLowerCase(),
+          token: normalizeOtp(emailOtp),
+          type: 'email',
+        });
+        if (result.error) throw result.error;
+        if (!result.data.session?.access_token || !result.data.session?.refresh_token) {
+          throw new Error('کد تأیید شد اما نشست ورود دریافت نشد. یک کد تازه درخواست کنید.');
+        }
+        advance(79, 'کد تأیید شد؛ نشست امن ایجاد شد');
+        return result.data;
       });
-      if (verifyError) {
-        setError(authErrorMessage(verifyError));
-        return;
-      }
-      if (!data.session?.access_token || !data.session?.refresh_token) {
-        setError('کد تأیید شد اما نشست ورود دریافت نشد. یک کد تازه درخواست کنید.');
-        return;
-      }
       setEmail(data.user?.email || email.trim().toLowerCase());
       setStep('setup');
       setNotice('ایمیل تأیید شد. اکنون رمز عبور حساب خود را انتخاب کنید.');
@@ -134,14 +140,16 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-        data: { account_password_ready: true },
+      await runOperation('تکمیل ثبت‌نام و ساخت رمز', async (advance) => {
+        advance(18, 'اعتبارسنجی قدرت رمز عبور و تطابق تکرار آن');
+        advance(46, 'ثبت رمز در سرویس امن احراز هویت');
+        const { error: updateError } = await supabase.auth.updateUser({
+          password,
+          data: { account_password_ready: true },
+        });
+        if (updateError) throw updateError;
+        advance(88, 'رمز ذخیره شد؛ حساب آماده ورود است');
       });
-      if (updateError) {
-        setError(authErrorMessage(updateError));
-        return;
-      }
       setNotice('ثبت‌نام با موفقیت تکمیل شد. حساب شما اکنون با ایمیل و رمز عبور قابل ورود است.');
     } catch (cause) {
       setError(authErrorMessage(cause));
@@ -159,14 +167,16 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+      await runOperation('ورود به حساب', async (advance) => {
+        advance(18, 'آماده‌سازی اطلاعات ورود');
+        advance(48, 'بررسی ایمیل و رمز عبور در سرور');
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password,
+        });
+        if (loginError) throw new Error('ایمیل یا رمز عبور صحیح نیست. اگر هنوز حساب نساخته‌اید، ثبت‌نام با کد ایمیل را انجام دهید.');
+        advance(88, 'نشست معتبر حساب ایجاد شد');
       });
-      if (loginError) {
-        setError('ایمیل یا رمز عبور صحیح نیست. اگر هنوز حساب نساخته‌اید، ثبت‌نام با کد ایمیل را انجام دهید.');
-        return;
-      }
       // Password sign-in already established a valid session. Do not add a
       // second metadata write here: signup sets account_password_ready, and a
       // failed follow-up mutation must never turn a successful login into an error.
@@ -186,31 +196,35 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setError('');
     setNotice('');
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('access-code-login', {
-        body: { action: 'login', code: accessCode },
+      await runOperation('ورود با کد دسترسی', async (advance) => {
+        advance(16, 'بررسی ساختار و اعتبار کد');
+        advance(42, 'ارسال کد برای اعتبارسنجی سروری');
+        const { data, error: functionError } = await supabase.functions.invoke('access-code-login', {
+          body: { action: 'login', code: accessCode },
+        });
+        if (functionError) {
+          const status = Number((functionError as { context?: { status?: unknown } }).context?.status);
+          throw new Error(status === 429
+            ? 'به‌دلیل چند تلاش ناموفق، ورود با کد موقتاً محدود شده است. ۱۵ دقیقه بعد دوباره تلاش کنید.'
+            : 'اتصال به سرویس ورود با کد برقرار نشد. کمی بعد دوباره تلاش کنید.');
+        }
+        if (data?.ok !== true || !data?.session?.access_token || !data?.session?.refresh_token) {
+          const messages: Record<string, string> = {
+            invalid_code: 'کد دسترسی نادرست است. دوباره بررسی کنید.',
+            disabled: 'ورود با کد دسترسی فعلاً توسط مدیر غیرفعال شده است.',
+            rate_limited: 'تعداد تلاش‌های ناموفق زیاد شده است. کمی بعد دوباره تلاش کنید.',
+            not_configured: 'تنظیمات ورود با کد هنوز کامل نشده است.',
+          };
+          throw new Error(messages[String(data?.reason)] || 'ورود مهمان انجام نشد. دوباره تلاش کنید.');
+        }
+        advance(78, 'کد تأیید شد؛ حساب مهمان سروری آماده است');
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (sessionError) throw sessionError;
+        advance(92, 'نشست مهمان روی دستگاه فعال شد');
       });
-      if (functionError) {
-        const status = Number((functionError as { context?: { status?: unknown } }).context?.status);
-        setError(status === 429
-          ? 'به‌دلیل چند تلاش ناموفق، ورود با کد موقتاً محدود شده است. ۱۵ دقیقه بعد دوباره تلاش کنید.'
-          : 'اتصال به سرویس ورود با کد برقرار نشد. کمی بعد دوباره تلاش کنید.');
-        return;
-      }
-      if (data?.ok !== true || !data?.session?.access_token || !data?.session?.refresh_token) {
-        const messages: Record<string, string> = {
-          invalid_code: 'کد دسترسی نادرست است. دوباره بررسی کنید.',
-          disabled: 'ورود با کد دسترسی فعلاً توسط مدیر غیرفعال شده است.',
-          rate_limited: 'تعداد تلاش‌های ناموفق زیاد شده است. کمی بعد دوباره تلاش کنید.',
-          not_configured: 'تنظیمات ورود با کد هنوز کامل نشده است.',
-        };
-        setError(messages[String(data?.reason)] || 'ورود مهمان انجام نشد. دوباره تلاش کنید.');
-        return;
-      }
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-      });
-      if (sessionError) setError(authErrorMessage(sessionError));
     } catch (cause) {
       setError(authErrorMessage(cause));
     } finally {
