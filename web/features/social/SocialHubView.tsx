@@ -5,6 +5,7 @@ import { Film, Music2, Megaphone, Heart, Plus, Upload, RefreshCw, Send, ImagePlu
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader, EmptyState } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 import { validateReelUpload } from '@/lib/reel-media';
 
 type Reel = { id: string; author_id: string; caption: string; video_path: string; cover_path: string | null; mime_type: string; published_at: string; allow_comments: boolean; views_count: number; visibility?: 'public' | 'followers' | 'private'; duration_seconds?: number | null };
@@ -52,6 +53,7 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
   const [scheduled, setScheduled] = useState<ScheduledNotice[]>([]);
   const [dailySaving, setDailySaving] = useState(false);
   const viewedReelsRef = useRef<Set<string>>(new Set());
+  const { runOperation } = useOperationProgress();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,39 +109,50 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (validationError) return notify(validationError, 'error');
     if (!reelVideo) return;
     setUploading(true);
-    const safeName = (file: File) => file.name.replace(/[^\w.\-]/g, '_');
+    const safeName = (file: File) => file.name.replace(/[^\\w.\\-]/g, '_');
     const path = userId + '/reels/' + crypto.randomUUID() + '-' + safeName(reelVideo);
     const coverPath = reelCover ? userId + '/reel-covers/' + crypto.randomUUID() + '-' + safeName(reelCover) : null;
     const uploadedPaths: string[] = [];
     setReelUploadProgress(0);
-    const uploaded = await uploadWithProgress('post-media', path, reelVideo, setReelUploadProgress);
-    if (uploaded.error) { setUploading(false); return notify('بارگذاری ویدئو ناموفق بود: ' + uploaded.error.message, 'error'); }
-    uploadedPaths.push(path);
-    if (reelCover && coverPath) {
-      const coverUpload = await uploadWithProgress('post-media', coverPath, reelCover, () => undefined);
-      if (coverUpload.error) {
-        await supabase.storage.from('post-media').remove(uploadedPaths);
-        setUploading(false);
-        return notify('بارگذاری تصویر جلد ناموفق بود: ' + coverUpload.error.message, 'error');
-      }
-      uploadedPaths.push(coverPath);
+    try {
+      await runOperation('انتشار ریلز', async (advance) => {
+        advance(12, 'اعتبارسنجی ویدئو، جلد و زمان پخش');
+        const uploaded = await uploadWithProgress('post-media', path, reelVideo, (percent) => {
+          setReelUploadProgress(percent);
+          advance(16 + Math.round(percent * 0.52), `آپلود ویدئو · ${percent.toLocaleString('fa-IR')}٪ از بایت‌ها ارسال شد`);
+        });
+        if (uploaded.error) throw uploaded.error;
+        uploadedPaths.push(path);
+        advance(72, 'ویدئو منتقل شد؛ بررسی تصویر جلد');
+        if (reelCover && coverPath) {
+          const coverUpload = await uploadWithProgress('post-media', coverPath, reelCover, (percent) => {
+            advance(72 + Math.round(percent * 0.12), `آپلود تصویر جلد · ${percent.toLocaleString('fa-IR')}٪`);
+          });
+          if (coverUpload.error) throw coverUpload.error;
+          uploadedPaths.push(coverPath);
+        }
+        advance(88, 'ثبت مشخصات ریلز و پیوند رسانه‌ها');
+        const inserted = await supabase.from('reels').insert({
+          author_id: userId,
+          caption: caption.trim(),
+          video_path: path,
+          cover_path: coverPath,
+          mime_type: reelVideo.type,
+          duration_seconds: reelDuration,
+        });
+        if (inserted.error) throw inserted.error;
+        advance(96, 'ریلز در فید ذخیره و منتشر شد');
+      });
+      setCaption(''); setVideo(null); setCover(null); setReelDuration(null);
+      notify('ریلز به‌صورت عمومی منتشر شد.');
+      await load();
+    } catch (cause) {
+      if (uploadedPaths.length) await supabase.storage.from('post-media').remove(uploadedPaths);
+      notify('انتشار ریلز ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+    } finally {
+      setUploading(false);
+      setReelUploadProgress(0);
     }
-    const inserted = await supabase.from('reels').insert({
-      author_id: userId,
-      caption: caption.trim(),
-      video_path: path,
-      cover_path: coverPath,
-      mime_type: reelVideo.type,
-      duration_seconds: reelDuration,
-    });
-    setUploading(false);
-    if (inserted.error) {
-      await supabase.storage.from('post-media').remove(uploadedPaths);
-      return notify('ثبت ریلز ناموفق بود: ' + inserted.error.message, 'error');
-    }
-    setCaption(''); setVideo(null); setCover(null); setReelDuration(null);
-    notify('ریلز به‌صورت عمومی منتشر شد.');
-    await load();
   };
 
   const toggleLike = async (reel: Reel) => {
@@ -179,18 +192,27 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     event.preventDefault();
     if (!playlistTitle.trim()) return;
     const isPublic = isAdmin && playlistPublic;
-    const { data, error } = await supabase.from('playlists').insert({
-      owner_id: userId,
-      title: playlistTitle.trim(),
-      is_public: isPublic,
-    }).select('id,owner_id,title,description,is_public').single();
-    if (error) return notify('ساخت فهرست پخش ناموفق بود: ' + error.message, 'error');
-    setPlaylists((old) => [data as Playlist, ...old]);
-    setPlaylistTitle('');
-    setPlaylistPublic(false);
-    setSelectedPlaylist(data.id);
-    await refreshPlaylistTracks(data.id);
-    notify(isPublic ? 'فهرست پخش عمومی ساخته شد و برای کاربران قابل مشاهده است.' : 'فهرست پخش خصوصی ساخته شد.');
+    try {
+      const data = await runOperation('ساخت فهرست پخش', async (advance) => {
+        advance(22, 'اعتبارسنجی عنوان و سطح دسترسی فهرست');
+        const { data, error } = await supabase.from('playlists').insert({
+          owner_id: userId,
+          title: playlistTitle.trim(),
+          is_public: isPublic,
+        }).select('id,owner_id,title,description,is_public').single();
+        if (error || !data) throw error ?? new Error('ساخت فهرست پخش انجام نشد.');
+        advance(90, isPublic ? 'فهرست عمومی برای جامعه ثبت شد' : 'فهرست خصوصی برای مالک ثبت شد');
+        return data;
+      });
+      setPlaylists((old) => [data as Playlist, ...old]);
+      setPlaylistTitle('');
+      setPlaylistPublic(false);
+      setSelectedPlaylist(data.id);
+      await refreshPlaylistTracks(data.id);
+      notify(isPublic ? 'فهرست پخش عمومی ساخته شد و برای کاربران قابل مشاهده است.' : 'فهرست پخش خصوصی ساخته شد.');
+    } catch (cause) {
+      notify('ساخت فهرست پخش ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+    }
   };
 
   const addTrackToPlaylist = async () => {
@@ -225,14 +247,35 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     if (!audio) return notify('ابتدا فایل موسیقی را از گوشی یا دستگاه انتخاب کنید.', 'error');
     if (audio.size > 100 * 1024 * 1024) return notify('حداکثر حجم فایل موسیقی ۱۰۰ مگابایت است.', 'error');
     setUploading(true);
-    const path = userId + '/audio/' + crypto.randomUUID() + '-' + audio.name.replace(/[^\w.\-]/g, '_');
+    const selectedAudio = audio;
+    const path = userId + '/audio/' + crypto.randomUUID() + '-' + selectedAudio.name.replace(/[^\\w.\\-]/g, '_');
     setAudioUploadProgress(0);
-    const uploaded = await uploadWithProgress('music-library', path, audio, setAudioUploadProgress);
-    if (uploaded.error) { setUploading(false); setAudioUploadProgress(0); return notify(uploaded.error.message, 'error'); }
-    const inserted = await supabase.from('audio_tracks').insert({ title: trackTitle.trim(), artist: trackArtist.trim(), audio_path: path, created_by: userId }).select('id,title,artist,audio_path,duration_seconds').single();
-    setUploading(false); setAudioUploadProgress(0);
-    if (inserted.error) { await supabase.storage.from('music-library').remove([path]); return notify(inserted.error.message, 'error'); }
-    setTracks((old) => [inserted.data as Track, ...old]); setTrackTitle(''); setTrackArtist(''); setAudio(null); notify('آهنگ به کتابخانه موسیقی اضافه شد.');
+    try {
+      const insertedData = await runOperation('آپلود و ثبت موسیقی', async (advance) => {
+        advance(12, 'بررسی دسترسی مدیر، نام و حجم فایل');
+        const uploaded = await uploadWithProgress('music-library', path, selectedAudio, (percent) => {
+          setAudioUploadProgress(percent);
+          advance(18 + Math.round(percent * 0.62), `انتقال موسیقی · ${percent.toLocaleString('fa-IR')}٪ از بایت‌ها ارسال شد`);
+        });
+        if (uploaded.error) throw uploaded.error;
+        advance(84, 'فایل منتقل شد؛ ثبت مشخصات موسیقی');
+        const inserted = await supabase.from('audio_tracks').insert({
+          title: trackTitle.trim(), artist: trackArtist.trim(), audio_path: path, created_by: userId,
+        }).select('id,title,artist,audio_path,duration_seconds').single();
+        if (inserted.error) throw inserted.error;
+        advance(96, 'موسیقی در کتابخانه ثبت شد');
+        return inserted.data;
+      });
+      setTracks((old) => [insertedData as Track, ...old]);
+      setTrackTitle(''); setTrackArtist(''); setAudio(null);
+      notify('آهنگ به کتابخانه موسیقی اضافه شد.');
+    } catch (cause) {
+      await supabase.storage.from('music-library').remove([path]);
+      notify(cause instanceof Error ? cause.message : 'آپلود موسیقی ناموفق بود.', 'error');
+    } finally {
+      setUploading(false);
+      setAudioUploadProgress(0);
+    }
   };
 
   const publishGlobalMusic = async () => {
@@ -252,10 +295,17 @@ export default function SocialHubView({ supabase, userId, isAdmin, notify }: { s
     event.preventDefault();
     if (!isAdmin || !dailyTitle.trim()) return;
     setDailySaving(true);
-    const { error } = await supabase.from('daily_titles').insert({ title: dailyTitle.trim(), body: dailyBody.trim(), category: dailyCategory, is_published: true, created_by: userId });
-    setDailySaving(false);
-    if (error) return notify('انتشار اطلاعیه ناموفق بود: ' + error.message, 'error');
-    setDailyTitle(''); setDailyBody(''); notify('اطلاعیه منتشر شد.'); await load();
+    try {
+      await runOperation('انتشار عنوان روزانه یا اطلاعیه', async (advance) => {
+        advance(22, 'اعتبارسنجی متن و دسته‌بندی اطلاعیه');
+        const { error } = await supabase.from('daily_titles').insert({ title: dailyTitle.trim(), body: dailyBody.trim(), category: dailyCategory, is_published: true, created_by: userId });
+        if (error) throw error;
+        advance(90, 'اطلاعیه با نقش مدیریتی در سرور منتشر شد');
+      });
+      setDailyTitle(''); setDailyBody(''); notify('اطلاعیه منتشر شد.'); await load();
+    } catch (cause) {
+      notify('انتشار اطلاعیه ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+    } finally { setDailySaving(false); }
   };
 
   const addReelComment = async (reelId: string) => {
