@@ -7,8 +7,10 @@ import type { Notify } from '@/lib/ui-types';
 import { formatDate } from '@/lib/format';
 import { planProfileAssetCleanup } from '@/lib/profile-assets';
 import { Avatar, SectionHeader } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 export default function ProfileView({ supabase, userId, profile, accountLabel, onSaved, notify }: { supabase: SupabaseClient; userId: string; profile: Profile | null; accountLabel: string; onSaved: () => Promise<void>; notify: Notify }) {
+  const { runOperation } = useOperationProgress();
   const [name, setName] = useState(profile?.display_name ?? '');
   const [username, setUsername] = useState(profile?.username ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -90,6 +92,8 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
     const uploadedAssets: { bucket: string; path: string }[] = [];
     let profileUpdateAttempted = false;
     try {
+      await runOperation('ذخیره هویت پروفایل', async (advance) => {
+      advance(10, 'اعتبارسنجی اطلاعات و تنظیمات هویت');
       let avatarPath = profile?.avatar_path ?? null;
       let coverPath = profile?.cover_path ?? null;
       if (avatarFile) {
@@ -100,6 +104,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         if (uploadError) throw uploadError;
         uploadedAssets.push({ bucket: 'profile-media', path });
         avatarPath = path;
+        advance(34, 'تصویر پروفایل بارگذاری شد');
       }
       if (coverFile) {
         if (!['image/jpeg','image/png','image/webp','image/avif','image/gif'].includes(coverFile.type) || coverFile.size > 5 * 1024 * 1024) throw new Error('کاور باید JPG، PNG، WEBP، AVIF یا GIF متحرک و حداکثر ۵ مگابایت باشد.');
@@ -108,6 +113,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         const { error: coverUploadError } = await supabase.storage.from('profile-media').upload(coverPath, coverFile, { contentType: coverFile.type, upsert: false });
         if (coverUploadError) throw coverUploadError;
         uploadedAssets.push({ bucket: 'profile-media', path: coverPath });
+        advance(54, 'کاور پروفایل در فضای رسانه ذخیره شد');
       }
       const avatarUrl = avatarPath ? supabase.storage.from('profile-media').getPublicUrl(avatarPath).data.publicUrl : profile?.avatar_url ?? null;
       let profileMusicPath = (profile as Profile & {profile_music_path?:string|null} | null)?.profile_music_path ?? null;
@@ -120,6 +126,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         if (musicUploadError) throw musicUploadError;
         uploadedAssets.push({ bucket: 'post-media', path });
         profileMusicPath = path;
+        advance(72, 'موسیقی پروفایل بارگذاری شد');
       }
       const safeTheme = {
         accent: /^#[0-9a-fA-F]{6}$/.test(profileTheme.accent) ? profileTheme.accent : '#168bff',
@@ -127,9 +134,11 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         text: /^#[0-9a-fA-F]{6}$/.test(profileTheme.text) ? profileTheme.text : '#f4f1eb',
       };
       const patch = { display_name: name.trim(), username: username.trim() || null, bio: bio.trim(), avatar_path: avatarPath, avatar_url: avatarUrl, cover_path: coverPath, profile_visibility: profileVisibility, profile_theme: safeTheme, featured_badges: featuredBadges.filter(code => badges.some(b => b.badge_code === code)).slice(0,6), profile_music_path: profileMusicPath, profile_music_title: profileMusicPath ? musicTitle.trim().slice(0,120) || 'موسیقی پروفایل' : null, updated_at: new Date().toISOString() };
+      advance(82, 'اعتبارسنجی نهایی و ثبت اطلاعات پروفایل');
       profileUpdateAttempted = true;
       const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
       if (error) throw error;
+      advance(94, 'اطلاعات هویت با موفقیت در سرور ذخیره شد');
       const obsoleteAssets = [
         profile?.avatar_path && profile.avatar_path !== avatarPath ? { bucket: 'profile-media', path: profile.avatar_path } : null,
         profile?.cover_path && profile.cover_path !== coverPath ? { bucket: 'profile-media', path: profile.cover_path } : null,
@@ -138,6 +147,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
       await Promise.allSettled(obsoleteAssets.map(asset => supabase.storage.from(asset.bucket).remove([asset.path])));
       setAvatarFile(null); setAvatarPreview(null); setCoverFile(null); setCoverPreview(null); setMusicFile(null); setRemoveProfileMusic(false);
       notify('پروفایل به‌روزرسانی شد.'); await onSaved();
+      });
     } catch (error) {
       // Compensate successful Storage uploads when the profile write did not
       // commit. If the write result was ambiguous, read saved pointers first;
