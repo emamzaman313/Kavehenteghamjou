@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, ArrowLeft, Bell, Command, Compass, Film, FolderOpen, Home, LifeBuoy, MessageCircle, Search, Settings, ShieldCheck, Trophy, Users, X } from 'lucide-react';
+import { Activity, ArrowLeft, Bell, Command, Compass, Eye, Film, Focus, FolderOpen, Home, LifeBuoy, MessageCircle, MousePointer2, RotateCcw, Search, Settings, ShieldCheck, Sparkles, Trophy, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Destination = 'home' | 'chats' | 'support' | 'world' | 'files' | 'discover' | 'social' | 'profile' | 'notifications' | 'settings' | 'admin';
@@ -22,6 +22,8 @@ const destinations: Item[] = [
 
 export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate: (destination: Destination) => void }) {
   const [open, setOpen] = useState(false);
+  const [visualOpen, setVisualOpen] = useState(false);
+  const [prefs, setPrefs] = useState({ pointerGlow: true, cardTilt: true, ambientMotion: true, focusMode: false });
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -80,6 +82,25 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
     return () => window.removeEventListener('keydown', keydown);
   }, [activeIndex, filtered, isAdmin, onNavigate, open]);
 
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('kaveh-experience-preferences');
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<typeof prefs>;
+        setPrefs((current) => ({ ...current, ...parsed }));
+      }
+    } catch { /* Keep accessible defaults when storage is unavailable. */ }
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.kavehPointerGlow = prefs.pointerGlow ? 'on' : 'off';
+    root.dataset.kavehCardTilt = prefs.cardTilt ? 'on' : 'off';
+    root.dataset.kavehAmbientMotion = prefs.ambientMotion ? 'on' : 'off';
+    root.dataset.kavehFocus = prefs.focusMode ? 'on' : 'off';
+    try { window.localStorage.setItem('kaveh-experience-preferences', JSON.stringify(prefs)); } catch { /* Preferences remain active for this session. */ }
+  }, [prefs]);
+
   useEffect(() => { if (open) { setActiveIndex(0); window.requestAnimationFrame(() => inputRef.current?.focus()); } }, [open]);
 
   useEffect(() => {
@@ -97,7 +118,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
       const y = pointer.clientY;
       root.style.setProperty('--kaveh-pointer-x', x + 'px');
       root.style.setProperty('--kaveh-pointer-y', y + 'px');
-      root.style.setProperty('--kaveh-pointer-opacity', '1');
+      root.style.setProperty('--kaveh-pointer-opacity', prefs.pointerGlow ? '1' : '0');
       const element = document.elementFromPoint(x, y);
       const card = element?.closest<HTMLElement>('.post-card,.panel-card,.welcome-card,.side-info-card,.reel-card,.community-card,.profile-main-card,.settings-card,.rank-card,.badge-card') ?? null;
       if (currentCard && currentCard !== card) {
@@ -107,7 +128,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
         currentCard.style.removeProperty('--kaveh-card-spot-y');
       }
       currentCard = card;
-      if (card) {
+      if (card && prefs.cardTilt) {
         const rect = card.getBoundingClientRect();
         const px = Math.max(0, Math.min(1, (x - rect.left) / Math.max(1, rect.width)));
         const py = Math.max(0, Math.min(1, (y - rect.top) / Math.max(1, rect.height)));
@@ -141,7 +162,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
       currentCard?.style.removeProperty('--kaveh-card-rx');
       currentCard?.style.removeProperty('--kaveh-card-ry');
     };
-  }, []);
+  }, [prefs.cardTilt, prefs.pointerGlow]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -167,6 +188,15 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
     <div className="kaveh-ambient-layer" aria-hidden="true"><span className="kaveh-ambient-orb kaveh-ambient-orb-one" /><span className="kaveh-ambient-orb kaveh-ambient-orb-two" /><span className="kaveh-ambient-grid" /></div>
     <div className="kaveh-pointer-glow" aria-hidden="true" />
     <div className="kaveh-scroll-progress" aria-hidden="true" />
+    <button type="button" className="kaveh-visual-trigger" onClick={() => setVisualOpen((value) => !value)} aria-label="تنظیم جلوه‌های بصری" aria-expanded={visualOpen} title="تنظیم تجربهٔ بصری"><Eye size={17} /></button>
+    {visualOpen && <aside className="kaveh-visual-panel" aria-label="تنظیم تجربهٔ بصری">
+      <div className="kaveh-visual-panel-heading"><div><strong>تجربهٔ بصری کاوه</strong><small>جلوه‌ها را مطابق سلیقه‌ات تنظیم کن</small></div><button type="button" onClick={() => setVisualOpen(false)} aria-label="بستن تنظیمات"><X size={16} /></button></div>
+      <button type="button" className="kaveh-visual-option" aria-pressed={prefs.pointerGlow} onClick={() => setPrefs((p) => ({ ...p, pointerGlow: !p.pointerGlow }))}><span className="kaveh-visual-option-icon"><MousePointer2 size={17} /></span><span><strong>نور دنبال‌کنندهٔ ماوس</strong><small>درخشش آرام همراه حرکت نشانگر</small></span><i className={prefs.pointerGlow ? 'is-on' : ''} /></button>
+      <button type="button" className="kaveh-visual-option" aria-pressed={prefs.cardTilt} onClick={() => setPrefs((p) => ({ ...p, cardTilt: !p.cardTilt }))}><span className="kaveh-visual-option-icon"><Focus size={17} /></span><span><strong>عمق و حرکت کارت‌ها</strong><small>واکنش سه‌بعدی و نور نقطه‌ای</small></span><i className={prefs.cardTilt ? 'is-on' : ''} /></button>
+      <button type="button" className="kaveh-visual-option" aria-pressed={prefs.ambientMotion} onClick={() => setPrefs((p) => ({ ...p, ambientMotion: !p.ambientMotion }))}><span className="kaveh-visual-option-icon"><Sparkles size={17} /></span><span><strong>پس‌زمینهٔ زنده</strong><small>حرکت نرم نورهای محیطی</small></span><i className={prefs.ambientMotion ? 'is-on' : ''} /></button>
+      <button type="button" className="kaveh-visual-option" aria-pressed={prefs.focusMode} onClick={() => setPrefs((p) => ({ ...p, focusMode: !p.focusMode }))}><span className="kaveh-visual-option-icon"><Eye size={17} /></span><span><strong>حالت تمرکز</strong><small>کاهش جلوه‌های فرعی و حواس‌پرتی</small></span><i className={prefs.focusMode ? 'is-on' : ''} /></button>
+      <button type="button" className="kaveh-visual-reset" onClick={() => setPrefs({ pointerGlow: true, cardTilt: true, ambientMotion: true, focusMode: false })}><RotateCcw size={14} /> بازنشانی تنظیمات</button>
+    </aside>}
     <button type="button" className="kaveh-command-trigger" ref={triggerRef} onClick={() => setOpen(true)} aria-label="باز کردن فرمان‌مرکز" title="فرمان‌مرکز (Ctrl یا ⌘ + K)">
       <Command size={17} /><span>فرمان‌مرکز</span><kbd>⌘ K</kbd>
     </button>
