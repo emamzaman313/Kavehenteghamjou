@@ -27,6 +27,7 @@ import KavehCommandDock from '@/components/KavehCommandDock';
 import KavehPageStage from '@/components/KavehPageStage';
 import SupportCenter from '@/features/support/SupportCenter';
 import KavehWorldView from '@/features/world/KavehWorldView';
+import { useOnlinePresence } from '@/lib/use-online-presence';
 
 type Toast = { id: number; text: string; tone?: ToastTone };
 type Tab = 'home' | 'chats' | 'files' | 'discover' | 'social' | 'profile' | 'notifications' | 'settings' | 'support' | 'world' | 'admin';
@@ -51,6 +52,7 @@ function KavehAppContent() {
   const supabase = useMemo(() => getSupabase(), []);
   const configured = Boolean(supabase);
   const [session, setSession] = useState<Session | null>(null);
+  const onlineUserIds = useOnlinePresence(supabase, session?.user.id, profile?.display_name ?? 'کاربر کاوه');
   const [authReady, setAuthReady] = useState(!supabase);
   const [tab, setTab] = useState<Tab>('home');
   const [publicProfileUsername, setPublicProfileUsername] = useState<string | null>(null);
@@ -283,10 +285,10 @@ function KavehAppContent() {
         {homeSpotlight.text && <p>{homeSpotlight.text}</p>}
       </section>}
       <div className="content-scroll">
-        {publicProfileUsername ? <PublicProfileView supabase={supabase} viewerId={session.user.id} username={publicProfileUsername} notify={notify} onBack={closePublicProfile} onOpenChat={() => { closePublicProfile(); setTab('chats'); }}/> : <>
+        {publicProfileUsername ? <PublicProfileView supabase={supabase} viewerId={session.user.id} username={publicProfileUsername} notify={notify} onBack={closePublicProfile} onOpenChat={() => { closePublicProfile(); setTab('chats'); }} onlineUserIds={onlineUserIds}/> : <>
         <KavehPageStage activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
-        {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
+        {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify} onlineUserIds={onlineUserIds}/>}
         {tab === 'support' && <SupportCenter supabase={supabase} userId={session.user.id} notify={notify} staff={isSupportStaff}/>}
         {tab === 'world' && <KavehWorldView supabase={supabase} userId={session.user.id} isAdmin={isAdmin} notify={notify}/>}
         {tab === 'files' && <FilesView supabase={supabase} userId={session.user.id} notify={notify}/>}
