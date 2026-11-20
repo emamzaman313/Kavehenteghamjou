@@ -602,6 +602,12 @@ Deno.serve(async (request: Request) => {
     ]);
     const firstError = users.error || userCount.error || onlineUsers.error || newUsers.error || posts.error || comments.error || media.error || reels.error || audioTracks.error || playlists.error || dailyTitles.error || reelViews.error || latestPosts.error || recentPosts.error || recentComments.error || recentReels.error || pendingReports.error || recentNotifications.error;
     if (firstError) return respond({ ok: false, reason: "query_failed" }, 500, origin);
+    const recentMemberIds = (users.data ?? []).map((user) => user.id);
+    const { data: recentPresence, error: recentPresenceError } = recentMemberIds.length
+      ? await admin.from("user_presence").select("user_id").in("user_id", recentMemberIds).gte("last_seen_at", new Date(Date.now() - 120_000).toISOString())
+      : { data: [], error: null };
+    if (recentPresenceError) return respond({ ok: false, reason: "presence_query_failed" }, 500, origin);
+    const onlineMemberIds = new Set((recentPresence ?? []).map((row) => row.user_id));
     const days = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(sinceDate);
       date.setUTCDate(date.getUTCDate() + index);
@@ -627,7 +633,7 @@ Deno.serve(async (request: Request) => {
         notifications_7d: recentNotifications.count ?? 0,
       },
       daily_activity: days,
-      users: users.data ?? [],
+      users: (users.data ?? []).map((user) => ({ ...user, is_online: onlineMemberIds.has(user.id) })),
       posts: latestPosts.data ?? [],
     }, 200, origin);
   }
