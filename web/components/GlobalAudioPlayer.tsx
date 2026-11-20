@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Music2, Pause, Play, ChevronUp } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 type GlobalAudioRow = { track_id: string | null; enabled: boolean; volume: number; track?: { title: string; artist: string | null; audio_path: string } | null };
@@ -68,13 +69,13 @@ export default function GlobalAudioPlayer({ supabase }: { supabase: SupabaseClie
     catch { setNeedsGesture(true); }
   };
   return <>
-    {collapsed && <button type="button" className="global-audio-reopen" aria-label="نمایش دوبارهٔ پخش‌کنندهٔ موسیقی" onClick={() => setCollapsed(false)} onPointerDown={(event) => { gesture.current = { y: event.clientY, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const start = gesture.current; gesture.current = null; if (start && event.clientY - start.y < -35) setCollapsed(false); }}>♫ <span>نمایش موسیقی</span></button>}
+    {collapsed && <button type="button" className="global-audio-reopen" aria-label="نمایش دوبارهٔ پخش‌کنندهٔ موسیقی" onClick={() => setCollapsed(false)} onPointerDown={(event) => { gesture.current = { y: event.clientY, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const start = gesture.current; gesture.current = null; if (start && event.clientY - start.y < -35) setCollapsed(false); }}><Music2 size={17}/><span>نمایش موسیقی</span><ChevronUp size={15}/></button>}
     <div className={`global-audio-dock ${collapsed ? 'is-collapsed' : ''}`} role="region" aria-label="موسیقی سراسری" aria-hidden={collapsed}>
       <div className="global-audio-grip" aria-label="برای پنهان‌کردن به پایین بکشید" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { gesture.current = null; }}><i/></div>
     <audio ref={audioRef} preload="auto" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={(e) => { e.currentTarget.currentTime = 0; void e.currentTarget.play().catch(() => setNeedsGesture(true)); }}/>
-    <span className="global-audio-disc">♫</span>
-    <span className="global-audio-meta"><strong>{setting.track.title}</strong><small>{setting.track.artist || 'موسیقی سراسری کاوه'}</small></span>
-    <button type="button" className="button button-quiet" onClick={() => { const a = audioRef.current; if (!a) return; if (a.paused) void start(); else a.pause(); }}>{playing ? 'توقف' : needsGesture ? 'برای شنیدن لمس کنید' : 'پخش'}</button>
+    <span className={`global-audio-disc ${playing ? "is-playing" : ""}`}><Music2 size={19}/></span>
+    <span className="global-audio-meta"><strong>{setting.track.title}</strong><small>{setting.track.artist || 'موسیقی سراسری کاوه'} <i className={playing ? 'audio-status is-playing' : 'audio-status'}/>{playing ? 'در حال پخش' : 'متوقف'}</small></span>
+    <button type="button" className="global-audio-control" aria-label={playing ? "توقف موسیقی" : "پخش موسیقی"} onClick={() => { const a = audioRef.current; if (!a) return; if (a.paused) void start(); else a.pause(); }}>{playing ? <Pause size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}</button>
     </div>
   </>;
 }
