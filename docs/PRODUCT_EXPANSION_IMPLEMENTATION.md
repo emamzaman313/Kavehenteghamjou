@@ -215,3 +215,65 @@ These require a dedicated migration, verified RLS policies, server-side authoriz
 - Validation on the current PR head `dd1fa8cf`: Web CI passed (TypeScript, ESLint, unit tests, Next.js production build and artifact upload); Android CI passed (unit tests, debug APK/AAB assembly and artifact upload).
 - Security workflow: Gitleaks secret scanning and the blocking production dependency audit passed. GitHub Dependency Review remains blocked because repository Dependency Graph is disabled; this is a repository configuration limitation, not a reported vulnerable dependency.
 - The PR remains a draft. These are branch/CI results, not a production release. No production schema migration, production data change, secret modification, or Vercel production promotion was performed.
+
+
+## 2026-11-20 — Phase 0 live audit snapshot
+
+This section supersedes older statements in this document when they conflict with the live checks below. It is a read-only audit; no production data, schema, secrets, or deployment settings were changed.
+
+### GitHub and CI
+
+- Current development PR: #3, branch `feat/kaveh-premium-experience`, still open and Draft; not merged.
+- Current PR head at audit start: `343355d6ab1a35bd84c0d260b33228879aef0505`.
+- Fresh checks on that head: Web CI, Android CI, and Security checks all completed successfully.
+- The Security workflow's Dependency Review job also passed on this latest run. Earlier notes saying Dependency Review was blocked by the disabled Dependency Graph are historical and no longer describe the latest observed run.
+- Web CI covered TypeScript, ESLint, unit tests and Next.js production build. Android CI covered unit tests and debug APK/AAB assembly. These results do not replace two-account/device E2E, Android release signing, or owner acceptance.
+
+### Vercel
+
+- The Vercel project `kaveh-avenger` exists and its latest production deployment was `READY` on `main`, commit `5b3c413655a46e6f05d8cb7e69eebe4ccc571424`.
+- Vercel reports no Git repository linked to this project. Consequently, the feature branch has no Vercel preview deployment through the current Git integration. The production deployment is not the current PR head and must not be described as containing the PR changes.
+
+### Supabase live state
+
+- Project `slwzjufipavuwcbwoyro` is `ACTIVE_HEALTHY`, PostgreSQL 17.12.
+- 57 public base tables were found; RLS is enabled on all 57. The live policy count is 148.
+- The live migration ledger contains 62 migrations. Preserve the ledger and data; do not run the archived draft schema or reset the database.
+- Storage buckets: `user-files` is private with a 50,000,000-byte limit; `post-media` is public with a 50,000,000-byte limit; `profile-media` and `music-library` are also public. Public media access is a deliberate product/security boundary that requires separate validation before offering private/follower-only reel modes.
+- Four Edge Functions are active: `notification-dispatch`, `access-code-login`, `rank-management`, and `admin-console`. `admin-console` has platform JWT verification disabled, but the inspected handler explicitly validates a Bearer token with Auth and checks the caller's server-side admin role before privileged actions. Keep this behavior under security regression tests; do not infer that the endpoint is unauthenticated solely from the platform flag.
+- The Security Advisor reports two warnings: (1) `public.create_support_ticket(text,text,text)` is SECURITY DEFINER and executable by authenticated users; inspection shows an empty search_path, an `auth.uid()` requirement, input validation and no anon execute grant, but its definer privileges remain a documented review item; (2) leaked-password protection is disabled in Auth and needs an owner-approved Auth configuration change.
+- Performance Advisor reports one foreign key without a covering index on `platform_feature_flags.updated_by`, plus 64 informational unused-index findings. Do not drop indexes solely from this snapshot; verify query workload first.
+- A read-only grant inventory found 127 anon table-grant entries. RLS is enabled everywhere, and observed anon/public policies are limited to selected public-facing data (published appearance, public feature flags/audio settings and visibility-filtered reels); still review grants and policies together before tightening privileges.
+
+### Product feature matrix — current evidence, not release certification
+
+| Module | Web | Android | Backend / security | Overall |
+|---|---|---|---|---|
+| Universe | Partial: World surfaces exist; no interactive world map/territory lifecycle | Partial: World tabs exist | Missions/events/ranks exist; no territory model | Partially Implemented |
+| Identity | Partial: profile and discovery surfaces | Partial: profile surface exists | Profiles/ranks/badges exist; no revocable identity QR/reputation ledger | Partially Implemented |
+| Live | Not implemented | Not implemented | No SFU/media transport found | Not Implemented |
+| AI | Not implemented | Not implemented | No provider abstraction/quota service found | Not Implemented |
+| Missions | Partial | Partial | Daily missions, progress, events and rewards exist; seasons/teams/robust anti-abuse remain | Partially Implemented |
+| Studio | Partial: social/reels publishing and creator analytics foundations | Partial: social/reels publishing foundations | Media metadata and scheduled-related schema exist; complete processing/copyright lifecycle remains | Partially Implemented |
+| Vault | Partial: private file listing/search/download | Partial: private file listing/search/download | Private `user-files`, owner RLS and 50 MB limit; no share/version lifecycle | Partially Implemented |
+| Shadow | Partial: user settings/privacy foundations | Partial: settings foundation | RLS/session controls exist; no audited E2EE or complete device-lock/key lifecycle | Partially Implemented |
+| Radar | Partial: discovery surfaces | Partial: explore surface | Following/discovery foundations; no complete configurable social radar | Partially Implemented |
+| Academy | Not implemented | Not implemented | No course/lesson/enrollment/certificate domain found | Not Implemented |
+| Market | Not implemented | Not implemented | No catalog/order/payment domain found | Not Implemented |
+| Pulse | Partial: admin overview metrics | Partial: admin overview surfaces | Some counts/activity data; no full operational analytics/health pipeline | Partially Implemented |
+| Memories | Not implemented | Not implemented | No consent-based memories/album intelligence domain found | Not Implemented |
+| Command Center | Partial: admin console, RBAC, audit, appearance and flags | Partial: admin console/report/audit surfaces | Role/audit/flag/appearance foundations; unified health, approvals and rollback coverage remain | Partially Implemented |
+| Events | Partial: World events surfaces | Partial: World events tabs | Event participation/rewards/notifications exist; organizer lifecycle and full moderation remain | Partially Implemented |
+
+### Phase 0 blockers and next actions
+
+1. Add a real Vercel Git connection or otherwise establish a verified preview workflow for the development branch; do not promote production as a workaround.
+2. Review Auth email OTP/password setup and run fresh-email E2E using two independent accounts on web and Android.
+3. Review the Auth leaked-password protection setting and obtain owner approval before changing it.
+4. Add a regression test for the manually authenticated `admin-console` endpoint and review the SECURITY DEFINER support-ticket RPC/grants.
+5. Review anonymous table grants, storage policies, public media behavior and negative cross-account RLS tests.
+6. Resolve or explicitly accept the missing `platform_feature_flags.updated_by` index after workload review.
+7. Verify Android Release signing and real-device behavior; current CI only proves unit tests and debug package assembly.
+8. Update this matrix only when a complete web + Android + backend + authorization + test slice is evidenced.
+
+Phase 0 remains **Partially Complete** until the preview path, auth E2E, authorization negatives and release-device gates are verified. No production migration, production data change, secret update, merge or production promotion was performed in this audit.
