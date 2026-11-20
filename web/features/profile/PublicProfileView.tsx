@@ -14,8 +14,8 @@ type PublicProfile = {
   featured_badges: string[] | null; profile_music_path?: string | null; profile_music_title?: string | null;
 };
 
-export default function PublicProfileView({ supabase, viewerId, username, notify, onBack, onOpenChat }: {
-  supabase: SupabaseClient; viewerId: string; username: string; notify: Notify; onBack: () => void; onOpenChat: () => void;
+export default function PublicProfileView({ supabase, viewerId, username, notify, onBack, onOpenChat, onlineUserIds = [] }: {
+  supabase: SupabaseClient; viewerId: string; username: string; notify: Notify; onBack: () => void; onOpenChat: () => void; onlineUserIds?: string[];
 }) {
   const [person, setPerson] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +93,7 @@ export default function PublicProfileView({ supabase, viewerId, username, notify
       <div className="public-profile-cover" style={cover ? { backgroundImage: 'linear-gradient(110deg,rgba(4,10,20,.18),rgba(4,10,20,.72)),url("' + cover + '")' } : undefined}><span> KAVEH MEMBER IDENTITY </span></div>
       <div className="public-profile-heading">
         <Avatar profile={{ display_name: person.display_name ?? 'کاربر کاوه', avatar_url: avatar }} size="lg"/>
-        <div className="public-profile-name"><h2>{person.display_name || 'کاربر کاوه'} <BadgeCheck size={17}/></h2><span dir="ltr">@{person.username}</span></div>
+        <div className="public-profile-name"><h2>{person.display_name || 'کاربر کاوه'} <BadgeCheck size={17}/></h2><span dir="ltr">@{person.username}</span><small style={{display:'inline-flex',alignItems:'center',gap:6,marginTop:6,color:onlineUserIds.includes(person.id)?'#22c55e':'#94a3b8'}}><i style={{width:7,height:7,borderRadius:'50%',background:onlineUserIds.includes(person.id)?'#22c55e':'#94a3b8'}}/>{onlineUserIds.includes(person.id)?'آنلاین':'آفلاین'}</small></div>
         <div className="public-profile-actions">
           {!isOwner && <button className="button button-primary" disabled={busy} onClick={() => void follow()}>{following ? <><UserCheck size={16}/> لغو دنبال‌کردن</> : pending ? 'لغو درخواست' : <><UserPlus size={16}/> درخواست دنبال‌کردن</>}</button>}
           {!isOwner && <button className="button button-quiet" onClick={onOpenChat}><MessageCircle size={16}/> پیام</button>}
