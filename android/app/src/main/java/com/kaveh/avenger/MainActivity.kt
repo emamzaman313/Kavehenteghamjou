@@ -8,6 +8,8 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +23,7 @@ import com.kaveh.avenger.ui.screens.ConfigurationRequiredScreen
 import com.kaveh.avenger.ui.screens.EmailOtpScreen
 import com.kaveh.avenger.ui.screens.LoadingScreen
 import com.kaveh.avenger.ui.theme.KavehTheme
+import com.kaveh.avenger.ui.progress.OperationProgressHost
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.collect
@@ -52,6 +55,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun KavehRoot() {
     KavehTheme {
+        Box(modifier = Modifier.fillMaxSize()) {
         if (!SupabaseClientProvider.isConfigured) {
             ConfigurationRequiredScreen()
         } else {
@@ -90,6 +94,8 @@ private fun KavehRoot() {
                     initialMessage = "بازیابی نشست انجام نشد. دوباره کد ورود را درخواست کنید."
                 )
             }
+        }
+        OperationProgressHost(modifier = Modifier.align(Alignment.TopCenter))
         }
     }
 }
