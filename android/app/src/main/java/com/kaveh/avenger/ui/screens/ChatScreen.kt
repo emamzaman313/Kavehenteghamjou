@@ -63,6 +63,7 @@ import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.storage.storage
 import com.kaveh.avenger.files.FileUploadRepository
+import com.kaveh.avenger.files.verifyFileIntegrity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collect
@@ -139,7 +140,8 @@ private data class FileAssetRow(
     @SerialName("object_path") val objectPath: String,
     @SerialName("original_name") val originalName: String,
     @SerialName("mime_type") val mimeType: String? = null,
-    @SerialName("byte_size") val byteSize: Long
+    @SerialName("byte_size") val byteSize: Long,
+    @SerialName("sha256_hex") val sha256Hex: String? = null
 )
 
 @Serializable
@@ -503,7 +505,11 @@ fun ChatScreen(
         downloadingFilePath = file.objectPath
         errorText = null
         try {
-            pendingDownloadBytes = supabase.storage.from(file.bucketId).downloadAuthenticated(file.objectPath)
+            val downloadedBytes = supabase.storage.from(file.bucketId).downloadAuthenticated(file.objectPath)
+            require(verifyFileIntegrity(downloadedBytes, file.byteSize, file.sha256Hex.orEmpty())) {
+                "سلامت پیوست دریافتی تأیید نشد؛ حجم یا اثرانگشت فایل با اطلاعات ثبت‌شده مطابقت ندارد."
+            }
+            pendingDownloadBytes = downloadedBytes
             saveFileLauncher.launch(file.originalName)
         } catch (exception: Exception) {
             errorText = exception.message ?: "دریافت فایل ناموفق بود."
