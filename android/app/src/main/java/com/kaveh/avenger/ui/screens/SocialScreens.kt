@@ -1661,6 +1661,11 @@ private data class CommunityConversationInsert(
 private data class CommunityConversationIdRow(val id: String)
 
 @Serializable
+private data class CommunitySpaceMetadataRow(
+    @SerialName("conversation_id") val conversationId: String
+)
+
+@Serializable
 private data class CommunityOwnerMemberInsert(
     @SerialName("conversation_id") val conversationId: String,
     @SerialName("user_id") val userId: String,
@@ -1765,6 +1770,8 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
         creatingSpace = true
         error = null
         var createdConversationId: String? = null
+        var spaceCommitted = false
+        var rollbackSafe = true
         try {
             OperationProgressController.run(if (createSpaceType == "group") "ساخت گروه جدید" else "ساخت کانال عمومی") { progress ->
                 progress.advance(14, "اعتبارسنجی نام، توضیحات و نوع فضا")
@@ -1777,15 +1784,37 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
                     CommunityOwnerMemberInsert(conversation.id, userId)
                 )
                 progress.advance(64, "ثبت مالک و دسترسی سازنده")
-                if (createSpaceType == "group") {
-                    supabase.postgrest["group_spaces"].insert(
-                        GroupSpaceInsert(conversation.id, userId, description, createSpaceApproval)
-                    )
-                } else {
-                    supabase.postgrest["channel_spaces"].insert(
-                        ChannelSpaceInsert(conversation.id, userId, description)
-                    )
+                try {
+                    if (createSpaceType == "group") {
+                        supabase.postgrest["group_spaces"].insert(
+                            GroupSpaceInsert(conversation.id, userId, description, createSpaceApproval)
+                        )
+                    } else {
+                        supabase.postgrest["channel_spaces"].insert(
+                            ChannelSpaceInsert(conversation.id, userId, description)
+                        )
+                    }
+                } catch (insertError: Exception) {
+                    val savedMetadata = try {
+                        if (createSpaceType == "group") {
+                            supabase.postgrest["group_spaces"].select {
+                                filter { eq("conversation_id", conversation.id) }
+                            }.decodeList<CommunitySpaceMetadataRow>().isNotEmpty()
+                        } else {
+                            supabase.postgrest["channel_spaces"].select {
+                                filter { eq("conversation_id", conversation.id) }
+                            }.decodeList<CommunitySpaceMetadataRow>().isNotEmpty()
+                        }
+                    } catch (verificationError: Exception) {
+                        rollbackSafe = false
+                        throw IllegalStateException(
+                            "نتیجه ساخت گروه یا کانال نامشخص است؛ برای جلوگیری از حذف فضای احتمالا ساخته‌شده، پاک‌سازی خودکار متوقف شد.",
+                            verificationError
+                        )
+                    }
+                    if (!savedMetadata) throw insertError
                 }
+                spaceCommitted = true
                 progress.advance(92, "تنظیمات و عضویت مالک ثبت شد")
             }
             showCreateSpace = false
@@ -1794,10 +1823,12 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             createSpaceApproval = false
             refresh()
         } catch (exception: Exception) {
-            createdConversationId?.let { conversationId ->
-                runCatching {
-                    supabase.postgrest["conversations"].delete {
-                        filter { eq("id", conversationId); eq("created_by", userId) }
+            if (rollbackSafe && !spaceCommitted) {
+                createdConversationId?.let { conversationId ->
+                    runCatching {
+                        supabase.postgrest["conversations"].delete {
+                            filter { eq("id", conversationId); eq("created_by", userId) }
+                        }
                     }
                 }
             }
