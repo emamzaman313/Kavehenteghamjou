@@ -23,6 +23,7 @@ import AdminAccessCodePanel from '@/features/admin/AdminAccessCodePanel';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
 import KavehExperienceLayer from '@/components/KavehExperienceLayer';
 import KavehCommandDock from '@/components/KavehCommandDock';
+import KavehPageStage from '@/components/KavehPageStage';
 import SupportCenter from '@/features/support/SupportCenter';
 import KavehWorldView from '@/features/world/KavehWorldView';
 
@@ -241,6 +242,7 @@ function KavehAppContent() {
         <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title="تغییر تم"><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       <div className="content-scroll">
+        <KavehPageStage activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
         {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'support' && <SupportCenter supabase={supabase} userId={session.user.id} notify={notify} staff={isSupportStaff}/>}

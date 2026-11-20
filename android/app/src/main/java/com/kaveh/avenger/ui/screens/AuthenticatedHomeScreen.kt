@@ -274,7 +274,17 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         ) {
             Spacer(Modifier.height(14.dp))
             when (selectedTab) {
-                MainTab.Home -> HomeOverview(email, rankNames, onNavigate = { selectedTab = it })
+                MainTab.Home -> HomeOverview(email, rankNames, onNavigate = { next ->
+                     val required = when (next) {
+                         MainTab.Chats, MainTab.Communities -> "chat"
+                         MainTab.Publish -> "posts"
+                         MainTab.Explore -> "social_discovery"
+                         MainTab.Reels -> "reels"
+                         MainTab.Media -> "uploads"
+                         else -> null
+                     }
+                     if (required == null || featureOn(required)) selectedTab = next
+                 })
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
