@@ -53,13 +53,17 @@ export default function PublicProfileView({ supabase, viewerId, username, notify
   const follow = async () => {
     if (!person || busy || person.id === viewerId) return;
     setBusy(true);
-    const status = person.profile_visibility === 'followers' ? 'pending' : 'accepted';
-    const { error } = await supabase.from('follows').upsert({ follower_id: viewerId, following_id: person.id, status }, { onConflict: 'follower_id,following_id' });
+    const wasFollowing = following;
+    const wasPending = pending;
+    const result = wasFollowing || wasPending
+      ? await supabase.from('follows').delete().eq('follower_id', viewerId).eq('following_id', person.id)
+      : await supabase.from('follows').insert({ follower_id: viewerId, following_id: person.id, status: 'pending' });
     setBusy(false);
-    if (error) { notify('دنبال‌کردن کاربر انجام نشد: ' + error.message, 'error'); return; }
-    setFollowing(status === 'accepted'); setPending(status === 'pending');
-    if (status === 'accepted') setFollowers(value => value + 1);
-    notify(status === 'pending' ? 'درخواست دنبال‌کردن ارسال شد.' : 'این کاربر را دنبال می‌کنی.');
+    if (result.error) { notify('تغییر وضعیت دنبال‌کردن انجام نشد: ' + result.error.message, 'error'); return; }
+    setFollowing(false);
+    setPending(!wasFollowing && !wasPending);
+    if (wasFollowing) setFollowers(value => Math.max(0, value - 1));
+    notify(wasFollowing || wasPending ? 'ارتباط یا درخواست دنبال‌کردن لغو شد.' : 'درخواست دنبال‌کردن ارسال شد.');
   };
 
   const share = async () => {
@@ -86,10 +90,10 @@ export default function PublicProfileView({ supabase, viewerId, username, notify
     <section className="public-profile-card" style={{ '--public-accent': accent, '--public-surface': theme.surface ?? '#101b2c', '--public-text': theme.text ?? '#f4f1eb' } as React.CSSProperties}>
       <div className="public-profile-cover" style={cover ? { backgroundImage: 'linear-gradient(110deg,rgba(4,10,20,.18),rgba(4,10,20,.72)),url("' + cover + '")' } : undefined}><span> KAVEH MEMBER IDENTITY </span></div>
       <div className="public-profile-heading">
-        <Avatar profile={{ display_name: person.display_name ?? 'کاربر کاوه', avatar_url: avatar }} size="xl"/>
+        <Avatar profile={{ display_name: person.display_name ?? 'کاربر کاوه', avatar_url: avatar }} size="lg"/>
         <div className="public-profile-name"><h2>{person.display_name || 'کاربر کاوه'} <BadgeCheck size={17}/></h2><span dir="ltr">@{person.username}</span></div>
         <div className="public-profile-actions">
-          {!isOwner && <button className="button button-primary" disabled={busy || following || pending} onClick={() => void follow()}>{following ? <><UserCheck size={16}/> دنبال می‌کنی</> : pending ? 'در انتظار تأیید' : <><UserPlus size={16}/> دنبال‌کردن</>}</button>}
+          {!isOwner && <button className="button button-primary" disabled={busy} onClick={() => void follow()}>{following ? <><UserCheck size={16}/> لغو دنبال‌کردن</> : pending ? 'لغو درخواست' : <><UserPlus size={16}/> درخواست دنبال‌کردن</>}</button>}
           {!isOwner && <button className="button button-quiet" onClick={onOpenChat}><MessageCircle size={16}/> پیام</button>}
           <button className="button button-quiet" onClick={() => void share()}><Share2 size={16}/> اشتراک</button>
         </div>
