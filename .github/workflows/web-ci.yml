@@ -6,6 +6,7 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/web-ci.yml"
+      - "supabase/config.toml"
   pull_request:
     branches: [main]
     paths:
