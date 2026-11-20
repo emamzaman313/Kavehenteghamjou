@@ -31,7 +31,7 @@ export function OperationProgressProvider({ children }: { children: ReactNode })
   const runOperation = useCallback(async <T,>(title: string, task: (advance: Advance) => Promise<T>): Promise<T> => {
     const id = ++sequence.current;
     setOperations((current) => [...current.filter((item) => item.status === 'running'), {
-      id, title, detail: 'آماده‌سازی عملیات', progress: 6, status: 'running',
+      id, title, detail: 'آماده‌سازی عملیات', progress: 6, status: 'running' as const,
     }].slice(-4));
 
     const advance: Advance = (progress, detail) => {
