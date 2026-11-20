@@ -167,15 +167,9 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         setError('ایمیل یا رمز عبور صحیح نیست. اگر هنوز حساب نساخته‌اید، ثبت‌نام با کد ایمیل را انجام دهید.');
         return;
       }
-      if (data.user?.user_metadata?.account_password_ready !== true) {
-        const { error: metadataError } = await supabase.auth.updateUser({
-          data: { account_password_ready: true },
-        });
-        if (metadataError) {
-          setError('ورود انجام شد اما تکمیل وضعیت حساب ناموفق بود. دوباره تلاش کنید.');
-          return;
-        }
-      }
+      // Password sign-in already established a valid session. Do not add a
+      // second metadata write here: signup sets account_password_ready, and a
+      // failed follow-up mutation must never turn a successful login into an error.
       setNotice('ورود با موفقیت انجام شد.');
     } catch (cause) {
       setError(authErrorMessage(cause));
