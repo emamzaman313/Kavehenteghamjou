@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { filterSupportTickets } from '@/lib/support-ticket-filters';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 type Ticket = {
   id: string; conversation_id: string; requester_id: string; assigned_to: string | null;
@@ -38,6 +39,8 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   const [reply,setReply] = useState('');
   const [creating,setCreating] = useState(false);
   const [showNew,setShowNew] = useState(false);
+
+  const { runOperation } = useOperationProgress();
 
   const filteredTickets = filterSupportTickets(tickets, {
     search: ticketSearch,
@@ -154,13 +157,21 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     event.preventDefault();
     if (creating) return;
     setCreating(true);
-    const {data,error} = await supabase.rpc('create_support_ticket',{p_subject:subject.trim(),p_category:category,p_body:body.trim()});
-    setCreating(false);
-    if (error || !data) { notify('ثبت درخواست ناموفق بود: '+(error?.message ?? 'خطای نامشخص'),'error'); return; }
-    setSubject(''); setBody(''); setCategory('general'); setShowNew(false);
-    await refresh();
-    setActive(data as string);
-    notify('درخواست پشتیبانی ثبت شد.');
+    try {
+      const ticketId = await runOperation('ثبت درخواست پشتیبانی', async advance => {
+        advance(18, 'اعتبارسنجی عنوان و شرح درخواست');
+        const {data,error} = await supabase.rpc('create_support_ticket',{p_subject:subject.trim(),p_category:category,p_body:body.trim()});
+        if (error || !data) throw error ?? new Error('کد پیگیری درخواست دریافت نشد.');
+        advance(78, 'درخواست در سرور ثبت شد؛ دریافت اطلاعات تازه');
+        return data as string;
+      });
+      setSubject(''); setBody(''); setCategory('general'); setShowNew(false);
+      await refresh();
+      setActive(ticketId);
+      notify('درخواست پشتیبانی ثبت شد.');
+    } catch (cause) {
+      notify('ثبت درخواست ناموفق بود: '+(cause instanceof Error?cause.message:'خطای نامشخص'),'error');
+    } finally { setCreating(false); }
   };
 
   const sendReply = async (event:FormEvent) => {
@@ -169,15 +180,23 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     const text = reply.trim();
     if (!ticket || !text || sending) return;
     setSending(true);
-    const {data:sentMessage,error} = await supabase.from('messages')
-      .insert({conversation_id:ticket.conversation_id,sender_id:userId,body:text,format:'plain'})
-      .select('id').single();
-    setSending(false);
-    if (error) { notify('ارسال پاسخ ناموفق بود: '+error.message,'error'); return; }
-    if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch',{body:{message_id:sentMessage.id}});
-    setReply('');
-    await loadMessages(ticket.id);
-    await refresh();
+    try {
+      const messageId = await runOperation('ارسال پاسخ پشتیبانی', async advance => {
+        advance(20, 'آماده‌سازی پاسخ');
+        const {data:sentMessage,error} = await supabase.from('messages')
+          .insert({conversation_id:ticket.conversation_id,sender_id:userId,body:text,format:'plain'})
+          .select('id').single();
+        if (error || !sentMessage?.id) throw error ?? new Error('شناسه پیام دریافت نشد.');
+        advance(78, 'پاسخ در گفتگو ثبت شد');
+        return sentMessage.id;
+      });
+      void supabase.functions.invoke('notification-dispatch',{body:{message_id:messageId}});
+      setReply('');
+      await loadMessages(ticket.id);
+      await refresh();
+    } catch (cause) {
+      notify('ارسال پاسخ ناموفق بود: '+(cause instanceof Error?cause.message:'خطای نامشخص'),'error');
+    } finally { setSending(false); }
   };
 
   const sendAttachment = async (file:File) => {
@@ -191,35 +210,55 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     let path:string|null=null;
     let assetId:string|null=null;
     let messageId:string|null=null;
+    let attachmentCommitted=false;
+    let rollbackSafe=true;
     try {
-const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).join('_').replace(/[\u0000-\u001f]/g,'_').slice(0,180) || 'attachment';
-      const bytes = await file.arrayBuffer();
-      const digest = await crypto.subtle.digest('SHA-256',bytes);
-      const hash = Array.from(new Uint8Array(digest)).map(value=>value.toString(16).padStart(2,'0')).join('');
-      path = userId+'/'+crypto.randomUUID();
-      const {error:uploadError} = await supabase.storage.from('user-files').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
-      if (uploadError) throw uploadError;
-      const {data:asset,error:assetError} = await supabase.from('file_assets').insert({
-        owner_id:userId,bucket_id:'user-files',object_path:path,original_name:safeName,
-        mime_type:file.type||null,byte_size:file.size,sha256_hex:hash,status:'ready'
-      }).select('id').single();
-      if (assetError || !asset) throw assetError ?? new Error('ثبت مشخصات فایل ناموفق بود.');
-      assetId = asset.id;
-      const {data:message,error:messageError} = await supabase.from('messages').insert({
-        conversation_id:ticket.conversation_id,sender_id:userId,body:'📎 '+safeName,format:'plain'
-      }).select('id').single();
-      if (messageError || !message) throw messageError ?? new Error('ثبت پیام پیوست ناموفق بود.');
-      messageId = message.id;
-      const {error:linkError} = await supabase.from('message_attachments').insert({message_id:message.id,file_asset_id:asset.id,display_order:0});
-      if (linkError) throw linkError;
-      void supabase.functions.invoke('notification-dispatch',{body:{message_id:message.id}});
-      await loadMessages(ticket.id);
-      await refresh();
+      await runOperation('ارسال پیوست پشتیبانی', async advance => {
+        const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).join('_').replace(/[\u0000-\u001f]/g,'_').slice(0,180) || 'attachment';
+        advance(12, 'محاسبه صحت فایل و آماده‌سازی اطلاعات');
+        const bytes = await file.arrayBuffer();
+        const digest = await crypto.subtle.digest('SHA-256',bytes);
+        const hash = Array.from(new Uint8Array(digest)).map(value=>value.toString(16).padStart(2,'0')).join('');
+        path = userId+'/'+crypto.randomUUID();
+        advance(28, 'بارگذاری فایل در فضای خصوصی');
+        const {error:uploadError} = await supabase.storage.from('user-files').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+        if (uploadError) throw uploadError;
+        advance(58, 'ثبت مشخصات و اثرانگشت فایل');
+        const {data:asset,error:assetError} = await supabase.from('file_assets').insert({
+          owner_id:userId,bucket_id:'user-files',object_path:path,original_name:safeName,
+          mime_type:file.type||null,byte_size:file.size,sha256_hex:hash,status:'ready'
+        }).select('id').single();
+        if (assetError || !asset) throw assetError ?? new Error('ثبت مشخصات فایل ناموفق بود.');
+        assetId = asset.id;
+        const {data:message,error:messageError} = await supabase.from('messages').insert({
+          conversation_id:ticket.conversation_id,sender_id:userId,body:'📎 '+safeName,format:'plain'
+        }).select('id').single();
+        if (messageError || !message) throw messageError ?? new Error('ثبت پیام پیوست ناموفق بود.');
+        messageId = message.id;
+        advance(78, 'پیام ایجاد شد؛ اتصال امن فایل به گفتگو');
+        const {error:linkError} = await supabase.from('message_attachments').insert({message_id:message.id,file_asset_id:asset.id,display_order:0});
+        if (linkError) {
+          const {data:existingLink,error:verifyError} = await supabase.from('message_attachments')
+            .select('message_id').eq('message_id',message.id).eq('file_asset_id',asset.id).maybeSingle();
+          if (verifyError) {
+            rollbackSafe = false;
+            throw new Error('نتیجه اتصال فایل نامشخص است؛ برای جلوگیری از حذف فایل احتمالا ارسال‌شده، پاک‌سازی خودکار انجام نشد.');
+          }
+          if (!existingLink) throw linkError;
+        }
+        attachmentCommitted = true;
+        advance(90, 'پیوست در گفتگو ثبت شد؛ همگام‌سازی نمایش');
+        void supabase.functions.invoke('notification-dispatch',{body:{message_id:message.id}});
+        await loadMessages(ticket.id);
+        await refresh();
+      });
       notify('فایل به گفتگوی پشتیبانی پیوست شد.');
     } catch (error) {
-      if (messageId) await supabase.from('messages').delete().eq('id',messageId);
-      if (assetId) await supabase.from('file_assets').delete().eq('id',assetId);
-      if (path) await supabase.storage.from('user-files').remove([path]);
+      if (!attachmentCommitted && rollbackSafe) {
+        if (messageId) await supabase.from('messages').delete().eq('id',messageId);
+        if (assetId) await supabase.from('file_assets').delete().eq('id',assetId);
+        if (path) await supabase.storage.from('user-files').remove([path]);
+      }
       notify('ارسال فایل ناموفق بود: '+(error instanceof Error?error.message:'خطای نامشخص'),'error');
     } finally { setUploading(false); }
   };
