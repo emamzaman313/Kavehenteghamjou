@@ -378,6 +378,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       <div className="auth-security-accordion">{[['چرا باید ایمیلم را تأیید کنم؟','برای اطمینان از اینکه ایمیل واقعاً متعلق به شماست و کمک به بازیابی حساب.'],['آیا هر بار کد می‌گیرم؟','خیر. پس از تأیید ایمیل و ساخت رمز، دفعات بعد با ایمیل و رمز عبور وارد می‌شوید.'],['رمز من کجا نگهداری می‌شود؟','رمز از طریق سرویس احراز هویت ثبت می‌شود و نباید به‌صورت متن ساده در پایگاه داده برنامه ذخیره شود.']].map(([question,answer],index)=><div className={openSecurityTip===index?'auth-tip open':'auth-tip'} key={question}><button type="button" onClick={()=>setOpenSecurityTip(current=>current===index?null:index)} aria-expanded={openSecurityTip===index}><span>{question}</span><span>⌄</span></button>{openSecurityTip===index&&<p>{answer}</p>}</div>)}</div>
       <p className="auth-foot"><ShieldCheck size={14}/> رمز عبور فقط به‌صورت هش‌شده در سرویس احراز هویت ذخیره می‌شود.</p>
     </section>
+    </div>
     <span className="auth-version">KAVEH AVENGER · WEB</span>
   </main>;
 }
