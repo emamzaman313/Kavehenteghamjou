@@ -9,6 +9,7 @@ import { authErrorMessage, getOAuthCallbackError } from '@/lib/auth-errors';
 import type { ToastTone } from '@/lib/ui-types';
 import type { Profile } from '@/lib/types';
 import { Avatar, BrandMark } from '@/components/ui';
+import { OperationProgressProvider } from '@/components/OperationProgress';
 import LoginScreen from '@/features/auth/LoginScreen';
 import FeedView from '@/features/feed/FeedView';
 import ChatView from '@/features/chat/ChatView';
@@ -42,7 +43,7 @@ function toastMessage(setToasts: (fn: (items: Toast[]) => Toast[]) => void, text
   window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 4200);
 }
 
-export default function KavehApp() {
+function KavehAppContent() {
   const supabase = useMemo(() => getSupabase(), []);
   const configured = Boolean(supabase);
   const [session, setSession] = useState<Session | null>(null);
@@ -253,4 +254,9 @@ export default function KavehApp() {
     </main>
     <div className="toast-stack" role="status" aria-live="polite" aria-atomic="false">{toasts.map((item) => <div key={item.id} className={`toast ${item.tone === 'error' ? 'toast-error' : ''}`}><span>{item.tone === 'error' ? <X size={16}/> : <Check size={16}/>}</span>{item.text}</div>)}</div>
   </div>;
+}
+
+
+export default function KavehApp() {
+  return <OperationProgressProvider><KavehAppContent/></OperationProgressProvider>;
 }
