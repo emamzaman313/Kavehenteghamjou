@@ -29,6 +29,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
   const [badges, setBadges] = useState<BadgeRow[]>([]);
   const [myBadges, setMyBadges] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [missionTitle, setMissionTitle] = useState('');
   const [missionDescription, setMissionDescription] = useState('');
@@ -53,6 +54,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setLoadErrors([]);
     try {
       const now = new Date().toISOString();
       const [missionResult, progressResult, eventResult, joinedResult, levelResult, rankResult, badgeResult, myBadgeResult] = await Promise.all([
@@ -75,6 +77,8 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
         ['نشان‌ها', badgeResult.error],
         ['نشان‌های شما', myBadgeResult.error],
       ] as const;
+      const failedSections = initialErrors.filter(([, error]) => error).map(([section, error]) => section + ': ' + (error?.message ?? 'خطای نامشخص'));
+      setLoadErrors(failedSections);
       const firstInitialError = initialErrors.find(([, error]) => error);
       if (firstInitialError) notify('بخشی از اطلاعات جهان کاوه بارگذاری نشد (' + firstInitialError[0] + '): ' + firstInitialError[1]?.message, 'error');
       if (!missionResult.error) setMissions((missionResult.data ?? []) as Mission[]);
@@ -104,7 +108,9 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
       if (!myBadgeResult.error) setMyBadges((myBadgeResult.data ?? []).map((row) => row.badge_code));
 
     } catch (cause) {
-      notify('همگام‌سازی جهان کاوه با خطای غیرمنتظره روبه‌رو شد: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      const message = 'همگام‌سازی جهان کاوه: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته');
+      setLoadErrors([message]);
+      notify(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -317,6 +323,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
       </div>
       {isAdmin && <div className="world-admin-note"><ShieldIcon/> کنترل مدیریتی فعال است؛ مأموریت، رویداد و نشان‌ها از همین بخش مدیریت می‌شوند.</div>}
       {loading ? <div className="world-loading"><span className="spinner"/> در حال همگام‌سازی جهان کاوه…</div> : <>
+        {loadErrors.length > 0 && <div role="alert" style={{display:'grid',gap:8,padding:14,border:'1px solid var(--danger, #c75b5b)',borderRadius:14,background:'var(--surface-2, rgba(180,70,70,.08))'}}><strong>بعضی اطلاعات جهان کاوه بارگذاری نشد</strong><span style={{fontSize:11,color:'var(--muted)'}}>داده‌های بخش‌های ناموفق را خالی فرض نکن؛ اتصال یا مجوز دسترسی باید بررسی شود.</span><ul style={{margin:0,paddingInlineStart:20,fontSize:11}}>{loadErrors.map((item)=><li key={item}>{item}</li>)}</ul><button type="button" className="button button-quiet" onClick={()=>void refresh()} style={{justifySelf:'start'}}><RefreshCw size={14}/> تلاش دوباره</button></div>}
         {tab === 'missions' && <div className="world-section-grid">
           <div className="world-list">{missions.length ? missions.map((mission) => {
             const state = progressMap.get(mission.id);
