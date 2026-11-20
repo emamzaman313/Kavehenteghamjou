@@ -606,6 +606,27 @@ html[data-kaveh-focus="on"] .kaveh-premium-shell .side-info-card:hover { opacity
   .kaveh-visual-trigger { inset-inline-end: 65px; inset-block-end: 78px; }
   .kaveh-visual-panel { inset-inline-end: 9px; inset-block-end: 128px; }
 }
+
+/* Touch-device performance profile: retain the ambient look without continuously
+   repainting huge blurred layers while the user scrolls or changes theme. */
+@media (hover: none) and (pointer: coarse) {
+  .kaveh-pointer-glow { display: none !important; }
+  .kaveh-ambient-orb {
+    animation: none !important;
+    filter: blur(38px);
+    opacity: .055;
+    transform: none;
+    will-change: auto;
+  }
+  .kaveh-premium-shell .content-scroll { animation: none !important; }
+  .kaveh-premium-shell .mobile-nav {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .kaveh-command-trigger-pulse,
+  .kaveh-stage-orbit-one,
+  .kaveh-stage-orbit-two { animation: none !important; }
+}
 @media (prefers-reduced-motion: reduce) {
   .kaveh-visual-panel { animation: none !important; }
   .kaveh-visual-trigger:hover { transform: none; }
