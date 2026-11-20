@@ -237,7 +237,7 @@ fun ChatScreen(
                         exact("deleted_at", null)
                         membership.lastReadAt?.let { gt("created_at", it) }
                     }
-                }.countOrNull() ?: 0
+                }.countOrNull()?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: 0
 
                 ChatConversation(
                     id = conversation.id,
