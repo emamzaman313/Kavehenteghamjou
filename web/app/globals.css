@@ -2461,3 +2461,52 @@ html[data-kaveh-density="compact"] .settings-mini-preview-card { padding:8px; }
  .profile-customization{padding:13px;border-radius:16px}
 }
 @media(prefers-reduced-motion:reduce){.profile-cover:before,.profile-cover-glow,.profile-avatar-edit:before,.profile-meter-orbit,.rank-emblem{animation:none!important}.profile-meter-track i{transition:none!important}}
+
+
+/* Public member identity pages */
+.public-profile-page{max-width:980px;margin-inline:auto}
+.public-profile-back{align-self:flex-start}
+.public-profile-card{--public-accent:#168bff;--public-surface:#101b2c;--public-text:#f4f1eb;overflow:hidden;border:1px solid color-mix(in srgb,var(--public-accent) 35%,var(--line));border-radius:25px;background:var(--surface);box-shadow:0 22px 65px rgba(0,0,0,.13)}
+.public-profile-cover{position:relative;display:flex;align-items:flex-start;justify-content:flex-end;height:clamp(170px,25vw,260px);padding:20px;background:radial-gradient(ellipse at 20% 10%,color-mix(in srgb,var(--public-accent) 48%,transparent),transparent 45%),linear-gradient(125deg,#061426,#163a5b 55%,#0b1728);background-size:cover;background-position:center}
+.public-profile-cover:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,8,16,.08),rgba(2,8,16,.48))}
+.public-profile-cover span{position:relative;z-index:1;color:#e9f5ff;font-size:9px;letter-spacing:2px;font-weight:800;text-shadow:0 2px 10px #000}
+.public-profile-heading{display:flex;align-items:center;gap:16px;padding:0 26px;margin-top:-43px;position:relative;z-index:2;flex-wrap:wrap}
+.public-profile-heading>.avatar{width:92px;height:92px;border:5px solid var(--surface);box-shadow:0 10px 30px rgba(0,0,0,.24)}
+.public-profile-name{display:grid;gap:5px;min-width:140px;padding-top:37px}
+.public-profile-name h2{display:flex;align-items:center;gap:7px;margin:0;color:var(--text);font-size:clamp(18px,2.4vw,25px)}
+.public-profile-name h2 svg{color:var(--public-accent)}
+.public-profile-name>span{font-size:11px;color:var(--muted)}
+.public-profile-actions{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto;padding-top:36px}
+.public-profile-actions .button{display:inline-flex;align-items:center;gap:7px}
+.public-profile-stats{display:grid;grid-template-columns:repeat(3,1fr);margin:22px 26px 0;padding:16px 8px;border-block:1px solid var(--line)}
+.public-profile-stats>div{display:grid;justify-items:center;gap:4px}
+.public-profile-stats strong{font-size:21px;color:var(--text);font-weight:850}
+.public-profile-stats span{font-size:10px;color:var(--muted)}
+.public-profile-details{padding:23px 27px 27px;color:var(--text)}
+.public-profile-details>p{margin:0 0 17px;white-space:pre-wrap;line-height:2;font-size:13px}
+.public-profile-badges{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.public-profile-badges span{padding:8px 11px;border:1px solid color-mix(in srgb,var(--public-accent) 30%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--public-accent) 9%,var(--surface));font-size:10px;color:var(--text)}
+.public-profile-music{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--surface-2)}
+.public-profile-music>svg{color:var(--public-accent)}
+.public-profile-music>div{display:grid;gap:3px;min-width:110px}
+.public-profile-music strong{font-size:11px}.public-profile-music small{font-size:9px;color:var(--muted)}
+.public-profile-music audio{width:min(100%,330px);height:36px;margin-inline-start:auto}
+.public-profile-locked{display:grid;justify-items:center;text-align:center;gap:9px;padding:45px 25px;color:var(--muted)}
+.public-profile-locked>svg{color:var(--public-accent)}
+.public-profile-locked h3{margin:0;color:var(--text);font-size:17px}
+.public-profile-locked p{max-width:470px;margin:0;font-size:11px;line-height:1.9}
+.profile-share-button{display:inline-flex;align-items:center;gap:6px}
+@media(max-width:650px){
+ .public-profile-card{border-radius:18px}
+ .public-profile-cover{height:165px}
+ .public-profile-heading{padding:0 14px;gap:10px;margin-top:-35px}
+ .public-profile-heading>.avatar{width:72px;height:72px}
+ .public-profile-name{padding-top:29px;min-width:0}
+ .public-profile-name h2{font-size:16px}
+ .public-profile-actions{width:100%;margin:4px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr}
+ .public-profile-actions .button:first-child{grid-column:1/-1}
+ .public-profile-stats{margin:17px 14px 0;padding:13px 4px}
+ .public-profile-stats strong{font-size:18px}
+ .public-profile-details{padding:17px 15px 20px}
+ .public-profile-music audio{width:100%;margin:6px 0 0}
+}
