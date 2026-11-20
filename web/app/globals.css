@@ -2397,3 +2397,67 @@ html[data-kaveh-density="compact"] .settings-mini-preview-card { padding:8px; }
  .reel-stage-topline{font-size:8px}
 }
 @media(prefers-reduced-motion:reduce){.reel-card,.reel-mode-toolbar button{transition:none!important}}
+
+
+/* Kaveh identity studio — profile presentation */
+.profile-main-card{position:relative;overflow:hidden;border-radius:26px;background:radial-gradient(ellipse at 100% 0,color-mix(in srgb,var(--accent) 8%,transparent),transparent 42%),var(--surface);box-shadow:0 22px 58px rgba(0,0,0,.11)}
+.profile-cover{position:relative;isolation:isolate;height:230px;overflow:hidden;background:radial-gradient(ellipse at 78% 22%,rgba(82,177,255,.32),transparent 34%),radial-gradient(ellipse at 20% 90%,rgba(224,177,109,.16),transparent 42%),linear-gradient(120deg,#071626,#173a5c 55%,#091729);background-size:cover;background-position:center}
+.profile-cover:before,.profile-live-cover:before{content:"";position:absolute;inset:-40%;z-index:0;pointer-events:none;background:linear-gradient(110deg,transparent 38%,rgba(255,255,255,.11) 49%,transparent 60%);transform:translateX(-55%) rotate(-8deg);animation:profile-sheen 9s ease-in-out infinite}
+.profile-cover:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(4,12,22,.03),rgba(4,12,22,.48))}
+.profile-cover-glow{position:absolute;z-index:1;width:260px;height:260px;inset-inline-start:12%;top:-150px;border:1px solid rgba(157,211,255,.25);border-radius:50%;box-shadow:0 0 0 28px rgba(111,184,245,.035),0 0 0 58px rgba(111,184,245,.025),0 0 65px rgba(63,151,222,.2);animation:profile-orbit 24s linear infinite}
+.profile-cover-edit{z-index:2;backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.25);background:rgba(4,13,24,.5);border-radius:12px;padding:9px 13px;font-size:10px;transition:transform .2s,background .2s}
+.profile-cover-edit:hover{transform:translateY(-2px);background:rgba(4,13,24,.78)}
+.profile-identity{position:relative;z-index:3;margin-top:-54px;padding:0 26px;gap:15px;align-items:flex-end}
+.profile-avatar-edit{position:relative;isolation:isolate;border-radius:50%;padding:5px;background:linear-gradient(145deg,#9bd9ff,var(--accent),#d8b77d);box-shadow:0 0 0 5px color-mix(in srgb,var(--surface) 82%,transparent),0 12px 35px rgba(0,0,0,.26);transition:transform .3s cubic-bezier(.2,.9,.25,1.25),box-shadow .3s}
+.profile-avatar-edit:before{content:"";position:absolute;inset:-7px;border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:50%;animation:profile-ring 3.8s ease-in-out infinite;pointer-events:none}
+.profile-avatar-edit:hover{transform:translateY(-4px) scale(1.035);box-shadow:0 0 0 6px color-mix(in srgb,var(--surface) 82%,transparent),0 18px 42px rgba(0,0,0,.3)}
+.profile-identity>div{padding-bottom:8px}
+.profile-identity h2{font-size:clamp(18px,2vw,25px);letter-spacing:-.5px}
+.profile-identity>div>span{font-size:11px;color:var(--muted)}
+.profile-identity .verified-pill{margin-inline-start:auto;margin-bottom:10px;padding:7px 11px;border-radius:99px;border:1px solid color-mix(in srgb,var(--accent) 27%,var(--line));background:color-mix(in srgb,var(--accent) 9%,var(--surface));box-shadow:0 5px 18px color-mix(in srgb,var(--accent) 8%,transparent)}
+.profile-identity-meter{position:relative;overflow:hidden;margin:20px 24px 0;padding:17px 18px 14px;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--line));border-radius:19px;background:radial-gradient(ellipse at 100% 0,color-mix(in srgb,var(--accent) 12%,transparent),transparent 48%),linear-gradient(140deg,var(--surface-2),var(--surface));box-shadow:inset 0 1px rgba(255,255,255,.04)}
+.profile-meter-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.profile-meter-heading>div{display:grid;gap:4px}
+.profile-meter-heading>div>span{font-size:10px;color:var(--muted)}
+.profile-meter-heading strong{font-size:23px;color:var(--text);font-weight:850}
+.profile-meter-heading strong small{font-size:10px;font-weight:500;color:var(--muted)}
+.profile-meter-orbit{display:grid;place-items:center;width:39px;height:39px;border-radius:13px;color:var(--accent-strong);background:color-mix(in srgb,var(--accent) 13%,var(--surface));box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 5%,transparent);animation:profile-float 3.2s ease-in-out infinite}
+.profile-meter-track{height:8px;margin:13px 0 12px;overflow:hidden;border-radius:99px;background:color-mix(in srgb,var(--line) 75%,transparent)}
+.profile-meter-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#9ad8ff,#e0bd82);box-shadow:0 0 16px color-mix(in srgb,var(--accent) 45%,transparent);transition:width .65s cubic-bezier(.2,.8,.2,1)}
+.profile-meter-checks{display:flex;flex-wrap:wrap;gap:7px}
+.profile-meter-checks span{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:color-mix(in srgb,var(--surface) 82%,transparent);color:var(--muted);font-size:9px;transition:all .2s ease}
+.profile-meter-checks span i{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;font-size:9px;font-style:normal;background:var(--surface-2)}
+.profile-meter-checks span.is-done{border-color:color-mix(in srgb,#4fc99a 35%,var(--line));color:var(--text);background:color-mix(in srgb,#4fc99a 7%,var(--surface))}
+.profile-meter-checks span.is-done i{color:#4fc99a;background:color-mix(in srgb,#4fc99a 15%,var(--surface))}
+.profile-identity-meter>p{margin:11px 0 0;color:var(--muted);font-size:9px;line-height:1.8}
+.profile-form{padding:23px 24px 25px}
+.profile-customization{border-radius:20px;padding:18px;border:1px solid color-mix(in srgb,var(--accent) 18%,var(--line));background:linear-gradient(145deg,color-mix(in srgb,var(--surface-2) 78%,var(--accent) 3%),var(--surface))}
+.profile-live-preview{transform:translateZ(0);transition:transform .3s ease,box-shadow .3s ease}
+.profile-live-preview:hover{transform:translateY(-3px);box-shadow:0 22px 50px rgba(0,0,0,.2)}
+.profile-live-cover{isolation:isolate}
+.profile-live-body{position:relative}
+.profile-live-body>.avatar{box-shadow:0 0 0 4px var(--profile-surface),0 8px 22px rgba(0,0,0,.25)}
+.profile-live-badges span{transition:transform .2s ease,background .2s ease}
+.profile-live-badges span:hover{transform:translateY(-2px)}
+.rank-card{position:relative;overflow:hidden;border:1px solid rgba(130,190,238,.22);border-radius:22px;background:radial-gradient(ellipse at 50% 0,rgba(75,160,226,.2),transparent 58%),linear-gradient(145deg,#183653,#0b192b);box-shadow:0 18px 42px rgba(0,0,0,.17)}
+.rank-card:after{content:"";position:absolute;inset:auto -30px -85px;width:190px;height:190px;border:1px solid rgba(139,203,250,.14);border-radius:50%;box-shadow:0 0 0 22px rgba(139,203,250,.035),0 0 0 46px rgba(139,203,250,.025);pointer-events:none}
+.rank-emblem{box-shadow:0 0 0 9px rgba(115,190,247,.06),0 0 35px rgba(76,160,226,.2);animation:profile-float 4s ease-in-out infinite}
+.badge-card{border-radius:19px;border:1px solid var(--line);box-shadow:0 10px 27px rgba(0,0,0,.055)}
+@keyframes profile-sheen{0%,35%{transform:translateX(-65%) rotate(-8deg)}70%,100%{transform:translateX(65%) rotate(-8deg)}}
+@keyframes profile-orbit{to{transform:rotate(360deg)}}
+@keyframes profile-ring{0%,100%{transform:scale(.98);opacity:.55}50%{transform:scale(1.045);opacity:1}}
+@keyframes profile-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@media(max-width:700px){
+ .profile-cover{height:185px}
+ .profile-identity{padding:0 15px;margin-top:-42px;gap:10px;flex-wrap:wrap}
+ .profile-identity .avatar{width:70px;height:70px}
+ .profile-identity>div{padding-bottom:5px}
+ .profile-identity h2{font-size:17px}
+ .profile-identity .verified-pill{margin-inline-start:82px;margin-top:-4px;margin-bottom:0}
+ .profile-identity-meter{margin:17px 12px 0;padding:14px}
+ .profile-meter-checks{gap:5px}
+ .profile-meter-checks span{font-size:8px;padding:5px 7px}
+ .profile-form{padding:16px 13px 20px}
+ .profile-customization{padding:13px;border-radius:16px}
+}
+@media(prefers-reduced-motion:reduce){.profile-cover:before,.profile-cover-glow,.profile-avatar-edit:before,.profile-meter-orbit,.rank-emblem{animation:none!important}.profile-meter-track i{transition:none!important}}
