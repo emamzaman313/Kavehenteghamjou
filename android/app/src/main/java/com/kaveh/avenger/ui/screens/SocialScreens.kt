@@ -1978,7 +1978,10 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                             val uploadedPaths = mutableListOf<String>()
                             var postCreated = false
                             try {
+                                OperationProgressController.run("انتشار پست و رسانه‌ها") { progress ->
+                                progress.advance(12, "اعتبارسنجی متن و رسانه‌های انتخاب‌شده")
                                 require(body.isNotBlank() || selectedMedia.isNotEmpty()) { "متن یا رسانه‌ای برای انتشار انتخاب کن." }
+                                progress.advance(28, "ثبت پست اولیه در سرور")
                                 supabase.postgrest["posts"].insert(
                                     SocialPostInsert(
                                         id = postId,
@@ -1989,6 +1992,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                     )
                                 )
                                 postCreated = true
+                                progress.advance(38, "پست ثبت شد؛ آماده‌سازی پیوست‌ها")
                                 selectedMedia.forEachIndexed { index, uri ->
                                     val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
                                     require(mime.startsWith("image/") || mime.startsWith("video/")) { "فقط عکس و ویدئو قابل پیوست است." }
@@ -2019,6 +2023,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                         val progressMonitor = scope.launch {
                                             resumableUpload.stateFlow.collect { state ->
                                                 uploadProgress = state.progress
+                                                val mediaPercent = (state.progress.toDouble() * 100).toInt().coerceIn(0, 100)
+                                                val overall = 40 + (((index + state.progress.toDouble()) / selectedMedia.size.coerceAtLeast(1)) * 48).toInt()
+                                                progress.advance(overall, "انتقال رسانه ${index + 1} از ${selectedMedia.size} · ${mediaPercent.toPersianProgressDigits()}٪")
                                             }
                                         }
                                         try {
@@ -2028,6 +2035,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                         }
                                         uploadedPaths.add(path)
                                         val displayName = contentDisplayName(context, uri, "media-${index + 1}")
+                                        progress.advance(91, "رسانه منتقل شد؛ ثبت مشخصات پیوست")
                                         supabase.postgrest["post_attachments"].insert(
                                             SocialPostAttachmentInsert(postId, userId, "post-media", path, displayName, mime, tempFile.length())
                                         )
@@ -2038,7 +2046,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                 body = ""
                                 selectedMedia = emptyList()
                                 uploadProgress = null
+                                progress.advance(97, "پست و تمام رسانه‌ها با موفقیت منتشر شدند")
                                 message = "پست و رسانه‌های پیوست‌شده با موفقیت منتشر شدند."
+                                }
                             } catch (exception: Exception) {
                                 var cleanupFailed = false
                                 if (uploadedPaths.isNotEmpty()) {
@@ -2086,3 +2096,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
         }
     }
 }
+
+
+private fun Float.toPersianProgressDigits(): String =
+    (this * 100).toInt().toString().map { digit ->
+        if (digit in '0'..'9') ('۰'.code + (digit - '0')).toChar() else digit
+    }.joinToString("")
