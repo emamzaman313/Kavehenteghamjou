@@ -268,6 +268,58 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
         }
     }
 
+    suspend fun createCommunitySpace() {
+        val title = createSpaceTitle.trim()
+        val description = createSpaceDescription.trim()
+        if (title.length !in 3..60 || description.length > 500) {
+            error = "نام باید ۳ تا ۶۰ نویسه و توضیحات حداکثر ۵۰۰ نویسه باشد."
+            return
+        }
+        creatingSpace = true
+        error = null
+        var createdConversationId: String? = null
+        try {
+            OperationProgressController.run(if (createSpaceType == "group") "ساخت گروه جدید" else "ساخت کانال عمومی") { progress ->
+                progress.advance(14, "اعتبارسنجی نام، توضیحات و نوع فضا")
+                val conversation = supabase.postgrest["conversations"].insert(
+                    CommunityConversationInsert(createSpaceType, title, userId)
+                ) { select() }.decodeList<CommunityConversationIdRow>().single()
+                createdConversationId = conversation.id
+                progress.advance(40, "ساخت فضای گفتگو در سرور")
+                supabase.postgrest["conversation_members"].insert(
+                    CommunityOwnerMemberInsert(conversation.id, userId)
+                )
+                progress.advance(64, "ثبت مالک و دسترسی سازنده")
+                if (createSpaceType == "group") {
+                    supabase.postgrest["group_spaces"].insert(
+                        GroupSpaceInsert(conversation.id, userId, description, createSpaceApproval)
+                    )
+                } else {
+                    supabase.postgrest["channel_spaces"].insert(
+                        ChannelSpaceInsert(conversation.id, userId, description)
+                    )
+                }
+                progress.advance(92, "تنظیمات و عضویت مالک ثبت شد")
+            }
+            showCreateSpace = false
+            createSpaceTitle = ""
+            createSpaceDescription = ""
+            createSpaceApproval = false
+            refresh()
+        } catch (exception: Exception) {
+            createdConversationId?.let { conversationId ->
+                runCatching {
+                    supabase.postgrest["conversations"].delete {
+                        filter { eq("id", conversationId); eq("created_by", userId) }
+                    }
+                }
+            }
+            error = exception.message ?: "ساخت گروه یا کانال ناموفق بود."
+        } finally {
+            creatingSpace = false
+        }
+    }
+
     LaunchedEffect(userId) { refresh() }
 
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1643,6 +1695,39 @@ private data class CommunityRow(
 )
 
 @Serializable
+private data class CommunityConversationInsert(
+    val kind: String,
+    val title: String,
+    @SerialName("created_by") val createdBy: String
+)
+
+@Serializable
+private data class CommunityConversationIdRow(val id: String)
+
+@Serializable
+private data class CommunityOwnerMemberInsert(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("member_role") val memberRole: String = "owner"
+)
+
+@Serializable
+private data class GroupSpaceInsert(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("owner_id") val ownerId: String,
+    val description: String,
+    @SerialName("join_approval_required") val joinApprovalRequired: Boolean
+)
+
+@Serializable
+private data class ChannelSpaceInsert(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("owner_id") val ownerId: String,
+    val description: String,
+    val visibility: String = "public"
+)
+
+@Serializable
 private data class JoinCommunityArgs(
     @SerialName("p_conversation_id") val conversationId: String
 )
@@ -1677,6 +1762,12 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
     var error by remember { mutableStateOf<String?>(null) }
     var communityQuery by remember { mutableStateOf("") }
     var communityFilter by remember { mutableStateOf("all") }
+    var showCreateSpace by remember { mutableStateOf(false) }
+    var createSpaceType by remember { mutableStateOf("group") }
+    var createSpaceTitle by remember { mutableStateOf("") }
+    var createSpaceDescription by remember { mutableStateOf("") }
+    var createSpaceApproval by remember { mutableStateOf(false) }
+    var creatingSpace by remember { mutableStateOf(false) }
 
     suspend fun refresh() {
         loading = true
@@ -1715,6 +1806,54 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             IconButton(onClick = { scope.launch { refresh() } }) { Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی") }
         }
         Text("فضاهای موردعلاقه‌ات را پیدا کن و به جامعه‌های کاوه بپیوند.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Button(
+            onClick = { showCreateSpace = !showCreateSpace },
+            enabled = !creatingSpace,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (showCreateSpace) "بستن فرم ساخت فضا" else "ساخت گروه یا کانال جدید") }
+        if (showCreateSpace) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("ساخت فضای اجتماعی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (createSpaceType == "group") Button(onClick = { createSpaceType = "group" }, enabled = !creatingSpace) { Text("گروه") }
+                        else OutlinedButton(onClick = { createSpaceType = "group" }, enabled = !creatingSpace) { Text("گروه") }
+                        if (createSpaceType == "channel") Button(onClick = { createSpaceType = "channel" }, enabled = !creatingSpace) { Text("کانال عمومی") }
+                        else OutlinedButton(onClick = { createSpaceType = "channel" }, enabled = !creatingSpace) { Text("کانال عمومی") }
+                    }
+                    OutlinedTextField(
+                        value = createSpaceTitle,
+                        onValueChange = { createSpaceTitle = it.take(60) },
+                        label = { Text(if (createSpaceType == "group") "نام گروه" else "نام کانال") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !creatingSpace
+                    )
+                    OutlinedTextField(
+                        value = createSpaceDescription,
+                        onValueChange = { createSpaceDescription = it.take(500) },
+                        label = { Text("توضیحات (اختیاری)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        enabled = !creatingSpace
+                    )
+                    if (createSpaceType == "group") {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked = createSpaceApproval, onCheckedChange = { createSpaceApproval = it }, enabled = !creatingSpace)
+                            Text("عضویت با تأیید مدیر")
+                        }
+                    }
+                    Button(
+                        onClick = { scope.launch { createCommunitySpace() } },
+                        enabled = !creatingSpace && createSpaceTitle.trim().length in 3..60,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (creatingSpace) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                        else Text(if (createSpaceType == "group") "ساخت گروه" else "ساخت کانال")
+                    }
+                }
+            }
+        }
         OutlinedTextField(
             value = communityQuery,
             onValueChange = { communityQuery = it },
