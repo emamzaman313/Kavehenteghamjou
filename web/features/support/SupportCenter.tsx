@@ -247,11 +247,11 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
           if (!existingLink) throw linkError;
         }
         attachmentCommitted = true;
-        advance(90, 'پیوست در گفتگو ثبت شد؛ همگام‌سازی نمایش');
+        advance(90, 'پیوست در گفتگو ثبت شد');
         void supabase.functions.invoke('notification-dispatch',{body:{message_id:message.id}});
-        await loadMessages(ticket.id);
-        await refresh();
       });
+      await loadMessages(ticket.id);
+      await refresh();
       notify('فایل به گفتگوی پشتیبانی پیوست شد.');
     } catch (error) {
       if (!attachmentCommitted && rollbackSafe) {
@@ -259,7 +259,9 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
         if (assetId) await supabase.from('file_assets').delete().eq('id',assetId);
         if (path) await supabase.storage.from('user-files').remove([path]);
       }
-      notify('ارسال فایل ناموفق بود: '+(error instanceof Error?error.message:'خطای نامشخص'),'error');
+      notify(attachmentCommitted
+        ? 'پیوست در گفتگو ثبت شد، اما تازه‌سازی نمایش با مشکل روبه‌رو شد: '+(error instanceof Error?error.message:'خطای نامشخص')
+        : 'ارسال فایل ناموفق بود: '+(error instanceof Error?error.message:'خطای نامشخص'),'error');
     } finally { setUploading(false); }
   };
 
