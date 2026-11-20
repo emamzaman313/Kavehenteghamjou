@@ -1,5 +1,5 @@
 'use client';
-import { Check, Eye, LogOut, Palette, ShieldCheck, SunMoon, Zap } from 'lucide-react';
+import { Check, LogOut, Palette, ShieldCheck, SunMoon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
@@ -26,7 +26,7 @@ export default function SettingsView({ supabase, userId, dark, onTheme, notify, 
       if (savedDensity === 'compact' || savedDensity === 'comfortable') setDensity(savedDensity);
       setReducedMotion(savedMotion === 'true');
       if (['ice','teal','violet','amber','rose'].includes(savedAccent ?? '')) setAccentPalette(savedAccent as typeof accentPalette);
-    } finally { setPreferencesLoaded(true); }
+    } catch { /* Keep safe defaults when browser storage is unavailable. */ } finally { setPreferencesLoaded(true); }
   }, []);
   useEffect(() => {
     if (!preferencesLoaded) return;

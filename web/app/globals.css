@@ -1935,7 +1935,7 @@ html[data-kaveh-accent="rose"] .app-frame { --accent:#e87991; --accent-strong:#f
 html[data-kaveh-density="compact"] .content-scroll { padding-top:24px; padding-bottom:40px; }
 html[data-kaveh-density="compact"] .post-card { padding:13px; margin-bottom:9px; }
 html[data-kaveh-density="compact"] .composer-card { padding:13px; margin-bottom:17px; }
-html[data-kaveh-density="compact"] .side-info-card,.app-frame[data-kaveh-density="compact"] .settings-card { padding:12px; }
+html[data-kaveh-density="compact"] .side-info-card,html[data-kaveh-density="compact"] .settings-card { padding:12px; }
 html[data-kaveh-motion="reduced"] *,html[data-kaveh-motion="reduced"] *::before,html[data-kaveh-motion="reduced"] *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 .settings-appearance-lab { grid-column:1/-1; }
 .settings-accent-picker { display:flex; flex-wrap:wrap; gap:8px; margin:15px 0; }
