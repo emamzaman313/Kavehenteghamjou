@@ -36,10 +36,5 @@ class EmailOtpRepository(private val supabase: SupabaseClient) {
             this.email = email.trim().lowercase()
             this.password = password
         }
-        supabase.auth.updateUser {
-            data {
-                put("account_password_ready", true)
-            }
-        }
     }
 }
