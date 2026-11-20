@@ -212,11 +212,14 @@ fun SupportCenterScreen(
         try {
             OperationProgressController.run("به‌روزرسانی درخواست پشتیبانی") { progress ->
                 progress.advance(22, "بررسی مجوز و اطلاعات تغییر")
-                supabase.postgrest["support_tickets"].update({
-                    set(field, value)
-                }) {
-                    filter { eq("id", ticket.id) }
-                }
+                supabase.postgrest.rpc(
+                    "update_support_ticket",
+                    buildJsonObject {
+                        put("p_ticket_id", JsonPrimitive(ticket.id))
+                        if (field == "status") put("p_status", JsonPrimitive(value))
+                        else put("p_priority", JsonPrimitive(value))
+                    }
+                )
                 progress.advance(78, "تغییر در سرور ثبت شد؛ دریافت وضعیت تازه")
                 refreshTickets()
             }
@@ -305,11 +308,26 @@ fun SupportCenterScreen(
                     Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
                 }
             }
-            ChatScreen(
-                supabase = supabase,
-                userId = userId,
-                conversationIds = setOf(selected!!.conversationId)
-            )
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            if (selected!!.status == "closed") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(
+                        "این درخواست بسته شده است. برای ادامه گفتگو، ابتدا وضعیت آن را به حالت باز تغییر دهید.",
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                ChatScreen(
+                    supabase = supabase,
+                    userId = userId,
+                    conversationIds = setOf(selected!!.conversationId)
+                )
+            }
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -327,13 +345,11 @@ fun SupportCenterScreen(
                 }
             }
 
-            if (!staff) {
-                OutlinedButton(onClick = { showCreate = !showCreate }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (showCreate) "بستن فرم درخواست" else "ثبت درخواست جدید")
-                }
+            OutlinedButton(onClick = { showCreate = !showCreate }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (showCreate) "بستن فرم درخواست" else if (staff) "ثبت درخواست شخصی" else "ثبت درخواست جدید")
             }
 
-            if (showCreate && !staff) {
+            if (showCreate) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
