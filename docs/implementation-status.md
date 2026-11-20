@@ -163,3 +163,21 @@
 - Web CI run `44377507753` در Commit `aa99add7` شامل فرم ورود با کد، پنل مدیر، helper و تست‌های آن بود؛ TypeScript، lint، test و build موفق شدند.
 - Security run `44377908908` برای Commit `456ef9e5` موفق شد؛ Secret scanning و dependency audit موفق، Dependency review به‌علت اجرا نشدن روی Pull Request skipped بود.
 - کد مهمان و پنل مدیر در محیط واقعی با مرورگر/درخواست POST end-to-end آزمایش نشده‌اند؛ ابزار اجرای این نشست امکان درخواست مستقیم به Edge Function را نداد. Deployment Vercel و درخواست واقعی کاربر باید برای اثبات کامل ورود آزمایش شوند.
+
+
+---
+
+## شاخه توسعه محصول — به‌روزرسانی ۲۰ نوامبر ۲۰۲۶
+
+این بخش وضعیت جدید شاخه `feat/kaveh-premium-experience` را ثبت می‌کند؛ گزارش تاریخی `main` بالا را بازنویسی نمی‌کند.
+
+- آخرین Commit کد هنگام ثبت این بخش: `97117704f89b2683cb7caef567682252db3a9521`.
+- PR مرتبط: [#3](https://github.com/emamzaman313/Kavehenteghamjou/pull/3)، همچنان Draft/Open و Merge نشده است.
+- اصلاحات فاز ۱ روی OTP اندروید، unread count دقیق، rollback آپلود ناموفق، حریم فیلد رمز، حذف mutation غیرضروری پس از ورود و rollback پیوست ناقص چت در تاریخچه همین شاخه ثبت شده‌اند.
+- روی وب، ناوبری صفحه‌کلیدپذیر بهبود یافت: پیوند پرش به محتوای اصلی، landmarkهای نام‌گذاری‌شده برای ناوبری، `aria-current=page` برای مسیر فعال، فوکوس‌پذیری main و live region برای اعلان‌های درون‌برنامه‌ای.
+- لایه دسترس‌پذیری CSS مشترک اضافه شد: focus-visible، رعایت reduced-motion، حداقل هدف لمسی در موبایل و استایل forced-colors.
+- این تغییرات دسترس‌پذیری هنوز از نظر screen reader و صفحه‌کلید به‌صورت دستی آزمایش نشده‌اند؛ تا پایان CI فقط کد پیاده‌سازی‌شده محسوب می‌شوند.
+- CI برای Commit `19745dc5ce51b257b686e6f171d8cc549849ca91` موفق شد: Android CI، Web CI و Security checks هر سه success.
+- CI برای Commit فعلی `97117704f89b2683cb7caef567682252db3a9521` در زمان ثبت: Android در حال اجرا، Web در صف، Security در صف. نتیجه نهایی هنوز تأیید نشده است.
+- تست واقعی دو حساب مستقل، نصب روی دستگاه فیزیکی، Android Release signing و تست دستی دسترس‌پذیری هنوز انجام نشده‌اند.
+- هیچ Production deployment/promotion، Merge یا Production migration انجام نشده است.
