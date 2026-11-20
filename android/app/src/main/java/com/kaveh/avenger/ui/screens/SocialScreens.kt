@@ -1,5 +1,7 @@
 package com.kaveh.avenger.ui.screens
 
+import com.kaveh.avenger.ui.progress.OperationProgressController
+
 import android.net.Uri
 import android.content.Context
 import android.content.Intent
@@ -1094,11 +1096,14 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                     uploading = true
                     error = null
                     try {
+                        OperationProgressController.run("انتشار ریلز") { progress ->
+                        progress.advance(12, "اعتبارسنجی ویدئو و سقف حجم")
                         val mime = context.contentResolver.getType(uri) ?: "video/mp4"
                         require(mime.startsWith("video/")) { "فایل انتخاب‌شده ویدئو نیست." }
                         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                             ?: throw IllegalStateException("خواندن ویدئو ناموفق بود.")
                         require(bytes.size <= 50_000_000) { "حداکثر حجم ویدئو ۵۰ مگابایت است." }
+                        progress.advance(30, "خواندن رسانه و استخراج مدت و کاور")
                         var durationSeconds: Int? = null
                         var coverBytes: ByteArray? = null
                         val retriever = MediaMetadataRetriever()
@@ -1119,11 +1124,13 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                         val path = "$userId/reels/${UUID.randomUUID()}"
                         val uploadedPaths = mutableListOf<String>()
                         try {
+                            progress.advance(48, "انتقال ویدئو به مخزن رسانه")
                             supabase.storage.from("post-media").upload(path, bytes) {
                                 contentType = ContentType.parse(mime)
                                 upsert = false
                             }
                             uploadedPaths.add(path)
+                            progress.advance(74, "ویدئو منتقل شد؛ ذخیره کاور")
                             val coverPath = if (coverBytes != null) "$userId/reel-covers/${UUID.randomUUID()}.jpg" else null
                             if (coverPath != null && coverBytes != null) {
                                 supabase.storage.from("post-media").upload(coverPath, coverBytes!!) {
@@ -1132,9 +1139,11 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                                 }
                                 uploadedPaths.add(coverPath)
                             }
+                            progress.advance(88, "ثبت metadata ریلز")
                             supabase.postgrest["reels"].insert(
                                 ReelInsertRow(userId, caption.trim(), path, mime, "public", coverPath, durationSeconds)
                             )
+                            progress.advance(96, "ریلز در سرور منتشر شد")
                             selectedVideo = null
                             caption = ""
                             refresh()
@@ -1143,6 +1152,7 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                                 runCatching { supabase.storage["post-media"].delete(*uploadedPaths.toTypedArray()) }
                             }
                             throw exception
+                        }
                         }
                     } catch (exception: Exception) {
                         error = exception.message ?: "انتشار ریلز ناموفق بود."
@@ -1747,11 +1757,15 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
                                 scope.launch {
                                     busyId = request.id
                                     try {
-                                        supabase.postgrest["conversation_join_requests"].update({
-                                            set("status", "approved")
-                                            set("reviewed_at", java.time.Instant.now().toString())
-                                            set("reviewed_by", userId)
-                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                        OperationProgressController.run("تأیید درخواست عضویت") { progress ->
+                                            progress.advance(24, "بررسی مجوز مدیر و وضعیت درخواست")
+                                            supabase.postgrest["conversation_join_requests"].update({
+                                                set("status", "approved")
+                                                set("reviewed_at", java.time.Instant.now().toString())
+                                                set("reviewed_by", userId)
+                                            }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                            progress.advance(90, "عضویت کاربر در سرور تأیید شد")
+                                        }
                                         pendingRequests.removeAll { it.id == request.id }
                                         refresh()
                                     } catch (exception: Exception) { error = exception.message ?: "تأیید درخواست ناموفق بود." }
@@ -1762,11 +1776,15 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
                                 scope.launch {
                                     busyId = request.id
                                     try {
-                                        supabase.postgrest["conversation_join_requests"].update({
-                                            set("status", "rejected")
-                                            set("reviewed_at", java.time.Instant.now().toString())
-                                            set("reviewed_by", userId)
-                                        }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                        OperationProgressController.run("رد درخواست عضویت") { progress ->
+                                            progress.advance(24, "بررسی مجوز مدیر و وضعیت درخواست")
+                                            supabase.postgrest["conversation_join_requests"].update({
+                                                set("status", "rejected")
+                                                set("reviewed_at", java.time.Instant.now().toString())
+                                                set("reviewed_by", userId)
+                                            }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                            progress.advance(90, "رد درخواست در سرور ثبت شد")
+                                        }
                                         pendingRequests.removeAll { it.id == request.id }
                                     } catch (exception: Exception) { error = exception.message ?: "رد درخواست ناموفق بود." }
                                     finally { busyId = null }
@@ -1797,7 +1815,13 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
                                 scope.launch {
                                     busyId = community.conversationId
                                     try {
-                                        val result = supabase.postgrest.rpc("join_community", JoinCommunityArgs(community.conversationId)).decodeAs<String>()
+                                        val result = OperationProgressController.run("پیوستن به اجتماع",) { progress ->
+                                            progress.advance(20, "بررسی وضعیت عضویت و دسترسی اجتماع")
+                                            progress.advance(48, "ارسال درخواست عضویت به سرور")
+                                            val response = supabase.postgrest.rpc("join_community", JoinCommunityArgs(community.conversationId)).decodeAs<String>()
+                                            progress.advance(90, if (response == "pending") "درخواست عضویت برای مدیر ثبت شد" else "عضویت توسط سرور ثبت شد")
+                                            response
+                                        }
                                         if (result == "pending") pending.value = pending.value + community.conversationId
                                         else members.value = members.value + community.conversationId
                                     } catch (exception: Exception) {
