@@ -5,6 +5,7 @@ import { ArrowRight, BadgeCheck, MessageCircle, Music2, Share2, UserPlus, UserCh
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { Avatar, SectionHeader } from '@/components/ui';
+import RpgIcon from '@/components/RpgIcon';
 
 type PublicProfile = {
   id: string; display_name: string | null; username: string | null; bio: string | null;
@@ -25,6 +26,7 @@ export default function PublicProfileView({ supabase, viewerId, username, notify
   const [followingCount, setFollowingCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [isFollower, setIsFollower] = useState(false);
+  const [badgeIcons, setBadgeIcons] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let alive = true;
@@ -35,6 +37,10 @@ export default function PublicProfileView({ supabase, viewerId, username, notify
       if (error || !data) { setPerson(null); setLoading(false); return; }
       const target = data as PublicProfile;
       setPerson(target);
+      if (target.featured_badges?.length) {
+        const { data: definitions } = await supabase.from('badges').select('code,icon_key').in('code', target.featured_badges.slice(0, 6));
+        if (alive) setBadgeIcons(Object.fromEntries((definitions ?? []).map((badge) => [badge.code, badge.icon_key])));
+      }
       const [{ count: followerCount }, { count: followingTotal }, { data: relation }] = await Promise.all([
         supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', target.id).eq('status', 'accepted'),
         supabase.from('follows').select('following_id', { count: 'exact', head: true }).eq('follower_id', target.id).eq('status', 'accepted'),
@@ -103,7 +109,7 @@ export default function PublicProfileView({ supabase, viewerId, username, notify
       <div className="public-profile-stats"><div><strong>{followers.toLocaleString('fa-IR')}</strong><span>دنبال‌کننده</span></div><div><strong>{followingCount.toLocaleString('fa-IR')}</strong><span>دنبال‌شونده</span></div><div><strong>{person.featured_badges?.length ?? 0}</strong><span>نشان منتخب</span></div></div>
       {!canSeeDetails ? <div className="public-profile-locked"><Users size={28}/><h3>{privateLocked ? 'این پروفایل خصوصی است' : 'این پروفایل مخصوص دنبال‌کنندگان تأییدشده است'}</h3><p>{privateLocked ? 'صاحب حساب نمایش اطلاعات عمومی را محدود کرده است.' : 'برای دیدن معرفی، نشان‌ها و موسیقی پروفایل باید درخواست دنبال‌کردن پذیرفته شود.'}</p></div> : <div className="public-profile-details">
         <p>{person.bio || 'این عضو هنوز معرفی کوتاهی ثبت نکرده است.'}</p>
-        {person.featured_badges?.length ? <div className="public-profile-badges">{person.featured_badges.slice(0,6).map(code=><span key={code}>✦ {code}</span>)}</div> : null}
+        {person.featured_badges?.length ? <div className="public-profile-badges">{person.featured_badges.slice(0,6).map(code=><span key={code}><RpgIcon name={badgeIcons[code]} size={20}/> {code}</span>)}</div> : null}
         {person.profile_music_path ? <div className="public-profile-music"><Music2 size={17}/><div><strong>{person.profile_music_title || 'موسیقی پروفایل'}</strong><small>موسیقی منتخب این عضو</small></div><audio controls preload="none" src={supabase.storage.from('post-media').getPublicUrl(person.profile_music_path).data.publicUrl}/></div> : null}
       </div>}
     </section>
