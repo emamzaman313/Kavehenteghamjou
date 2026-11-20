@@ -69,13 +69,12 @@ try {
     .maybeSingle();
   if (membershipError) throw new Error(`Account B membership query failed: ${membershipError.message}`);
   assert.ok(membership, 'Account B cannot see its own conversation membership');
-  const { data: outsiderMembership, error: outsiderMembershipError } = await userC
+  const { data: outsiderMemberships, error: outsiderMembershipError } = await userC
     .from('conversation_members')
-    .select('conversation_id')
-    .eq('conversation_id', conversationId)
-    .eq('user_id', c.id)
-    .maybeSingle();
-  assert.ok(outsiderMembershipError || !outsiderMembership, 'Account C unexpectedly sees membership in a private conversation');
+    .select('user_id')
+    .eq('conversation_id', conversationId);
+  if (outsiderMembershipError) throw new Error(`Account C membership visibility query failed: ${outsiderMembershipError.message}`);
+  assert.deepEqual(outsiderMemberships, [], 'Account C unexpectedly sees one or more members of a private conversation');
   pass('private conversation created for A and B; unrelated Account C cannot see membership');
 
   let resolveRealtime;
