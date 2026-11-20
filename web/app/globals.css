@@ -1772,3 +1772,37 @@ button:disabled { cursor: not-allowed; }
 .vault-filters button { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 11px; border:1px solid var(--line); border-radius:999px; background:var(--surface-2); color:var(--muted); font:inherit; font-size:10px; cursor:pointer; }
 .vault-filters button.active { border-color:color-mix(in srgb,var(--accent) 55%,var(--line)); background:color-mix(in srgb,var(--accent) 13%,var(--surface)); color:var(--accent-strong); }
 @media(max-width:560px) { .vault-summary { grid-template-columns:1fr 1fr; } .vault-summary>div:last-child { grid-column:1/-1; } .vault-summary strong { font-size:16px; } .vault-filters { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); } .vault-filters button { justify-content:center; padding:0 5px; } }
+
+
+/* Shared accessibility layer: keyboard navigation, focus visibility and motion preferences */
+.skip-link {
+  position:fixed; z-index:3000; inset-block-start:12px; inset-inline-start:12px;
+  transform:translateY(-160%); padding:12px 16px; border-radius:12px;
+  background:var(--accent,#168bff); color:#07111f; font-weight:800;
+  box-shadow:0 8px 28px rgba(0,0,0,.28); transition:transform .16s ease;
+}
+.skip-link:focus { transform:translateY(0); outline:3px solid currentColor; outline-offset:3px; }
+:where(button,a,input,textarea,select,[tabindex]):focus-visible {
+  outline:2px solid var(--accent-strong,#80d8ff);
+  outline-offset:3px;
+}
+#main-content:focus { outline:none; }
+button,a,input,textarea,select { touch-action:manipulation; }
+@media (max-width:700px) {
+  .mobile-nav button { min-height:44px; }
+  .icon-button { min-width:40px; min-height:40px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after {
+    scroll-behavior:auto !important;
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+}
+@media (forced-colors:active) {
+  .nav-item.active,.community-filters button.active,.vault-filters button.active {
+    outline:1px solid Highlight;
+  }
+  .skip-link { border:1px solid ButtonText; }
+}
