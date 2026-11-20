@@ -1,6 +1,8 @@
 package com.kaveh.avenger.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -64,6 +73,9 @@ fun EmailOtpScreen(
     var resendSeconds by remember { mutableStateOf(0) }
     var showPassword by remember { mutableStateOf(false) }
     var showPasswordConfirm by remember { mutableStateOf(false) }
+    val passwordStrength = when { password.isEmpty() -> 0; password.length < 8 -> 1; password.length < 12 -> 2; else -> 3 }
+    val stageProgress = when { setupPasswordMode -> 1f; codeSent -> .66f; passwordLoginMode -> 0f; else -> .33f }
+    val passwordMatches = password.isNotEmpty() && password == passwordConfirm
 
     LaunchedEffect(resendSeconds) {
         if (resendSeconds > 0) {
@@ -172,7 +184,60 @@ fun EmailOtpScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text("کاوه انتقامجو", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .22f))
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(
+                            Brush.linearGradient(listOf(Color(0xFF102B49), Color(0xFF0A1729), Color(0xFF173B5C)))
+                        ).padding(vertical = 22.dp, horizontal = 18.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.background(Color(0xFF163D61), CircleShape).padding(13.dp), contentAlignment = Alignment.Center) {
+                                Text("✦", color = Color(0xFF9AD9FF), fontSize = 28.sp, fontWeight = FontWeight.Black)
+                            }
+                            Text("K A V E H", color = Color(0xFF9AD9FF), style = MaterialTheme.typography.labelMedium)
+                            Text("کاوه انتقامجو", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                            Text("فضای ارتباطی مستقل", color = Color(0xFFB8CDE3), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(17.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    listOf("ایمیل", "تأیید", "ساخت رمز").forEachIndexed { index, title ->
+                        val activeIndex = when { setupPasswordMode -> 2; codeSent -> 1; passwordLoginMode -> -1; else -> 0 }
+                        val active = activeIndex == index
+                        val done = activeIndex > index
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = when { done -> Color(0xFF174D43); active -> MaterialTheme.colorScheme.primary.copy(alpha = .18f); else -> MaterialTheme.colorScheme.surfaceVariant },
+                            border = BorderStroke(1.dp, if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Text(
+                                (if (done) "✓  " else (index + 1).toString() + "  ") + title,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                color = when { done -> Color(0xFF8FE0B8); active -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurfaceVariant },
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { stageProgress },
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "کاوه انتقامجو", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold
+                )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     when {
@@ -211,6 +276,30 @@ fun EmailOtpScreen(
                         trailingIcon = { androidx.compose.material3.TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "پنهان" else "نمایش") } }
                     )
                     if (setupPasswordMode) {
+                        Spacer(Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .58f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .6f))
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("قدرت رمز عبور", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Text(listOf("وارد نشده", "نیاز به تقویت", "مناسب", "قوی")[passwordStrength], color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                                }
+                                LinearProgressIndicator(
+                                    progress = { passwordStrength / 3f },
+                                    modifier = Modifier.fillMaxWidth().height(5.dp),
+                                    color = when (passwordStrength) { 1 -> Color(0xFFE3A15D); 2 -> Color(0xFF69BDF1); 3 -> Color(0xFF68D3A2); else -> MaterialTheme.colorScheme.outline },
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(if (password.length >= 8) "✓ حداقل ۸ نویسه" else "○ حداقل ۸ نویسه", style = MaterialTheme.typography.labelSmall, color = if (password.length >= 8) Color(0xFF64C99B) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(if (passwordMatches) "✓ رمزها یکسان‌اند" else "○ تطابق رمزها", style = MaterialTheme.typography.labelSmall, color = if (passwordMatches) Color(0xFF64C99B) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
                             value = passwordConfirm,
@@ -328,6 +417,20 @@ fun EmailOtpScreen(
                     }
                 }
                 Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .42f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f))
+                ) {
+                    Column(modifier = Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("چرا ثبت‌نام کاوه امن‌تر است؟", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        listOf("✓  ایمیل فقط یک‌بار برای تأیید مالکیت بررسی می‌شود", "✓  بعد از ساخت رمز، ورودهای بعدی با رمز انجام می‌شود", "✓  رمز در سرویس احراز هویت ذخیره می‌شود، نه متن ساده").forEach {
+                            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
                     "رمز عبور در سرویس امن احراز هویت به‌صورت هش‌شده نگهداری می‌شود.",
                     style = MaterialTheme.typography.labelSmall,

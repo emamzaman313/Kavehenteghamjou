@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Eye, EyeOff, File, KeyRound, Mail, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, File, KeyRound, Mail, MessageCircle, ShieldCheck, Sparkles, LockKeyhole, Zap, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -20,12 +20,18 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showSignupPasswordConfirm, setShowSignupPasswordConfirm] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [authLightMode, setAuthLightMode] = useState(false);
+  const [openSecurityTip, setOpenSecurityTip] = useState<number | null>(0);
   const [accessEnabled, setAccessEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [resendIn, setResendIn] = useState(0);
   const { runOperation } = useOperationProgress();
+  const passwordChecks = [{ label: 'حداقل ۸ نویسه', ok: password.length >= 8 }, { label: 'ترکیب حروف و عدد', ok: /[A-Za-z\u0600-\u06FF]/.test(password) && /\d/.test(password) }, { label: 'تکرار رمز یکسان', ok: password.length > 0 && password === passwordConfirm }];
+  const passwordStrength = password.length === 0 ? 0 : password.length < 8 ? 1 : password.length < 12 ? 2 : 3;
+  const generatePassword = () => { const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*'; const bytes = new Uint32Array(16); window.crypto.getRandomValues(bytes); const generated = Array.from(bytes, byte => alphabet[byte % alphabet.length]).join(''); setPassword(generated); setPasswordConfirm(generated); setShowSignupPassword(true); setShowSignupPasswordConfirm(true); setError(''); };
 
   const normalizeOtp = (value: string) => value
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
@@ -257,14 +263,35 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     setNotice('');
   };
 
-  return <main className="auth-screen">
+  return <main className={`auth-screen kaveh-auth-experience ${authLightMode ? 'auth-light-mode' : ''}`}>
+    <div className="auth-ambient-grid" aria-hidden="true"/>
+    <div className="auth-orbit auth-orbit-one" aria-hidden="true"><i/><i/><i/></div><div className="auth-orbit auth-orbit-two" aria-hidden="true"><i/><i/></div>
     <div className="auth-glow auth-glow-a"/><div className="auth-glow auth-glow-b"/>
+    <div className="auth-topbar"><span className="auth-top-brand"><BrandMark/><span><b>KAVEH</b><small>فضای ارتباطی مستقل</small></span></span>
+      <button type="button" className="auth-theme-toggle" onClick={() => setAuthLightMode(value => !value)}>{authLightMode ? <Moon size={17}/> : <Sun size={17}/>}<span>{authLightMode ? 'حالت شب' : 'حالت روشن'}</span></button>
+    </div>
+    <div className="auth-stage-layout">
+    <aside className="auth-showcase" aria-label="ویژگی‌های کاوه">
+      <div className="auth-showcase-kicker"><span className="auth-live-dot"/> ارتباط امن، تجربه‌ای تازه</div>
+      <h2>جایی برای<br/><em>ارتباط واقعی.</em></h2>
+      <p>حساب خودت را بساز و وارد فضای مستقل کاوه شو؛ گفتگو، انتشار و اشتراک‌گذاری در یک تجربهٔ یکپارچه.</p>
+      <div className="auth-showcase-art" aria-hidden="true"><div className="auth-art-ring ring-a"/><div className="auth-art-ring ring-b"/><div className="auth-art-core"><BrandMark/></div>
+        <span className="auth-art-chip chip-chat"><MessageCircle size={15}/> گفتگو</span><span className="auth-art-chip chip-file"><File size={15}/> فضای فایل</span><span className="auth-art-chip chip-social"><Sparkles size={15}/> اجتماع</span>
+      </div>
+      <div className="auth-showcase-points">
+        <div><span><LockKeyhole size={17}/></span><section><b>حساب شخصی</b><small>ورود با رمز انتخابی خودت</small></section></div>
+        <div><span><ShieldCheck size={17}/></span><section><b>تأیید مالکیت ایمیل</b><small>کد یک‌بارمصرف فقط برای شروع</small></section></div>
+        <div><span><Zap size={17}/></span><section><b>ورود سریع‌تر</b><small>دفعات بعد بدون انتظار برای کد</small></section></div>
+      </div>
+      <div className="auth-showcase-foot">KAVEH ENTEGHAMJOU <span>•</span> YOUR SPACE, YOUR IDENTITY</div>
+    </aside>
     <section className="auth-card">
       <BrandMark />
       <div className="eyebrow"><span/> فضای ارتباطی مستقل</div>
       <h1>کاوه <em>انتقامجو</em></h1>
       <p className="auth-copy">گفتگو، انتشار و اشتراک‌گذاری فایل؛ در یک فضای شخصی و امن.</p>
       <div className="auth-features"><span><MessageCircle size={15}/> گفتگوهای زنده</span><span><File size={15}/> فضای فایل خصوصی</span><span><Sparkles size={15}/> هویت اجتماعی</span></div>
+      <div className="auth-journey" aria-label="مراحل ثبت‌نام">{['ایمیل','تأیید','ساخت رمز'].map((label,index)=><div className={`auth-journey-step ${step==='setup'&&index<2||step==='sent'&&index===0?'is-done':step==='email'&&index===0||step==='sent'&&index===1||step==='setup'&&index===2?'is-active':''}`} key={label}><span>{step==='setup'&&index<2||step==='sent'&&index===0?'✓':index+1}</span><small>{label}</small></div>)}<div className="auth-journey-track"><i style={{width:step==='email'?'0%':step==='sent'?'50%':step==='setup'?'100%':'0%'}}/></div></div>
       {!configured && <div className="notice notice-error">تنظیمات اتصال Supabase در محیط وب کامل نیست. مدیر فنی باید متغیرهای عمومی Supabase را در محیط Production بررسی کند.</div>}
       {error && <div className="notice notice-error" role="alert" aria-live="polite">{error}</div>}
       {notice && <div className="notice notice-success" role="status" aria-live="polite">{notice}</div>}
@@ -327,7 +354,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         <label className="auth-label" htmlFor="login-password-email">آدرس ایمیل</label>
         <input id="login-password-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={busy}/>
         <label className="auth-label" htmlFor="login-password">رمز عبور</label>
-        <input id="login-password" className="auth-input" type="password" autoComplete="current-password" dir="ltr" placeholder="رمز عبور حساب" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/>
+        <div className="signup-password-control"><input id="login-password" className="auth-input" type={showLoginPassword ? "text" : "password"} autoComplete="current-password" dir="auto" placeholder="رمز عبور حساب" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/><button type="button" onClick={() => setShowLoginPassword(value => !value)} aria-label="نمایش یا پنهان‌کردن رمز">{showLoginPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div>
         <button className="google-button" type="submit" disabled={busy || !email.trim() || !password}>
           {busy ? <span className="spinner small"/> : <KeyRound size={18}/>}
           <span>{busy ? 'در حال ورود…' : 'ورود به حساب'}</span><ArrowLeft size={17}/>
@@ -348,6 +375,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         <div className="auth-secondary-actions"><button type="button" onClick={() => openStep('email')} disabled={busy}>بازگشت</button></div>
       </form>}
 
+      <div className="auth-security-accordion">{[['چرا باید ایمیلم را تأیید کنم؟','برای اطمینان از اینکه ایمیل واقعاً متعلق به شماست و کمک به بازیابی حساب.'],['آیا هر بار کد می‌گیرم؟','خیر. پس از تأیید ایمیل و ساخت رمز، دفعات بعد با ایمیل و رمز عبور وارد می‌شوید.'],['رمز من کجا نگهداری می‌شود؟','رمز از طریق سرویس احراز هویت ثبت می‌شود و نباید به‌صورت متن ساده در پایگاه داده برنامه ذخیره شود.']].map(([question,answer],index)=><div className={openSecurityTip===index?'auth-tip open':'auth-tip'} key={question}><button type="button" onClick={()=>setOpenSecurityTip(current=>current===index?null:index)} aria-expanded={openSecurityTip===index}><span>{question}</span><span>⌄</span></button>{openSecurityTip===index&&<p>{answer}</p>}</div>)}</div>
       <p className="auth-foot"><ShieldCheck size={14}/> رمز عبور فقط به‌صورت هش‌شده در سرویس احراز هویت ذخیره می‌شود.</p>
     </section>
     <span className="auth-version">KAVEH AVENGER · WEB</span>
