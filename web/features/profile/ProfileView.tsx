@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
 import { formatDate } from '@/lib/format';
+import { planProfileAssetCleanup } from '@/lib/profile-assets';
 import { Avatar, SectionHeader } from '@/components/ui';
 
 export default function ProfileView({ supabase, userId, profile, accountLabel, onSaved, notify }: { supabase: SupabaseClient; userId: string; profile: Profile | null; accountLabel: string; onSaved: () => Promise<void>; notify: Notify }) {
@@ -141,25 +142,18 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
       // Compensate successful Storage uploads when the profile write did not
       // commit. If the write result was ambiguous, read saved pointers first;
       // never delete an asset that may already be referenced by the profile.
-      let referencedPaths = new Set<string>();
-      let safeToClean = !profileUpdateAttempted;
+      let savedProfile: { avatar_path: string | null; cover_path: string | null; profile_music_path: string | null } | null = null;
       if (profileUpdateAttempted && uploadedAssets.length) {
-        const { data: savedProfile, error: readError } = await supabase
+        const { data, error: readError } = await supabase
           .from('profiles')
           .select('avatar_path,cover_path,profile_music_path')
           .eq('id', userId)
           .maybeSingle();
-        if (!readError && savedProfile) {
-          referencedPaths = new Set(
-            [savedProfile.avatar_path, savedProfile.cover_path, savedProfile.profile_music_path]
-              .filter((value): value is string => typeof value === 'string' && value.length > 0)
-          );
-          safeToClean = true;
-        }
+        if (!readError) savedProfile = data;
       }
-      if (safeToClean) {
-        const abandonedAssets = uploadedAssets.filter(asset => !referencedPaths.has(asset.path));
-        await Promise.allSettled(abandonedAssets.map(asset =>
+      const cleanupPlan = planProfileAssetCleanup(uploadedAssets, profileUpdateAttempted, savedProfile);
+      if (cleanupPlan) {
+        await Promise.allSettled(cleanupPlan.map(asset =>
           supabase.storage.from(asset.bucket).remove([asset.path])
         ));
       }
