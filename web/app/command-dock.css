@@ -96,3 +96,26 @@ html[data-kaveh-command-motion="off"] *,html[data-kaveh-command-motion="off"] *:
   .kaveh-command-trigger-pulse { animation:none; }
   .kaveh-command-trigger,.kaveh-command-panel,.kaveh-command-route { transition:none; }
 }
+
+
+/* Persian typography and narrow-screen safeguards */
+.kaveh-command-brand { flex:1; min-width:0; }
+.kaveh-command-brand > span:last-child { flex:1; min-width:0; }
+.kaveh-command-brand strong { white-space:nowrap; overflow:visible; word-break:keep-all; overflow-wrap:normal; }
+.kaveh-command-brand small { white-space:nowrap; }
+.kaveh-command-current > span:last-child { min-width:0; }
+.kaveh-command-current small,
+.kaveh-command-current strong { white-space:nowrap; word-break:keep-all; }
+.kaveh-command-current > button { flex:none; white-space:nowrap; }
+.kaveh-command-section-label > span,
+.kaveh-command-section-label > small { white-space:nowrap; }
+.kaveh-command-settings-title strong { white-space:nowrap; }
+.kaveh-command-footnote { flex-wrap:wrap; }
+.kaveh-command-search input { text-align:right; line-height:1.8; }
+.kaveh-command-search input:focus-visible { outline:0; box-shadow:none; }
+@media (max-width:380px) {
+  .kaveh-command-panel { gap:12px; padding:12px; }
+  .kaveh-command-brand strong { font-size:12px; }
+  .kaveh-command-current { gap:7px; padding:8px; }
+  .kaveh-command-current > button { font-size:8px; padding:5px 6px; }
+}
