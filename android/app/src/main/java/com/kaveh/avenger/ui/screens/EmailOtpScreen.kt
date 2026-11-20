@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.auth.EmailOtpRepository
@@ -179,6 +180,7 @@ fun EmailOtpScreen(
                         label = { Text(if (setupPasswordMode) "انتخاب رمز عبور" else "رمز عبور") },
                         placeholder = { Text(if (setupPasswordMode) "۱۰ نویسه، حروف بزرگ و کوچک، عدد و نماد" else "رمز حساب شما") },
                         singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                     )
                     if (setupPasswordMode) {
@@ -190,7 +192,8 @@ fun EmailOtpScreen(
                             label = { Text("تکرار رمز عبور") },
                             placeholder = { Text("دقیقاً همان رمز را دوباره وارد کنید") },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                            visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                         )
                     }
                 } else if (codeSent) {
@@ -227,7 +230,6 @@ fun EmailOtpScreen(
                                 isLoading = true
                                 errorMessage = ""
                                 try {
-                                    if (code.length != 6) throw IllegalArgumentException("کد باید دقیقاً ۶ رقم باشد.")
                                     if (code.length != 6) throw IllegalArgumentException("کد باید دقیقاً ۶ رقم باشد.")
                                     authRepository.verifyCode(email, code)
                                     setupPasswordMode = true
