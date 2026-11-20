@@ -30,6 +30,12 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
   const [followRequests, setFollowRequests] = useState<{ follower_id: string; display_name: string; username: string | null }[]>([]);
   const [requestBusy, setRequestBusy] = useState<string | null>(null);
   useEffect(() => { setName(profile?.display_name ?? ''); setUsername(profile?.username ?? ''); setBio(profile?.bio ?? ''); const p = profile as (Profile & {profile_theme?:{accent?:string;surface?:string;text?:string};featured_badges?:string[];profile_music_title?:string|null}) | null; setProfileVisibility(p?.profile_visibility === 'private' ? 'private' : p?.profile_visibility === 'followers' ? 'followers' : 'public'); setProfileTheme({accent:p?.profile_theme?.accent ?? '#168bff',surface:p?.profile_theme?.surface ?? '#101b2c',text:p?.profile_theme?.text ?? '#f4f1eb'}); setFeaturedBadges(p?.featured_badges ?? []); setMusicTitle(p?.profile_music_title ?? ''); }, [profile]);
+  useEffect(() => () => {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+  }, [avatarPreview]);
+  useEffect(() => () => {
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+  }, [coverPreview]);
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -80,6 +86,8 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
   };
   const save = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true);
+    const uploadedAssets: { bucket: string; path: string }[] = [];
+    let profileUpdateAttempted = false;
     try {
       let avatarPath = profile?.avatar_path ?? null;
       let coverPath = profile?.cover_path ?? null;
@@ -89,6 +97,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         const path = `${userId}/avatar-${crypto.randomUUID()}.${extension}`;
         const { error: uploadError } = await supabase.storage.from('profile-media').upload(path, avatarFile, { contentType: avatarFile.type, upsert: false });
         if (uploadError) throw uploadError;
+        uploadedAssets.push({ bucket: 'profile-media', path });
         avatarPath = path;
       }
       if (coverFile) {
@@ -97,6 +106,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         coverPath = `${userId}/cover-${crypto.randomUUID()}.${extension}`;
         const { error: coverUploadError } = await supabase.storage.from('profile-media').upload(coverPath, coverFile, { contentType: coverFile.type, upsert: false });
         if (coverUploadError) throw coverUploadError;
+        uploadedAssets.push({ bucket: 'profile-media', path: coverPath });
       }
       const avatarUrl = avatarPath ? supabase.storage.from('profile-media').getPublicUrl(avatarPath).data.publicUrl : profile?.avatar_url ?? null;
       let profileMusicPath = (profile as Profile & {profile_music_path?:string|null} | null)?.profile_music_path ?? null;
@@ -107,6 +117,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         const path = userId + '/profile-music-' + crypto.randomUUID() + '.' + extension;
         const { error: musicUploadError } = await supabase.storage.from('post-media').upload(path,musicFile,{contentType:musicFile.type,upsert:false});
         if (musicUploadError) throw musicUploadError;
+        uploadedAssets.push({ bucket: 'post-media', path });
         profileMusicPath = path;
       }
       const safeTheme = {
@@ -115,6 +126,7 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
         text: /^#[0-9a-fA-F]{6}$/.test(profileTheme.text) ? profileTheme.text : '#f4f1eb',
       };
       const patch = { display_name: name.trim(), username: username.trim() || null, bio: bio.trim(), avatar_path: avatarPath, avatar_url: avatarUrl, cover_path: coverPath, profile_visibility: profileVisibility, profile_theme: safeTheme, featured_badges: featuredBadges.filter(code => badges.some(b => b.badge_code === code)).slice(0,6), profile_music_path: profileMusicPath, profile_music_title: profileMusicPath ? musicTitle.trim().slice(0,120) || 'موسیقی پروفایل' : null, updated_at: new Date().toISOString() };
+      profileUpdateAttempted = true;
       const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
       if (error) throw error;
       const obsoleteAssets = [
@@ -126,6 +138,31 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
       setAvatarFile(null); setAvatarPreview(null); setCoverFile(null); setCoverPreview(null); setMusicFile(null); setRemoveProfileMusic(false);
       notify('پروفایل به‌روزرسانی شد.'); await onSaved();
     } catch (error) {
+      // Compensate successful Storage uploads when the profile write did not
+      // commit. If the write result was ambiguous, read saved pointers first;
+      // never delete an asset that may already be referenced by the profile.
+      let referencedPaths = new Set<string>();
+      let safeToClean = !profileUpdateAttempted;
+      if (profileUpdateAttempted && uploadedAssets.length) {
+        const { data: savedProfile, error: readError } = await supabase
+          .from('profiles')
+          .select('avatar_path,cover_path,profile_music_path')
+          .eq('id', userId)
+          .maybeSingle();
+        if (!readError && savedProfile) {
+          referencedPaths = new Set(
+            [savedProfile.avatar_path, savedProfile.cover_path, savedProfile.profile_music_path]
+              .filter((value): value is string => typeof value === 'string' && value.length > 0)
+          );
+          safeToClean = true;
+        }
+      }
+      if (safeToClean) {
+        const abandonedAssets = uploadedAssets.filter(asset => !referencedPaths.has(asset.path));
+        await Promise.allSettled(abandonedAssets.map(asset =>
+          supabase.storage.from(asset.bucket).remove([asset.path])
+        ));
+      }
       notify(`ذخیره پروفایل انجام نشد: ${error instanceof Error ? error.message : 'خطای نامشخص'}`, 'error');
     } finally { setSaving(false); }
   };
