@@ -54,6 +54,7 @@ function KavehAppContent() {
   const [tab, setTab] = useState<Tab>('home');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dark, setDark] = useState(true);
+  const [themeHydrated, setThemeHydrated] = useState(false);
   const [appearance, setAppearance] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [unread, setUnread] = useState(0);
@@ -63,6 +64,22 @@ function KavehAppContent() {
   const [featureFlags, setFeatureFlags] = useState<Record<string,boolean>>({});
   const isSupportStaff = ['owner', 'admin', 'support'].includes(adminRole ?? '');
   const canBypassFeatureFlags = ['owner', 'admin'].includes(adminRole ?? '');
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('kaveh.app.theme');
+      if (saved === 'light' || saved === 'dark') setDark(saved === 'dark');
+    } catch { /* Keep the accessible dark default when storage is unavailable. */ }
+    setThemeHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!themeHydrated) return;
+    const mode = dark ? 'dark' : 'light';
+    document.documentElement.dataset.kavehTheme = mode;
+    document.documentElement.style.colorScheme = mode;
+    try { window.localStorage.setItem('kaveh.app.theme', mode); } catch { /* Theme remains active for this session. */ }
+  }, [dark, themeHydrated]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -239,7 +256,7 @@ function KavehAppContent() {
     <main className="main-area" id="main-content" tabIndex={-1}>
       <header className="topbar">
         <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', support: isSupportStaff ? 'صندوق پشتیبانی' : 'پشتیبانی و ارتباط با مدیریت', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
-        <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title="تغییر تم"><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
+        <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-label={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-pressed={!dark}><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       <div className="content-scroll">
         <KavehPageStage activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
