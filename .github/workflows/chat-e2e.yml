@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  two-account-chat:
-    name: Two-account Supabase chat, Realtime and private file test
+  three-account-chat:
+    name: Three-account Supabase chat, Realtime and private file authorization test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,5 +47,5 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Run two-account chat acceptance test
+      - name: Run three-account chat and authorization acceptance test
         run: npm run test:e2e:chat
