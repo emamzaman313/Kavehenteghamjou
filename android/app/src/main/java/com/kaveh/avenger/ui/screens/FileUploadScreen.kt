@@ -39,6 +39,7 @@ import com.kaveh.avenger.files.FileUploadRepository
 import com.kaveh.avenger.files.MAX_UPLOAD_BYTES
 import com.kaveh.avenger.files.UploadedFile
 import com.kaveh.avenger.files.VaultFile
+import com.kaveh.avenger.ui.progress.OperationProgressController
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import kotlinx.coroutines.launch
@@ -76,7 +77,11 @@ fun FileUploadScreen(userId: String) {
                 downloadingId = file.id
                 error = null
                 try {
-                    FileUploadRepository(SupabaseClientProvider.client).downloadToUri(context, file, destination)
+                    OperationProgressController.run("دانلود امن فایل") { progress ->
+                        FileUploadRepository(SupabaseClientProvider.client).downloadToUri(context, file, destination) { percent, detail ->
+                            progress.advance(percent, detail)
+                        }
+                    }
                 } catch (exception: Exception) {
                     error = exception.localizedMessage ?: "دانلود فایل ناموفق بود."
                 } finally {
@@ -121,8 +126,14 @@ fun FileUploadScreen(userId: String) {
                                 error = null
                                 uploaded = null
                                 try {
-                                    uploaded = FileUploadRepository(SupabaseClientProvider.client).upload(context, userId, uri)
-                                    vaultFiles = FileUploadRepository(SupabaseClientProvider.client).list(userId)
+                                    uploaded = OperationProgressController.run("آپلود فایل به Vault خصوصی") { progress ->
+                                        val result = FileUploadRepository(SupabaseClientProvider.client).upload(context, userId, uri) { percent, detail ->
+                                            progress.advance(percent, detail)
+                                        }
+                                        progress.advance(98, "به‌روزرسانی فهرست فایل‌های فضای خصوصی")
+                                        vaultFiles = FileUploadRepository(SupabaseClientProvider.client).list(userId)
+                                        result
+                                    }
                                 } catch (exception: Exception) {
                                     error = exception.localizedMessage ?: "آپلود فایل انجام نشد."
                                 } finally {
