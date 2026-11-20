@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.auth.EmailOtpRepository
+import com.kaveh.avenger.ui.progress.OperationProgressController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -73,7 +74,12 @@ fun EmailOtpScreen(
             errorMessage = ""
             infoMessage = ""
             try {
-                authRepository.sendCode(email)
+                OperationProgressController.run("ارسال کد ثبت‌نام") { progress ->
+                    progress.advance(18, "بررسی آدرس ایمیل")
+                    progress.advance(44, "ارسال درخواست به سرویس احراز هویت")
+                    authRepository.sendCode(email)
+                    progress.advance(90, "درخواست ارسال کد توسط سرور پذیرفته شد")
+                }
                 codeSent = true
                 code = ""
                 passwordLoginMode = false
@@ -95,7 +101,12 @@ fun EmailOtpScreen(
             errorMessage = ""
             infoMessage = ""
             try {
-                authRepository.loginWithPassword(email, password)
+                OperationProgressController.run("ورود به حساب") { progress ->
+                    progress.advance(20, "آماده‌سازی اطلاعات ورود")
+                    progress.advance(52, "بررسی ایمیل و رمز عبور در سرور")
+                    authRepository.loginWithPassword(email, password)
+                    progress.advance(90, "نشست معتبر حساب ایجاد شد")
+                }
             } catch (error: Exception) {
                 errorMessage = "ایمیل یا رمز عبور صحیح نیست. اگر حساب ندارید، ثبت‌نام با کد ایمیل را انجام دهید."
             } finally {
@@ -119,7 +130,12 @@ fun EmailOtpScreen(
             errorMessage = ""
             infoMessage = ""
             try {
-                authRepository.setAccountPassword(password)
+                OperationProgressController.run("تکمیل ثبت‌نام و ساخت رمز") { progress ->
+                    progress.advance(18, "اعتبارسنجی قدرت و تطابق رمز عبور")
+                    progress.advance(48, "ذخیره رمز در سرویس امن احراز هویت")
+                    authRepository.setAccountPassword(password)
+                    progress.advance(90, "رمز ذخیره شد؛ حساب آماده ورود است")
+                }
                 infoMessage = "ثبت‌نام با موفقیت تکمیل شد. از این پس با ایمیل و رمز عبور وارد شوید."
             } catch (error: Exception) {
                 val providerMessage = error.message.orEmpty().lowercase()
@@ -230,8 +246,13 @@ fun EmailOtpScreen(
                                 isLoading = true
                                 errorMessage = ""
                                 try {
-                                    if (code.length != 6) throw IllegalArgumentException("کد باید دقیقاً ۶ رقم باشد.")
-                                    authRepository.verifyCode(email, code)
+                                    OperationProgressController.run("تأیید ایمیل") { progress ->
+                                        progress.advance(18, "بررسی قالب شش‌رقمی کد")
+                                        if (code.length != 6) throw IllegalArgumentException("کد باید دقیقاً ۶ رقم باشد.")
+                                        progress.advance(48, "اعتبارسنجی کد یک‌بارمصرف در سرور")
+                                        authRepository.verifyCode(email, code)
+                                        progress.advance(88, "کد تأیید شد؛ نشست امن ایجاد شد")
+                                    }
                                     setupPasswordMode = true
                                     infoMessage = "ایمیل تأیید شد. اکنون رمز عبور خود را انتخاب کنید."
                                 } catch (error: Exception) {
