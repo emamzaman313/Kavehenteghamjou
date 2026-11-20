@@ -16,6 +16,16 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -84,6 +94,16 @@ private data class MobileFeatureFlagRow(val key:String,val enabled:Boolean)
 @Composable
 fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
+    val ambientTransition = rememberInfiniteTransition(label = "kaveh-ambient")
+    val ambientShift by ambientTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 18000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ambient-drift"
+    )
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var adminRole by remember { mutableStateOf<String?>(null) }
     var rankNames by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -172,7 +192,14 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 10.dp) {
+            NavigationBar(
+                modifier = Modifier.border(
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
+                    RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+                ),
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                tonalElevation = 12.dp
+            ) {
                 tabs.forEachIndexed { index, tab ->
                     val icon = when (tab) {
                         MainTab.Home -> Icons.Outlined.Home
@@ -192,7 +219,14 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
                         icon = { Icon(icon, contentDescription = tab.title) },
-                        label = { Text(tab.title, maxLines = 1) }
+                        label = { Text(tab.title, maxLines = 1) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
                 }
             }
@@ -210,6 +244,26 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         )
                     )
                 )
+                .drawBehind {
+                    val glowRadius = size.maxDimension * 0.78f
+                    val glowCenter = Offset(
+                        x = size.width * (0.18f + ambientShift * 0.5f),
+                        y = size.height * 0.14f
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.105f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.025f),
+                                androidx.compose.ui.graphics.Color.Transparent
+                            ),
+                            center = glowCenter,
+                            radius = glowRadius
+                        ),
+                        radius = glowRadius,
+                        center = glowCenter
+                    )
+                }
                 .padding(padding)
                 .padding(horizontal = 20.dp)
         ) {
