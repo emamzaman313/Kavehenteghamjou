@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState} from 'react';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import type {Notify} from '@/lib/ui-types';
 import {useOperationProgress} from '@/components/OperationProgress';
+import RpgIcon from '@/components/RpgIcon';
 type Rank={id:string;name_fa:string;name_en:string;tier:number;description:string;category:string;badge_color:string;badge_icon:string;is_assignable:boolean};
 type User={id:string;display_name:string;username:string|null;email:string|null};
 export default function RankManagementPanel({supabase,notify}:{supabase:SupabaseClient;notify:Notify}){
@@ -13,7 +14,7 @@ export default function RankManagementPanel({supabase,notify}:{supabase:Supabase
  useEffect(()=>{void refresh()},[refresh]);
  const assign=async()=>{if(!selected||busy)return;setBusy(true);try{await runOperation('اعطای رتبه',async advance=>{advance(16,'بررسی کاربر، رتبه و محدوده اعطا');await call('assign',{userId:selected,rankId,scopeType:scope,scopeId:scope==='global'?null:scopeId,expiresAt:expires?new Date(expires).toISOString():null,note});advance(86,'ثبت رتبه توسط سرویس مدیریتی تأیید شد')});notify('رتبه با موفقیت به کاربر اعطا شد.');setNote('');await refresh()}catch(e){notify(e instanceof Error?e.message:'اعطای رتبه ناموفق بود.','error')}finally{setBusy(false)}};
  return <section className="settings-card"><h3>سامانه ۲۵ رتبه و مجوزها</h3><p>رتبه‌ها در دیتابیس ثبت می‌شوند. رتبه مالک کل قابل اعطا نیست و اعطای رتبه فقط برای مالک اصلی مجاز است.</p>
- <div className="admin-stat-grid">{ranks.map(r=><div className="admin-stat" key={r.id}><span style={{color:r.badge_color}}>◆ رتبه {r.tier}</span><strong>{r.name_fa}</strong><small>{r.description}</small></div>)}</div>
+ <div className="admin-stat-grid">{ranks.map(r=><div className="admin-stat" key={r.id}><span className="rank-icon-line"><RpgIcon name={r.badge_icon} size={27}/> رتبه {r.tier}</span><strong>{r.name_fa}</strong><small>{r.description}</small></div>)}</div>
  <h3>اعطای رتبه</h3><label className="auth-label">کاربر</label><select className="auth-input" value={selected} onChange={e=>setSelected(e.target.value)}><option value="">انتخاب کاربر</option>{users.map(u=><option key={u.id} value={u.id}>{u.display_name+(u.username?' (@'+u.username+')':'')+(u.email?' · '+u.email:'')}</option>)}</select>
  <label className="auth-label">رتبه</label><select className="auth-input" value={rankId} onChange={e=>setRankId(e.target.value)}>{ranks.filter(r=>r.is_assignable).map(r=><option key={r.id} value={r.id}>{r.tier+'. '+r.name_fa}</option>)}</select>
  <label className="auth-label">محدوده</label><select className="auth-input" value={scope} onChange={e=>setScope(e.target.value)}><option value="global">سراسری</option><option value="group">گروه مشخص</option><option value="channel">کانال مشخص</option></select>
