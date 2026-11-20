@@ -95,10 +95,11 @@ private data class MobileFeatureFlagRow(val key:String,val enabled:Boolean)
 fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
     val ambientGlowColor = MaterialTheme.colorScheme.primary
+    var ambientMotionEnabled by remember { mutableStateOf(true) }
     val ambientTransition = rememberInfiniteTransition(label = "kaveh-ambient")
     val ambientShift by ambientTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 1f,
+        targetValue = if (ambientMotionEnabled) 1f else 0f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 18000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -182,6 +183,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     }
                 },
                 actions = {
+                    TextButton(onClick = { ambientMotionEnabled = !ambientMotionEnabled }) { Text(if (ambientMotionEnabled) "حرکت: روشن" else "حرکت: خاموش") }
                     TextButton(onClick = { selectedTab = MainTab.World }) { Text("جهان") }
                     if (adminRole != null) TextButton(onClick = { selectedTab = MainTab.Admin }) { Text("مدیریت") }
                     TextButton(onClick = { scope.launch { onSignOut() } }) { Text("خروج") }
