@@ -10,6 +10,20 @@ export default function GlobalAudioPlayer({ supabase }: { supabase: SupabaseClie
   const [setting, setSetting] = useState<GlobalAudioRow | null>(null);
   const [needsGesture, setNeedsGesture] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const gesture = useRef<{ y: number; pointerId: number } | null>(null);
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    gesture.current = { y: event.clientY, pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = gesture.current;
+    gesture.current = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const delta = event.clientY - start.y;
+    if (delta > 44) setCollapsed(true);
+    if (delta < -44) setCollapsed(false);
+  };
 
   useEffect(() => {
     let active = true;
@@ -53,10 +67,14 @@ export default function GlobalAudioPlayer({ supabase }: { supabase: SupabaseClie
     try { await audio.play(); setPlaying(true); setNeedsGesture(false); }
     catch { setNeedsGesture(true); }
   };
-  return <div className="global-audio-dock" role="region" aria-label="موسیقی سراسری">
+  return <>
+    {collapsed && <button type="button" className="global-audio-reopen" aria-label="نمایش دوبارهٔ پخش‌کنندهٔ موسیقی" onClick={() => setCollapsed(false)} onPointerDown={(event) => { gesture.current = { y: event.clientY, pointerId: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const start = gesture.current; gesture.current = null; if (start && event.clientY - start.y < -35) setCollapsed(false); }}>♫ <span>نمایش موسیقی</span></button>}
+    <div className={`global-audio-dock ${collapsed ? 'is-collapsed' : ''}`} role="region" aria-label="موسیقی سراسری" aria-hidden={collapsed}>
+      <div className="global-audio-grip" aria-label="برای پنهان‌کردن به پایین بکشید" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { gesture.current = null; }}><i/></div>
     <audio ref={audioRef} preload="auto" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={(e) => { e.currentTarget.currentTime = 0; void e.currentTarget.play().catch(() => setNeedsGesture(true)); }}/>
     <span className="global-audio-disc">♫</span>
     <span className="global-audio-meta"><strong>{setting.track.title}</strong><small>{setting.track.artist || 'موسیقی سراسری کاوه'}</small></span>
     <button type="button" className="button button-quiet" onClick={() => { const a = audioRef.current; if (!a) return; if (a.paused) void start(); else a.pause(); }}>{playing ? 'توقف' : needsGesture ? 'برای شنیدن لمس کنید' : 'پخش'}</button>
-  </div>;
+    </div>
+  </>;
 }

@@ -162,7 +162,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       setError('رمز عبور باید حداقل ۸ نویسه داشته باشد. می‌توانید از حروف فارسی یا انگلیسی، عدد و نماد استفاده کنید.');
       return;
     }
-    if (!/[A-Za-z\\u0600-\\u06FF]/.test(password) || !/\\d/.test(password)) {
+    if (!/[A-Za-z\u0600-\u06FF]/.test(password) || !/\d/.test(password)) {
       setError('برای امنیت بیشتر، رمز عبور باید دست‌کم یک حرف و یک عدد داشته باشد.');
       return;
     }
