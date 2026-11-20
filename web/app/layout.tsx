@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import './experience.css';
+import './command-dock.css';
+import './page-stage.css';
 
 export const metadata: Metadata = {
   title: 'کاوه انتقامجو',

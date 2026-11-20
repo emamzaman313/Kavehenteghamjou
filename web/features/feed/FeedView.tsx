@@ -1,6 +1,6 @@
 'use client';
-import { Activity, CircleHelp, Copy, Flag, Heart, MessageCircle, Send, ShieldCheck, Sparkles, Zap } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { Activity, CircleHelp, Copy, Flag, Heart, MessageCircle, Search, Send, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Post, Profile } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
@@ -28,6 +28,8 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
   const [commentReportDetails, setCommentReportDetails] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [selectedProfileBadges, setSelectedProfileBadges] = useState<{badge_code:string;title:string}[]>([]);
+  const [feedFilter, setFeedFilter] = useState<'recent' | 'popular' | 'media'>('recent');
+  const [feedQuery, setFeedQuery] = useState('');
 
   const openAuthorProfile = async (authorId: string) => {
     const author = authors[authorId];
@@ -157,6 +159,21 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     } catch (error) { notify(error instanceof Error ? error.message : 'کپی پیوند انجام نشد.', 'error'); }
   };
 
+  const visiblePosts = useMemo(() => {
+    const query = feedQuery.trim().toLocaleLowerCase('fa-IR');
+    const filtered = posts.filter((post) => {
+      const author = authors[post.author_id];
+      const searchable = [post.body, author?.display_name ?? '', author?.username ?? ''].join(' ').toLocaleLowerCase('fa-IR');
+      const matchesQuery = !query || searchable.includes(query);
+      const matchesType = feedFilter !== 'media' || Boolean(attachments[post.id]?.length);
+      return matchesQuery && matchesType;
+    });
+    if (feedFilter === 'popular') {
+      filtered.sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0));
+    }
+    return filtered;
+  }, [posts, authors, attachments, counts, feedFilter, feedQuery]);
+
   return <><div className="feed-layout"><div className="feed-main">
     <section className="home-hero" aria-label="خوش‌آمدگویی به کاوه انتقامجو">
       <div className="home-hero-copy">
@@ -193,8 +210,16 @@ export default function FeedView({ supabase, userId, notify, onGoChats }: { supa
     </section>
     <SectionHeader eyebrow="THE COMMUNITY FEED" title="جریان جامعه" description="تازه‌ترین نوشته‌ها و اتفاقات فضای کاوه." action={<button className="button button-quiet" onClick={onGoChats}><MessageCircle size={17}/> گفتگوها</button>}/>
     <PostComposer supabase={supabase} userId={userId} notify={notify} onPublished={() => void load()}/>\n    
-    <div className="feed-toolbar"><div><strong>تازه‌ترین‌ها</strong><span>محتوای عمومی جامعه</span></div><button className="icon-button" onClick={() => void load()} title="تازه‌سازی"><Activity size={18}/></button></div>
-    {loading ? <div className="skeleton-list">{[1,2,3].map((n) => <div className="skeleton-card" key={n}/>)}</div> : posts.length === 0 ? <EmptyState icon={<Sparkles/>} title="هنوز پستی منتشر نشده" description="اولین پست را تو منتشر کن و فید را زنده کن."/> : posts.map((post) => <article className="post-card" key={post.id}><button type="button" className="post-author post-author-button" onClick={() => void openAuthorProfile(post.author_id)} aria-label="نمایش پروفایل نویسنده"><Avatar profile={authors[post.author_id]} size="md"/><span><strong>{authors[post.author_id]?.display_name ?? 'کاربر کاوه'}</strong><small>{authors[post.author_id]?.username ? `@${authors[post.author_id].username} · ` : ''}{formatDate(post.published_at ?? post.created_at)}</small></span></button>{post.body && <p className="post-body">{post.body}</p>}{attachments[post.id]?.length ? <div className="post-media-grid">{attachments[post.id].map((item) => { const { data } = supabase.storage.from(item.bucket_id).getPublicUrl(item.object_path); const url = data.publicUrl; return item.mime_type?.startsWith('image/') ? <a className="post-media-link" href={url} target="_blank" rel="noreferrer" key={item.id}><img className="post-media-image" src={url} alt={item.original_name} loading="lazy"/></a> : item.mime_type?.startsWith('video/') ? <video className="post-media-video" key={item.id} controls playsInline preload="metadata" src={url}/> : item.mime_type?.startsWith('audio/') ? <audio className="post-media-audio" key={item.id} controls preload="metadata" src={url}/> : <a className="post-file-attachment" href={url} download={item.original_name} target="_blank" rel="noreferrer" key={item.id}><span>{item.original_name}</span></a>; })}</div> : null}<div className="post-meta"><span><Activity size={14}/> انتشار عمومی</span><span>{counts[post.id] ?? 0} واکنش</span></div><div className="post-actions"><button className={liked.has(post.id) ? 'is-liked' : ''} onClick={() => void toggleLike(post.id)}><Heart size={18} fill={liked.has(post.id) ? 'currentColor' : 'none'}/> پسندیدن</button><button onClick={() => void loadComments(post.id)}><MessageCircle size={18}/> دیدگاه‌ها</button><button onClick={() => void copyPostLink(post.id)}><Copy size={18}/> کپی پیوند</button><button onClick={() => { setReportingPost(reportingPost === post.id ? null : post.id); setReportDetails(''); }}><Flag size={18}/> گزارش</button></div>{reportingPost === post.id && <div className="post-report-form">
+    <div className="feed-toolbar"><div><strong>جریان جامعه</strong><span>{visiblePosts.length.toLocaleString('fa-IR')} از {posts.length.toLocaleString('fa-IR')} پست بارگذاری‌شده</span></div><button className="icon-button" onClick={() => void load()} title="تازه‌سازی"><Activity size={18}/></button></div>
+    <div className="feed-explorer-tools">
+      <div className="feed-filter-pills" role="group" aria-label="فیلتر جریان">
+        <button type="button" className={feedFilter === 'recent' ? 'active' : ''} aria-pressed={feedFilter === 'recent'} onClick={() => setFeedFilter('recent')}>تازه‌ترین</button>
+        <button type="button" className={feedFilter === 'popular' ? 'active' : ''} aria-pressed={feedFilter === 'popular'} onClick={() => setFeedFilter('popular')}>پربازخورد</button>
+        <button type="button" className={feedFilter === 'media' ? 'active' : ''} aria-pressed={feedFilter === 'media'} onClick={() => setFeedFilter('media')}>دارای رسانه</button>
+      </div>
+      <label className="feed-search-field"><Search size={15}/><input value={feedQuery} onChange={(event) => setFeedQuery(event.target.value)} placeholder="جست‌وجو در متن و نویسنده‌ها…" aria-label="جست‌وجو در پست‌ها"/>{feedQuery && <button type="button" onClick={() => setFeedQuery('')} aria-label="پاک‌کردن جست‌وجو">×</button>}</label>
+    </div>
+    {loading ? <div className="skeleton-list">{[1,2,3].map((n) => <div className="skeleton-card" key={n}/>)}</div> : posts.length === 0 ? <EmptyState icon={<Sparkles/>} title="هنوز پستی منتشر نشده" description="اولین پست را تو منتشر کن و فید را زنده کن."/> : visiblePosts.length === 0 ? <EmptyState icon={<Search/>} title="نتیجه‌ای پیدا نشد" description="عبارت جست‌وجو یا فیلتر رسانه را تغییر بده."/> : visiblePosts.map((post) => <article className="post-card" key={post.id}><button type="button" className="post-author post-author-button" onClick={() => void openAuthorProfile(post.author_id)} aria-label="نمایش پروفایل نویسنده"><Avatar profile={authors[post.author_id]} size="md"/><span><strong>{authors[post.author_id]?.display_name ?? 'کاربر کاوه'}</strong><small>{authors[post.author_id]?.username ? `@${authors[post.author_id].username} · ` : ''}{formatDate(post.published_at ?? post.created_at)}</small></span></button>{post.body && <p className="post-body">{post.body}</p>}{attachments[post.id]?.length ? <div className="post-media-grid">{attachments[post.id].map((item) => { const { data } = supabase.storage.from(item.bucket_id).getPublicUrl(item.object_path); const url = data.publicUrl; return item.mime_type?.startsWith('image/') ? <a className="post-media-link" href={url} target="_blank" rel="noreferrer" key={item.id}><img className="post-media-image" src={url} alt={item.original_name} loading="lazy"/></a> : item.mime_type?.startsWith('video/') ? <video className="post-media-video" key={item.id} controls playsInline preload="metadata" src={url}/> : item.mime_type?.startsWith('audio/') ? <audio className="post-media-audio" key={item.id} controls preload="metadata" src={url}/> : <a className="post-file-attachment" href={url} download={item.original_name} target="_blank" rel="noreferrer" key={item.id}><span>{item.original_name}</span></a>; })}</div> : null}<div className="post-meta"><span><Activity size={14}/> انتشار عمومی</span><span>{counts[post.id] ?? 0} واکنش</span></div><div className="post-actions"><button className={liked.has(post.id) ? 'is-liked' : ''} onClick={() => void toggleLike(post.id)}><Heart size={18} fill={liked.has(post.id) ? 'currentColor' : 'none'}/> پسندیدن</button><button onClick={() => void loadComments(post.id)}><MessageCircle size={18}/> دیدگاه‌ها</button><button onClick={() => void copyPostLink(post.id)}><Copy size={18}/> کپی پیوند</button><button onClick={() => { setReportingPost(reportingPost === post.id ? null : post.id); setReportDetails(''); }}><Flag size={18}/> گزارش</button></div>{reportingPost === post.id && <div className="post-report-form">
   <strong>گزارش این پست</strong>
   <label>دلیل گزارش<select value={reportReason} onChange={(event) => setReportReason(event.target.value)} disabled={reportSubmitting}><option>محتوای نامناسب</option><option>هرزنامه یا تبلیغات مزاحم</option><option>آزار و اذیت یا تهدید</option><option>اطلاعات گمراه‌کننده</option><option>نقض حقوق دیگران</option><option>سایر موارد</option></select></label>
   <label>توضیحات تکمیلی (اختیاری)<textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={500} rows={3} placeholder="اگر لازم است جزئیات بیشتری بنویسید…" disabled={reportSubmitting}/></label>

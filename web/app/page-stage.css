@@ -1,0 +1,122 @@
+/* Page-specific visual identity: one coherent system, a distinct atmosphere per destination */
+.kaveh-page-stage {
+  --stage-pointer-x: 76%;
+  --stage-pointer-y: 32%;
+  --stage-pointer-rx: 0deg;
+  --stage-pointer-ry: 0deg;
+  --stage-tone: var(--accent, #168bff);
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 202px;
+  margin: 0 0 27px;
+  padding: 25px clamp(22px,3.3vw,42px);
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at var(--stage-pointer-x) var(--stage-pointer-y),color-mix(in srgb,var(--stage-tone) 18%,transparent),transparent 43%),
+    linear-gradient(112deg,color-mix(in srgb,var(--surface) 82%,var(--stage-tone) 5%),var(--surface));
+  border: 1px solid color-mix(in srgb,var(--stage-tone) 26%,var(--line));
+  border-radius: 25px;
+  box-shadow: 0 18px 54px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.055);
+  transform-style: preserve-3d;
+}
+.kaveh-page-stage::before {
+  content:""; position:absolute; inset:0; z-index:-1; opacity:.25; pointer-events:none;
+  background:linear-gradient(120deg,transparent 12%,rgba(255,255,255,.08) 34%,transparent 49%);
+  transform:translateX(38%); animation:kaveh-stage-sheen 13s ease-in-out infinite;
+}
+.kaveh-page-stage::after {
+  content:""; position:absolute; z-index:-1; inset:0; pointer-events:none;
+  background:radial-gradient(500px circle at var(--stage-pointer-x) var(--stage-pointer-y),rgba(255,255,255,.045),transparent 72%);
+  mix-blend-mode:screen;
+}
+.kaveh-stage-copy { position:relative; z-index:3; width:min(720px,75%); transform:translateZ(24px); }
+.kaveh-stage-meta { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:13px; }
+.kaveh-stage-kicker { display:inline-flex; align-items:center; gap:8px; color:var(--accent-strong); font:700 9px Tahoma,sans-serif; letter-spacing:1.15px; }
+.kaveh-stage-kicker i { width:6px; height:6px; display:block; border-radius:50%; background:var(--stage-tone); box-shadow:0 0 0 5px color-mix(in srgb,var(--stage-tone) 14%,transparent),0 0 15px var(--stage-tone); }
+.kaveh-stage-index { color:var(--text); font:800 18px/1 Tahoma,sans-serif; letter-spacing:1px; font-variant-numeric:tabular-nums; opacity:.82; }
+.kaveh-stage-index b { color:var(--muted); font-size:9px; font-weight:500; }
+.kaveh-stage-copy h1 { margin:0 0 8px; color:var(--text); font-size:clamp(20px,2.3vw,29px); line-height:1.5; letter-spacing:-.8px; font-weight:800; text-wrap:balance; }
+.kaveh-stage-copy p { max-width:620px; margin:0; color:var(--soft); font-size:11px; line-height:2; opacity:.92; }
+.kaveh-stage-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.kaveh-stage-actions button {
+  min-height:31px; display:inline-flex; align-items:center; gap:7px; padding:0 10px;
+  color:var(--soft); background:color-mix(in srgb,var(--surface-2) 84%,transparent);
+  border:1px solid var(--line); border-radius:10px; font-size:9px; cursor:pointer;
+  transition:color 180ms ease,background 180ms ease,border-color 180ms ease,transform 180ms ease;
+}
+.kaveh-stage-actions button:hover { color:var(--text); background:color-mix(in srgb,var(--stage-tone) 15%,var(--surface-2)); border-color:color-mix(in srgb,var(--stage-tone) 36%,var(--line)); transform:translateY(-2px); }
+.kaveh-stage-actions button>svg:first-child { color:var(--accent-strong); }
+.kaveh-stage-actions button>b { min-width:16px; padding:2px 4px; color:#fff; background:var(--danger); border-radius:5px; font-size:8px; }
+.kaveh-stage-backdrop { position:absolute; z-index:0; inset:0; pointer-events:none; overflow:hidden; }
+.kaveh-stage-grid {
+  position:absolute; inset:-30%; opacity:.23;
+  background-image:linear-gradient(to right,color-mix(in srgb,var(--line) 90%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--line) 90%,transparent) 1px,transparent 1px);
+  background-size:34px 34px; mask-image:radial-gradient(ellipse at 76% 50%,#000 0%,transparent 58%);
+  transform:perspective(480px) rotateX(52deg) rotateZ(-18deg) translateY(9%);
+}
+.kaveh-stage-glow { position:absolute; width:390px; height:390px; inset-inline-end:7%; top:50%; transform:translateY(-50%); border-radius:50%; background:radial-gradient(circle,color-mix(in srgb,var(--stage-tone) 20%,transparent),transparent 68%); filter:blur(10px); }
+.kaveh-stage-orbit { position:absolute; inset-inline-end:9%; top:50%; border:1px solid color-mix(in srgb,var(--stage-tone) 28%,transparent); border-radius:50%; transform:translateY(-50%) rotateX(62deg) rotateZ(-18deg); transform-style:preserve-3d; }
+.kaveh-stage-orbit-one { width:260px; height:185px; animation:kaveh-stage-orbit 21s linear infinite; }
+.kaveh-stage-orbit-two { width:195px; height:140px; border-style:dashed; opacity:.68; animation:kaveh-stage-orbit 27s linear infinite reverse; }
+.kaveh-stage-orbit i { position:absolute; width:7px; height:7px; border-radius:50%; background:var(--stage-tone); box-shadow:0 0 15px var(--stage-tone); }
+.kaveh-stage-orbit-one i:nth-child(1) { top:13%; left:21%; }
+.kaveh-stage-orbit-one i:nth-child(2) { right:8%; top:50%; width:5px; height:5px; }
+.kaveh-stage-orbit-one i:nth-child(3) { bottom:8%; left:47%; width:4px; height:4px; }
+.kaveh-stage-orbit-two i:first-child { top:4%; right:27%; width:5px; height:5px; background:var(--accent-strong); }
+.kaveh-stage-orbit-two i:last-child { bottom:10%; left:14%; width:4px; height:4px; }
+.kaveh-stage-core {
+  position:absolute; inset-inline-end:calc(9% + 93px); top:50%; width:74px; height:74px; display:grid; place-items:center;
+  color:var(--accent-strong); background:radial-gradient(circle at 34% 28%,color-mix(in srgb,var(--stage-tone) 28%,var(--surface)),var(--surface-2));
+  border:1px solid color-mix(in srgb,var(--stage-tone) 48%,var(--line)); border-radius:24px;
+  box-shadow:0 0 0 12px color-mix(in srgb,var(--stage-tone) 5%,transparent),0 0 50px color-mix(in srgb,var(--stage-tone) 25%,transparent),inset 0 1px 0 rgba(255,255,255,.22);
+  transform:translateY(-50%) rotate(-8deg) translateZ(20px);
+}
+.kaveh-stage-spark { position:absolute; width:4px; height:4px; border-radius:50%; background:var(--accent-strong); box-shadow:0 0 13px var(--stage-tone); }
+.kaveh-stage-spark-one { inset-inline-end:8%; top:24%; }
+.kaveh-stage-spark-two { inset-inline-end:28%; bottom:18%; width:3px; height:3px; }
+.kaveh-stage-art { position:absolute; z-index:2; inset-inline-end:16px; top:0; width:330px; height:100%; pointer-events:none; transform:perspective(700px) rotateX(var(--stage-pointer-rx)) rotateY(var(--stage-pointer-ry)); transition:transform 180ms ease-out; }
+.kaveh-stage-art-caption { position:absolute; top:18px; inset-inline-end:15px; display:flex; align-items:center; gap:6px; color:var(--muted); font:9px Tahoma,sans-serif; letter-spacing:1px; }
+.kaveh-stage-art-caption span { display:grid; place-items:center; width:20px; height:20px; color:var(--text); background:color-mix(in srgb,var(--stage-tone) 28%,transparent); border:1px solid color-mix(in srgb,var(--stage-tone) 40%,transparent); border-radius:7px; font-weight:900; }
+.kaveh-stage-art-caption i { width:22px; height:1px; background:var(--line); }
+.kaveh-stage-art-ring { position:absolute; top:50%; inset-inline-end:46px; border:1px solid color-mix(in srgb,var(--stage-tone) 28%,transparent); border-radius:50%; transform:translateY(-50%) rotate(-28deg); }
+.kaveh-stage-art-ring.ring-large { width:230px; height:116px; }
+.kaveh-stage-art-ring.ring-small { width:160px; height:160px; inset-inline-end:81px; border-style:dashed; opacity:.55; transform:translateY(-50%) rotate(32deg); }
+.kaveh-stage-art-diamond { position:absolute; top:50%; inset-inline-end:137px; width:36px; height:36px; background:linear-gradient(135deg,var(--stage-tone),color-mix(in srgb,var(--stage-tone) 35%,#fff)); border:1px solid rgba(255,255,255,.35); border-radius:11px; box-shadow:0 0 35px color-mix(in srgb,var(--stage-tone) 38%,transparent); transform:translateY(-50%) rotate(45deg); }
+.kaveh-stage-art-beam { position:absolute; inset-inline-end:0; top:50%; width:300px; height:1px; opacity:.55; background:linear-gradient(90deg,transparent,var(--stage-tone),transparent); transform:rotate(-15deg); }
+.kaveh-stage-art-label { position:absolute; bottom:17px; inset-inline-end:28px; display:flex; align-items:center; gap:6px; color:var(--muted); font:8px Tahoma,sans-serif; letter-spacing:1.2px; }
+.kaveh-stage-art-label svg { color:var(--accent-strong); }
+.kaveh-stage-chats,.kaveh-stage-files { --stage-tone:#1ab3ac; }
+.kaveh-stage-social,.kaveh-stage-world { --stage-tone:#a786ed; }
+.kaveh-stage-profile,.kaveh-stage-settings { --stage-tone:#d6a45b; }
+.kaveh-stage-support,.kaveh-stage-notifications { --stage-tone:#55a9e8; }
+.kaveh-stage-admin { --stage-tone:#d66c91; }
+html[data-kaveh-command-focus="on"] .kaveh-page-stage { min-height:150px; margin-bottom:16px; }
+html[data-kaveh-command-motion="off"] .kaveh-page-stage::before,
+html[data-kaveh-command-motion="off"] .kaveh-stage-orbit-one,
+html[data-kaveh-command-motion="off"] .kaveh-stage-orbit-two { animation:none !important; }
+@keyframes kaveh-stage-orbit { from { transform:translateY(-50%) rotateX(62deg) rotateZ(-18deg); } to { transform:translateY(-50%) rotateX(62deg) rotateZ(342deg); } }
+@keyframes kaveh-stage-sheen { 0%,55% { transform:translateX(42%); opacity:0; } 72% { opacity:.6; } 100% { transform:translateX(-42%); opacity:0; } }
+@media (max-width:800px) {
+  .kaveh-page-stage { min-height:224px; padding:20px; margin-bottom:20px; }
+  .kaveh-stage-copy { width:100%; padding-inline-start:4px; }
+  .kaveh-stage-copy h1 { max-width:82%; font-size:22px; }
+  .kaveh-stage-copy p { max-width:76%; font-size:10px; }
+  .kaveh-stage-art { inset-inline-end:-105px; opacity:.66; transform:scale(.86) perspective(700px) rotateY(var(--stage-pointer-ry)); }
+  .kaveh-stage-meta { max-width:100%; }
+  .kaveh-stage-index { font-size:14px; }
+}
+@media (max-width:520px) {
+  .kaveh-page-stage { min-height:238px; padding:18px 16px; border-radius:20px; }
+  .kaveh-stage-copy h1 { max-width:86%; font-size:19px; }
+  .kaveh-stage-copy p { max-width:90%; line-height:1.8; }
+  .kaveh-stage-art { inset-inline-end:-170px; opacity:.34; }
+  .kaveh-stage-actions { gap:6px; margin-top:13px; }
+  .kaveh-stage-actions button { min-height:29px; padding:0 8px; font-size:8px; }
+  .kaveh-stage-kicker { font-size:8px; letter-spacing:.7px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .kaveh-page-stage::before,.kaveh-stage-orbit-one,.kaveh-stage-orbit-two { animation:none !important; }
+  .kaveh-stage-art,.kaveh-stage-actions button { transition:none; }
+}

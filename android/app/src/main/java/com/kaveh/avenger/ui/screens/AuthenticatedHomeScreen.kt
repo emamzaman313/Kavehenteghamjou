@@ -1,6 +1,8 @@
 package com.kaveh.avenger.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +18,16 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -84,6 +96,18 @@ private data class MobileFeatureFlagRow(val key:String,val enabled:Boolean)
 @Composable
 fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
+    val ambientGlowColor = MaterialTheme.colorScheme.primary
+    var ambientMotionEnabled by remember { mutableStateOf(true) }
+    val ambientTransition = rememberInfiniteTransition(label = "kaveh-ambient")
+    val ambientShift by ambientTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (ambientMotionEnabled) 1f else 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 18000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ambient-drift"
+    )
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var adminRole by remember { mutableStateOf<String?>(null) }
     var rankNames by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -161,6 +185,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     }
                 },
                 actions = {
+                    TextButton(onClick = { ambientMotionEnabled = !ambientMotionEnabled }) { Text(if (ambientMotionEnabled) "حرکت: روشن" else "حرکت: خاموش") }
                     TextButton(onClick = { selectedTab = MainTab.World }) { Text("جهان") }
                     if (adminRole != null) TextButton(onClick = { selectedTab = MainTab.Admin }) { Text("مدیریت") }
                     TextButton(onClick = { scope.launch { onSignOut() } }) { Text("خروج") }
@@ -172,7 +197,14 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 10.dp) {
+            NavigationBar(
+                modifier = Modifier.border(
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
+                    RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+                ),
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                tonalElevation = 12.dp
+            ) {
                 tabs.forEachIndexed { index, tab ->
                     val icon = when (tab) {
                         MainTab.Home -> Icons.Outlined.Home
@@ -192,7 +224,14 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
                         icon = { Icon(icon, contentDescription = tab.title) },
-                        label = { Text(tab.title, maxLines = 1) }
+                        label = { Text(tab.title, maxLines = 1) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
                 }
             }
@@ -210,12 +249,42 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                         )
                     )
                 )
+                .drawBehind {
+                    val glowRadius = size.maxDimension * 0.78f
+                    val glowCenter = Offset(
+                        x = size.width * (0.18f + ambientShift * 0.5f),
+                        y = size.height * 0.14f
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                ambientGlowColor.copy(alpha = 0.105f),
+                                ambientGlowColor.copy(alpha = 0.025f),
+                                androidx.compose.ui.graphics.Color.Transparent
+                            ),
+                            center = glowCenter,
+                            radius = glowRadius
+                        ),
+                        radius = glowRadius,
+                        center = glowCenter
+                    )
+                }
                 .padding(padding)
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(14.dp))
             when (selectedTab) {
-                MainTab.Home -> HomeOverview(email, rankNames)
+                MainTab.Home -> HomeOverview(email, rankNames, onNavigate = { next ->
+                     val required = when (next) {
+                         MainTab.Chats, MainTab.Communities -> "chat"
+                         MainTab.Publish -> "posts"
+                         MainTab.Explore -> "social_discovery"
+                         MainTab.Reels -> "reels"
+                         MainTab.Media -> "uploads"
+                         else -> null
+                     }
+                     if (required == null || featureOn(required)) selectedTab = next
+                 })
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
@@ -241,8 +310,9 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
 }
 
 @Composable
-private fun HomeOverview(email: String?, rankNames: List<String>) {
+private fun HomeOverview(email: String?, rankNames: List<String>, onNavigate: (MainTab) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        QuickNavigationRail(onNavigate)
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(30.dp),
@@ -316,6 +386,53 @@ private fun HomeOverview(email: String?, rankNames: List<String>) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+
+@Composable
+private fun QuickNavigationRail(onNavigate: (MainTab) -> Unit) {
+    val actions = listOf(
+        Triple(MainTab.Chats, "گفتگوها", Icons.Outlined.ChatBubbleOutline),
+        Triple(MainTab.Publish, "انتشار", Icons.Outlined.AddCircleOutline),
+        Triple(MainTab.Explore, "اکتشاف", Icons.Outlined.Explore),
+        Triple(MainTab.Reels, "تماشای ریلز", Icons.Outlined.PlayCircleOutline),
+        Triple(MainTab.World, "جهان کاوه", Icons.Outlined.Home),
+        Triple(MainTab.Profile, "پروفایل", Icons.Outlined.PersonOutline)
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("میان‌برهای فضای شما", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("دسترسی فوری", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            actions.forEach { (tab, label, icon) ->
+                Surface(
+                    onClick = { onNavigate(tab) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+                    tonalElevation = 2.dp,
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp))
+                        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+            }
+        }
     }
 }
 

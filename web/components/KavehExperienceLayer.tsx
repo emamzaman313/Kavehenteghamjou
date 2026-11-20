@@ -24,6 +24,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
   const [open, setOpen] = useState(false);
   const [visualOpen, setVisualOpen] = useState(false);
   const [prefs, setPrefs] = useState({ pointerGlow: true, cardTilt: true, ambientMotion: true, focusMode: false });
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,6 +44,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
         return;
       }
       if (!open) {
+        if (event.key === 'Escape' && visualOpen) { setVisualOpen(false); return; }
         const target = event.target as HTMLElement | null;
         const isTyping = Boolean(target?.closest('input,textarea,select,[contenteditable="true"]'));
         if (!isTyping && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
@@ -80,7 +82,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [activeIndex, filtered, isAdmin, onNavigate, open]);
+  }, [activeIndex, filtered, isAdmin, onNavigate, open, visualOpen]);
 
   useEffect(() => {
     try {
@@ -90,16 +92,18 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
         setPrefs((current) => ({ ...current, ...parsed }));
       }
     } catch { /* Keep accessible defaults when storage is unavailable. */ }
+    finally { setPrefsLoaded(true); }
   }, []);
 
   useEffect(() => {
+    if (!prefsLoaded) return;
     const root = document.documentElement;
     root.dataset.kavehPointerGlow = prefs.pointerGlow ? 'on' : 'off';
     root.dataset.kavehCardTilt = prefs.cardTilt ? 'on' : 'off';
     root.dataset.kavehAmbientMotion = prefs.ambientMotion ? 'on' : 'off';
     root.dataset.kavehFocus = prefs.focusMode ? 'on' : 'off';
     try { window.localStorage.setItem('kaveh-experience-preferences', JSON.stringify(prefs)); } catch { /* Preferences remain active for this session. */ }
-  }, [prefs]);
+  }, [prefs, prefsLoaded]);
 
   useEffect(() => { if (open) { setActiveIndex(0); window.requestAnimationFrame(() => inputRef.current?.focus()); } }, [open]);
 
@@ -188,9 +192,7 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
     <div className="kaveh-ambient-layer" aria-hidden="true"><span className="kaveh-ambient-orb kaveh-ambient-orb-one" /><span className="kaveh-ambient-orb kaveh-ambient-orb-two" /><span className="kaveh-ambient-grid" /></div>
     <div className="kaveh-pointer-glow" aria-hidden="true" />
     <div className="kaveh-scroll-progress" aria-hidden="true" />
-    <button type="button" className="kaveh-visual-trigger" onClick={() => setVisualOpen((value) => !value)} aria-label="تنظیم جلوه‌های بصری" aria-expanded={visualOpen} title="تنظیم تجربهٔ بصری">
-      <Eye size={17} />
-    </button>
+    <button type="button" className="kaveh-visual-trigger" onClick={() => setVisualOpen((value) => !value)} aria-label="تنظیم جلوه‌های بصری" aria-expanded={visualOpen} title="تنظیم تجربهٔ بصری"><Eye size={17} /></button>
     {visualOpen && <aside className="kaveh-visual-panel" aria-label="تنظیم تجربهٔ بصری">
       <div className="kaveh-visual-panel-heading"><div><strong>تجربهٔ بصری کاوه</strong><small>جلوه‌ها را مطابق سلیقه‌ات تنظیم کن</small></div><button type="button" onClick={() => setVisualOpen(false)} aria-label="بستن تنظیمات"><X size={16} /></button></div>
       <button type="button" className="kaveh-visual-option" aria-pressed={prefs.pointerGlow} onClick={() => setPrefs((p) => ({ ...p, pointerGlow: !p.pointerGlow }))}><span className="kaveh-visual-option-icon"><MousePointer2 size={17} /></span><span><strong>نور دنبال‌کنندهٔ ماوس</strong><small>درخشش آرام همراه حرکت نشانگر</small></span><i className={prefs.pointerGlow ? 'is-on' : ''} /></button>

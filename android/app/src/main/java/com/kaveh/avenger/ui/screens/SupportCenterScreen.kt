@@ -1,8 +1,12 @@
 package com.kaveh.avenger.ui.screens
 
+import com.kaveh.avenger.ui.progress.OperationProgressController
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -111,6 +116,9 @@ fun SupportCenterScreen(
 ) {
     val scope = rememberCoroutineScope()
     var tickets by remember { mutableStateOf<List<SupportTicketRow>>(emptyList()) }
+    var ticketSearch by remember { mutableStateOf("") }
+    var ticketStatusFilter by remember { mutableStateOf("all") }
+    var ticketPriorityFilter by remember { mutableStateOf("all") }
     var selected by remember { mutableStateOf<SupportTicketRow?>(null) }
     var loading by remember { mutableStateOf(true) }
     var creating by remember { mutableStateOf(false) }
@@ -123,6 +131,14 @@ fun SupportCenterScreen(
     var priorityExpanded by remember { mutableStateOf(false) }
     var updatingTicket by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    val filteredTickets = tickets.filter { ticket ->
+        val matchesStatus = ticketStatusFilter == "all" || ticket.status == ticketStatusFilter
+        val matchesPriority = !staff || ticketPriorityFilter == "all" || ticket.priority == ticketPriorityFilter
+        val searchable = listOf(ticket.subject, ticket.requesterLabel.orEmpty(), ticket.category, ticket.id).joinToString(" ")
+        matchesStatus && matchesPriority &&
+            (ticketSearch.isBlank() || searchable.contains(ticketSearch.trim(), ignoreCase = true))
+    }
 
     suspend fun refreshTickets() {
         loading = true
@@ -194,12 +210,38 @@ fun SupportCenterScreen(
         updatingTicket = true
         error = null
         try {
-            supabase.postgrest["support_tickets"].update({
-                set(field, value)
-            }) {
-                filter { eq("id", ticket.id) }
+            OperationProgressController.run("به‌روزرسانی درخواست پشتیبانی") { progress ->
+                progress.advance(22, "بررسی مجوز و اطلاعات تغییر")
+                try {
+                    supabase.postgrest.rpc(
+                        "update_support_ticket",
+                        buildJsonObject {
+                            put("p_ticket_id", JsonPrimitive(ticket.id))
+                            if (field == "status") put("p_status", JsonPrimitive(value))
+                            else put("p_priority", JsonPrimitive(value))
+                        }
+                    )
+                } catch (rpcError: Exception) {
+                    val message = rpcError.message.orEmpty()
+                    if (!message.contains("PGRST202", ignoreCase = true) &&
+                        !message.contains("Could not find the function", ignoreCase = true)
+                    ) throw rpcError
+
+                    // Backward-compatible path until the additive RPC migration is applied.
+                    val now = java.time.Instant.now().toString()
+                    supabase.postgrest["support_tickets"].update({
+                        set(field, value)
+                        set("updated_at", now)
+                        if (field == "status") {
+                            set("resolved_at", if (value == "resolved" || value == "closed") now else null)
+                        }
+                    }) {
+                        filter { eq("id", ticket.id) }
+                    }
+                }
+                progress.advance(78, "تغییر در سرور ثبت شد؛ دریافت وضعیت تازه")
+                refreshTickets()
             }
-            refreshTickets()
         } catch (exception: Exception) {
             error = exception.message ?: "به‌روزرسانی درخواست ناموفق بود."
         } finally {
@@ -214,21 +256,25 @@ fun SupportCenterScreen(
         creating = true
         error = null
         try {
-            val ticketId = supabase.postgrest.rpc(
-                "create_support_ticket",
-                buildJsonObject {
-                    put("p_subject", JsonPrimitive(cleanSubject))
-                    put("p_category", JsonPrimitive(category))
-                    put("p_body", JsonPrimitive(cleanBody))
-                }
-            ).decodeAs<String>()
-            subject = ""
-            body = ""
-            category = "general"
-            showCreate = false
-            refreshTickets()
-            selected = tickets.firstOrNull { it.id == ticketId }
-                ?: tickets.firstOrNull()
+            OperationProgressController.run("ارسال درخواست پشتیبانی") { progress ->
+                progress.advance(18, "اعتبارسنجی عنوان و شرح درخواست")
+                val ticketId = supabase.postgrest.rpc(
+                    "create_support_ticket",
+                    buildJsonObject {
+                        put("p_subject", JsonPrimitive(cleanSubject))
+                        put("p_category", JsonPrimitive(category))
+                        put("p_body", JsonPrimitive(cleanBody))
+                    }
+                ).decodeAs<String>()
+                progress.advance(76, "درخواست در سرور ثبت شد؛ دریافت کد پیگیری")
+                subject = ""
+                body = ""
+                category = "general"
+                showCreate = false
+                refreshTickets()
+                selected = tickets.firstOrNull { it.id == ticketId }
+                    ?: tickets.firstOrNull()
+            }
         } catch (exception: Exception) {
             error = exception.message ?: "ثبت درخواست پشتیبانی ناموفق بود."
         } finally {
@@ -281,11 +327,26 @@ fun SupportCenterScreen(
                     Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
                 }
             }
-            ChatScreen(
-                supabase = supabase,
-                userId = userId,
-                conversationIds = setOf(selected!!.conversationId)
-            )
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            if (selected!!.status == "closed") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(
+                        "این درخواست بسته شده است. برای ادامه گفتگو، ابتدا وضعیت آن را به حالت باز تغییر دهید.",
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                ChatScreen(
+                    supabase = supabase,
+                    userId = userId,
+                    conversationIds = setOf(selected!!.conversationId)
+                )
+            }
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -303,13 +364,11 @@ fun SupportCenterScreen(
                 }
             }
 
-            if (!staff) {
-                OutlinedButton(onClick = { showCreate = !showCreate }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (showCreate) "بستن فرم درخواست" else "ثبت درخواست جدید")
-                }
+            OutlinedButton(onClick = { showCreate = !showCreate }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (showCreate) "بستن فرم درخواست" else if (staff) "ثبت درخواست شخصی" else "ثبت درخواست جدید")
             }
 
-            if (showCreate && !staff) {
+            if (showCreate) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
@@ -359,16 +418,51 @@ fun SupportCenterScreen(
 
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
+            OutlinedTextField(
+                value = ticketSearch,
+                onValueChange = { ticketSearch = it.take(160) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text(if (staff) "جست‌وجوی موضوع، درخواست‌دهنده یا شناسه" else "جست‌وجو در درخواست‌ها") }
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                FilterChip(selected = ticketStatusFilter == "all", onClick = { ticketStatusFilter = "all" }, label = { Text("همه ${tickets.size}") })
+                FilterChip(selected = ticketStatusFilter == "open", onClick = { ticketStatusFilter = "open" }, label = { Text("جدید ${tickets.count { it.status == "open" }}") })
+                FilterChip(selected = ticketStatusFilter == "in_progress", onClick = { ticketStatusFilter = "in_progress" }, label = { Text("در بررسی ${tickets.count { it.status == "in_progress" }}") })
+                FilterChip(selected = ticketStatusFilter == "waiting_user", onClick = { ticketStatusFilter = "waiting_user" }, label = { Text("منتظر کاربر ${tickets.count { it.status == "waiting_user" }}") })
+                FilterChip(selected = ticketStatusFilter == "resolved", onClick = { ticketStatusFilter = "resolved" }, label = { Text("حل‌شده ${tickets.count { it.status == "resolved" }}") })
+                FilterChip(selected = ticketStatusFilter == "closed", onClick = { ticketStatusFilter = "closed" }, label = { Text("بسته ${tickets.count { it.status == "closed" }}") })
+            }
+            if (staff) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    FilterChip(selected = ticketPriorityFilter == "all", onClick = { ticketPriorityFilter = "all" }, label = { Text("همه اولویت‌ها") })
+                    FilterChip(selected = ticketPriorityFilter == "urgent", onClick = { ticketPriorityFilter = "urgent" }, label = { Text("فوری ${tickets.count { it.priority == "urgent" }}") })
+                    FilterChip(selected = ticketPriorityFilter == "high", onClick = { ticketPriorityFilter = "high" }, label = { Text("بالا ${tickets.count { it.priority == "high" }}") })
+                    FilterChip(selected = ticketPriorityFilter == "normal", onClick = { ticketPriorityFilter = "normal" }, label = { Text("عادی ${tickets.count { it.priority == "normal" }}") })
+                    FilterChip(selected = ticketPriorityFilter == "low", onClick = { ticketPriorityFilter = "low" }, label = { Text("پایین ${tickets.count { it.priority == "low" }}") })
+                }
+            }
+
             if (loading) {
                 CircularProgressIndicator()
-            } else if (tickets.isEmpty()) {
+            } else if (filteredTickets.isEmpty()) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = MaterialTheme.shapes.large
                 ) {
                     Text(
-                        if (staff) "درخواستی برای نمایش وجود ندارد." else "هنوز درخواستی ثبت نکرده‌اید.",
+                        when {
+                            tickets.isEmpty() && staff -> "درخواستی برای نمایش وجود ندارد."
+                            tickets.isEmpty() -> "هنوز درخواستی ثبت نکرده‌اید."
+                            else -> "درخواستی با این فیلتر یا عبارت جست‌وجو پیدا نشد."
+                        },
                         modifier = Modifier.padding(18.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -378,7 +472,7 @@ fun SupportCenterScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(tickets, key = { it.id }) { ticket ->
+                    items(filteredTickets, key = { it.id }) { ticket ->
                         Card(
                             onClick = { selected = ticket },
                             modifier = Modifier.fillMaxWidth(),

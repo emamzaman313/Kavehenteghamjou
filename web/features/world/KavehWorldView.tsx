@@ -5,6 +5,7 @@ import { Award, CalendarDays, Check, Crown, Flame, Flag, Medal, Plus, RefreshCw,
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { SectionHeader } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 type Mission = { id: string; code: string; title: string; description: string; action_key: string; target_count: number; reward_points: number; reward_badge_code: string | null; active: boolean; starts_at: string; ends_at: string | null };
 type Progress = { mission_id: string; progress_count: number; completed_at: string | null; reward_claimed_at: string | null };
@@ -28,6 +29,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
   const [badges, setBadges] = useState<BadgeRow[]>([]);
   const [myBadges, setMyBadges] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [missionTitle, setMissionTitle] = useState('');
   const [missionDescription, setMissionDescription] = useState('');
@@ -48,45 +50,70 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
   const [badgeDescription, setBadgeDescription] = useState('');
   const [awardUser, setAwardUser] = useState('');
   const [selectedBadgeCode, setSelectedBadgeCode] = useState('');
+  const { runOperation } = useOperationProgress();
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const now = new Date().toISOString();
-    const [missionResult, progressResult, eventResult, joinedResult, levelResult, rankResult, badgeResult, myBadgeResult] = await Promise.all([
-      isAdmin ? supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').order('created_at', { ascending: false }) : supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').eq('active', true).lte('starts_at', now).or('ends_at.is.null,ends_at.gt.' + now).order('created_at', { ascending: false }),
-      supabase.from('mission_progress').select('mission_id,progress_count,completed_at,reward_claimed_at').eq('user_id', userId),
-      isAdmin ? supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').order('starts_at', { ascending: false }).limit(50) : supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').eq('status', 'published').or('ends_at.is.null,ends_at.gt.' + now).order('starts_at', { ascending: false }).limit(30),
-      supabase.from('platform_event_participants').select('event_id').eq('user_id', userId),
-      supabase.from('rank_levels').select('code,title,min_score,sort_order,accent_token').order('sort_order'),
-      supabase.from('user_rank_state').select('user_id,score,rank_code').order('score', { ascending: false }).limit(12),
-      supabase.from('badges').select('code,title,description,icon_key,accent_token'),
-      supabase.from('user_badges').select('badge_code').eq('user_id', userId),
-    ]);
-    if (missionResult.error) notify('بارگذاری مأموریت‌ها ناموفق بود: ' + missionResult.error.message, 'error');
-    else setMissions((missionResult.data ?? []) as Mission[]);
-    if (!progressResult.error) setProgress((progressResult.data ?? []) as Progress[]);
-    if (eventResult.error) notify('بارگذاری رویدادها ناموفق بود: ' + eventResult.error.message, 'error');
-    else setEvents((eventResult.data ?? []) as EventRow[]);
-    if (!joinedResult.error) setJoined(new Set((joinedResult.data ?? []).map((row) => row.event_id)));
-    const rankLevels = (levelResult.data ?? []) as RankLevel[];
-    setLevels(rankLevels);
-    const rankRows = (rankResult.data ?? []) as RankRow[];
-    const ids = rankRows.map((row) => row.user_id);
-    const { data: profiles } = ids.length ? await supabase.from('profiles').select('id,display_name,username').in('id', ids) : { data: [] };
-    const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-    setRanking(rankRows.map((row) => {
-      const profile = profileMap.get(row.user_id);
-      return { row, name: profile?.display_name || profile?.username || 'کاربر کاوه', username: profile?.username ?? null, rank: rankLevels.find((level) => level.code === row.rank_code) ?? null };
-    }));
-    const mine = rankRows.find((row) => row.user_id === userId);
-    if (mine) setMyRank({ score: mine.score, rank: rankLevels.find((level) => level.code === mine.rank_code) ?? null });
-    else {
-      const { data: own } = await supabase.from('user_rank_state').select('score,rank_code').eq('user_id', userId).maybeSingle();
-      setMyRank(own ? { score: own.score, rank: rankLevels.find((level) => level.code === own.rank_code) ?? null } : { score: 0, rank: rankLevels[0] ?? null });
+    setLoadErrors([]);
+    try {
+      const now = new Date().toISOString();
+      const [missionResult, progressResult, eventResult, joinedResult, levelResult, rankResult, badgeResult, myBadgeResult] = await Promise.all([
+        isAdmin ? supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').order('created_at', { ascending: false }) : supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').eq('active', true).lte('starts_at', now).or('ends_at.is.null,ends_at.gt.' + now).order('created_at', { ascending: false }),
+        supabase.from('mission_progress').select('mission_id,progress_count,completed_at,reward_claimed_at').eq('user_id', userId),
+        isAdmin ? supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').order('starts_at', { ascending: false }).limit(50) : supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').eq('status', 'published').or('ends_at.is.null,ends_at.gt.' + now).order('starts_at', { ascending: false }).limit(30),
+        supabase.from('platform_event_participants').select('event_id').eq('user_id', userId),
+        supabase.from('rank_levels').select('code,title,min_score,sort_order,accent_token').order('sort_order'),
+        supabase.from('user_rank_state').select('user_id,score,rank_code').order('score', { ascending: false }).limit(12),
+        supabase.from('badges').select('code,title,description,icon_key,accent_token'),
+        supabase.from('user_badges').select('badge_code').eq('user_id', userId),
+      ]);
+      const initialErrors = [
+        ['مأموریت‌ها', missionResult.error],
+        ['پیشرفت مأموریت‌ها', progressResult.error],
+        ['رویدادها', eventResult.error],
+        ['عضویت رویدادها', joinedResult.error],
+        ['سطوح رتبه', levelResult.error],
+        ['جدول رتبه‌بندی', rankResult.error],
+        ['نشان‌ها', badgeResult.error],
+        ['نشان‌های شما', myBadgeResult.error],
+      ] as const;
+      const failedSections = initialErrors.filter(([, error]) => error).map(([section, error]) => section + ': ' + (error?.message ?? 'خطای نامشخص'));
+      setLoadErrors(failedSections);
+      const firstInitialError = initialErrors.find(([, error]) => error);
+      if (firstInitialError) notify('بخشی از اطلاعات جهان کاوه بارگذاری نشد (' + firstInitialError[0] + '): ' + firstInitialError[1]?.message, 'error');
+      if (!missionResult.error) setMissions((missionResult.data ?? []) as Mission[]);
+      if (!progressResult.error) setProgress((progressResult.data ?? []) as Progress[]);
+      if (!eventResult.error) setEvents((eventResult.data ?? []) as EventRow[]);
+      if (!joinedResult.error) setJoined(new Set((joinedResult.data ?? []).map((row) => row.event_id)));
+      const rankLevels = (levelResult.data ?? []) as RankLevel[];
+      setLevels(rankLevels);
+      const rankRows = (rankResult.data ?? []) as RankRow[];
+      const ids = rankRows.map((row) => row.user_id);
+      const { data: profiles, error: profileError } = ids.length
+        ? await supabase.from('profiles').select('id,display_name,username').in('id', ids)
+        : { data: [], error: null };
+      if (profileError) notify('نام کاربران جدول رتبه‌بندی بارگذاری نشد: ' + profileError.message, 'error');
+      const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+      setRanking(rankRows.map((row) => {
+        const profile = profileMap.get(row.user_id);
+        return { row, name: profile?.display_name || profile?.username || 'کاربر کاوه', username: profile?.username ?? null, rank: rankLevels.find((level) => level.code === row.rank_code) ?? null };
+      }));
+      const mine = rankRows.find((row) => row.user_id === userId);
+      if (mine) setMyRank({ score: mine.score, rank: rankLevels.find((level) => level.code === mine.rank_code) ?? null });
+      else {
+        const { data: own } = await supabase.from('user_rank_state').select('score,rank_code').eq('user_id', userId).maybeSingle();
+        setMyRank(own ? { score: own.score, rank: rankLevels.find((level) => level.code === own.rank_code) ?? null } : { score: 0, rank: rankLevels[0] ?? null });
+      }
+      if (!badgeResult.error) setBadges((badgeResult.data ?? []) as BadgeRow[]);
+      if (!myBadgeResult.error) setMyBadges((myBadgeResult.data ?? []).map((row) => row.badge_code));
+
+    } catch (cause) {
+      const message = 'همگام‌سازی جهان کاوه: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته');
+      setLoadErrors([message]);
+      notify(message, 'error');
+    } finally {
+      setLoading(false);
     }
-    if (!badgeResult.error) setBadges((badgeResult.data ?? []) as BadgeRow[]);
-    if (!myBadgeResult.error) setMyBadges((myBadgeResult.data ?? []).map((row) => row.badge_code));
-    setLoading(false);
   }, [supabase, userId, isAdmin, notify]);
 
   useEffect(() => { void refresh(); }, [refresh]);
@@ -111,9 +138,22 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
   const joinEvent = async (event: EventRow) => {
     setBusy(event.id);
     const isJoined = joined.has(event.id);
-    const result = isJoined
-      ? await supabase.from('platform_event_participants').delete().eq('event_id', event.id).eq('user_id', userId)
-      : await supabase.from('platform_event_participants').insert({ event_id: event.id, user_id: userId });
+    let result: { error: { message: string } | null };
+    try {
+      result = await runOperation(isJoined ? 'خروج از رویداد' : 'ثبت‌نام در رویداد', async (advance) => {
+        advance(20, 'بررسی وضعیت عضویت فعلی');
+        const response = isJoined
+          ? await supabase.from('platform_event_participants').delete().eq('event_id', event.id).eq('user_id', userId)
+          : await supabase.from('platform_event_participants').insert({ event_id: event.id, user_id: userId });
+        if (response.error) throw response.error;
+        advance(88, 'تغییر عضویت در سرور ثبت شد');
+        return response;
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('تغییر عضویت رویداد انجام نشد: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
     if (result.error) { notify('تغییر عضویت رویداد انجام نشد: ' + result.error.message, 'error'); return; }
     setJoined((current) => { const next = new Set(current); if (isJoined) next.delete(event.id); else next.add(event.id); return next; });
@@ -124,13 +164,24 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     event.preventDefault();
     if (!missionTitle.trim()) return;
     setBusy('mission-create');
-    const { error } = await supabase.from('daily_missions').insert({
-      code: 'mission-' + Date.now(), title: missionTitle.trim(), description: missionDescription.trim(),
-      action_key: missionAction, target_count: Number(missionTarget), reward_points: Number(missionReward), reward_badge_code: missionBadgeCode || null,
-      active: true, starts_at: new Date().toISOString(), created_by: userId,
-    });
+    try {
+      await runOperation('ساخت مأموریت', async (advance) => {
+        advance(18, 'اعتبارسنجی عنوان، هدف و پاداش مأموریت');
+        advance(46, 'ثبت مأموریت در پایگاه داده');
+        const { error } = await supabase.from('daily_missions').insert({
+          code: 'mission-' + Date.now(), title: missionTitle.trim(), description: missionDescription.trim(),
+          action_key: missionAction, target_count: Number(missionTarget), reward_points: Number(missionReward), reward_badge_code: missionBadgeCode || null,
+          active: true, starts_at: new Date().toISOString(), created_by: userId,
+        });
+        if (error) throw error;
+        advance(88, 'مأموریت با مجوز سرور ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('ساخت مأموریت ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('ساخت مأموریت ناموفق بود: ' + error.message, 'error'); return; }
     setMissionTitle(''); setMissionDescription(''); setMissionTarget('1'); setMissionReward('25'); setMissionBadgeCode('');
     notify('مأموریت جدید منتشر شد.'); await refresh();
   };
@@ -144,37 +195,72 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     if (eventBanner && (!eventBanner.type.startsWith('image/') || eventBanner.size > 5 * 1024 * 1024)) { notify('بنر رویداد باید تصویر معتبر و حداکثر ۵ مگابایت باشد.', 'error'); return; }
     setBusy('event-create');
     let bannerPath: string | null = null;
-    if (eventBanner) {
-      const safeName = eventBanner.name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80) || 'event-cover';
-      bannerPath = userId + '/events/' + crypto.randomUUID() + '-' + safeName;
-      const upload = await supabase.storage.from('post-media').upload(bannerPath, eventBanner, { contentType: eventBanner.type, cacheControl: '3600', upsert: false });
-      if (upload.error) { setBusy(null); notify('بارگذاری بنر رویداد ناموفق بود: ' + upload.error.message, 'error'); return; }
+    try {
+      await runOperation('ایجاد و انتشار رویداد', async (advance) => {
+        advance(14, 'اعتبارسنجی زمان، دسته‌بندی و اطلاعات رویداد');
+        if (eventBanner) {
+          const safeName = eventBanner.name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80) || 'event-cover';
+          bannerPath = userId + '/events/' + crypto.randomUUID() + '-' + safeName;
+          advance(42, 'بارگذاری بنر رویداد');
+          const upload = await supabase.storage.from('post-media').upload(bannerPath, eventBanner, { contentType: eventBanner.type, cacheControl: '3600', upsert: false });
+          if (upload.error) throw upload.error;
+          advance(72, 'بنر ذخیره شد؛ ثبت جزئیات رویداد');
+        } else {
+          advance(56, 'آماده‌سازی جزئیات رویداد');
+        }
+        const { error } = await supabase.from('platform_events').insert({
+          title: eventTitle.trim(), summary: eventSummary.trim(), body: eventBody.trim(),
+          category: eventCategory, status: 'published', starts_at: startsAt, ends_at: endsAt,
+          points_reward: Number(eventReward), banner_path: bannerPath, created_by: userId,
+        });
+        if (error) throw error;
+        advance(92, 'رویداد در سرور منتشر شد');
+      });
+    } catch (cause) {
+      if (bannerPath) await supabase.storage.from('post-media').remove([bannerPath]);
+      setBusy(null);
+      notify('ساخت رویداد ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
     }
-    const { error } = await supabase.from('platform_events').insert({
-      title: eventTitle.trim(), summary: eventSummary.trim(), body: eventBody.trim(),
-      category: eventCategory, status: 'published', starts_at: startsAt, ends_at: endsAt,
-      points_reward: Number(eventReward), banner_path: bannerPath, created_by: userId,
-    });
     setBusy(null);
-    if (error) { if (bannerPath) await supabase.storage.from('post-media').remove([bannerPath]); notify('ساخت رویداد ناموفق بود: ' + error.message, 'error'); return; }
     setEventTitle(''); setEventSummary(''); setEventBody(''); setEventStart(''); setEventEnd(''); setEventReward('0'); setEventBanner(null);
     notify('رویداد در جهان کاوه منتشر شد.'); await refresh();
   };
 
   const toggleMission = async (mission: Mission) => {
     setBusy(mission.id);
-    const { error } = await supabase.from('daily_missions').update({ active: !mission.active }).eq('id', mission.id);
+    try {
+      await runOperation('به‌روزرسانی مأموریت', async (advance) => {
+        advance(30, 'بررسی مجوز و وضعیت فعلی مأموریت');
+        const { error } = await supabase.from('daily_missions').update({ active: !mission.active }).eq('id', mission.id);
+        if (error) throw error;
+        advance(88, 'وضعیت مأموریت در سرور ذخیره شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('تغییر وضعیت مأموریت ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('تغییر وضعیت مأموریت ناموفق بود: ' + error.message, 'error'); return; }
     notify(mission.active ? 'مأموریت متوقف شد.' : 'مأموریت دوباره فعال شد.'); await refresh();
   };
 
   const updateEventStatus = async (event: EventRow, status: string) => {
     if (status === 'archived' && !window.confirm('با پایان دادن به رویداد، امتیاز جایزه به تمام شرکت‌کنندگان ثبت‌شده اعطا می‌شود. ادامه می‌دهی؟')) return;
     setBusy(event.id);
-    const { error } = await supabase.from('platform_events').update({ status }).eq('id', event.id);
+    try {
+      await runOperation('تغییر وضعیت رویداد', async (advance) => {
+        advance(28, 'بررسی مجوز تغییر وضعیت');
+        const { error } = await supabase.from('platform_events').update({ status }).eq('id', event.id);
+        if (error) throw error;
+        advance(90, 'وضعیت جدید در سرور ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('تغییر وضعیت رویداد ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('تغییر وضعیت رویداد ناموفق بود.', 'error'); return; }
     notify('وضعیت رویداد به‌روزرسانی شد.'); await refresh();
   };
 
@@ -183,9 +269,19 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     const code = badgeCode.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     if (!code || !badgeTitle.trim()) return;
     setBusy('badge-create');
-    const { error } = await supabase.from('badges').insert({ code, title: badgeTitle.trim(), description: badgeDescription.trim(), icon_key: 'award', accent_token: 'gold' });
+    try {
+      await runOperation('ساخت نشان افتخار', async (advance) => {
+        advance(26, 'اعتبارسنجی شناسه و عنوان نشان');
+        const { error } = await supabase.from('badges').insert({ code, title: badgeTitle.trim(), description: badgeDescription.trim(), icon_key: 'award', accent_token: 'gold' });
+        if (error) throw error;
+        advance(90, 'نشان در تالار افتخار ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('ساخت نشان ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('ساخت نشان ناموفق بود: ' + error.message, 'error'); return; }
     setBadgeCode(''); setBadgeTitle(''); setBadgeDescription(''); notify('نشان جدید ساخته شد.'); await refresh();
   };
 
@@ -193,9 +289,19 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
     event.preventDefault();
     if (!awardUser || !selectedBadgeCode) return;
     setBusy('badge-award');
-    const { error } = await supabase.from('user_badges').insert({ user_id: awardUser.trim(), badge_code: selectedBadgeCode, awarded_by: userId });
+    try {
+      await runOperation('اعطای نشان به کاربر', async (advance) => {
+        advance(24, 'بررسی شناسه کاربر و نشان انتخابی');
+        const { error } = await supabase.from('user_badges').insert({ user_id: awardUser.trim(), badge_code: selectedBadgeCode, awarded_by: userId });
+        if (error) throw error;
+        advance(90, 'اعطای نشان با مجوز مدیر ثبت شد');
+      });
+    } catch (cause) {
+      setBusy(null);
+      notify('اعطای نشان ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setBusy(null);
-    if (error) { notify('اعطای نشان ناموفق بود: ' + error.message, 'error'); return; }
     setAwardUser(''); setSelectedBadgeCode(''); notify('نشان با موفقیت اعطا شد.'); await refresh();
   };
 
@@ -217,6 +323,7 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
       </div>
       {isAdmin && <div className="world-admin-note"><ShieldIcon/> کنترل مدیریتی فعال است؛ مأموریت، رویداد و نشان‌ها از همین بخش مدیریت می‌شوند.</div>}
       {loading ? <div className="world-loading"><span className="spinner"/> در حال همگام‌سازی جهان کاوه…</div> : <>
+        {loadErrors.length > 0 && <div role="alert" style={{display:'grid',gap:8,padding:14,border:'1px solid var(--danger, #c75b5b)',borderRadius:14,background:'var(--surface-2, rgba(180,70,70,.08))'}}><strong>بعضی اطلاعات جهان کاوه بارگذاری نشد</strong><span style={{fontSize:11,color:'var(--muted)'}}>داده‌های بخش‌های ناموفق را خالی فرض نکن؛ اتصال یا مجوز دسترسی باید بررسی شود.</span><ul style={{margin:0,paddingInlineStart:20,fontSize:11}}>{loadErrors.map((item)=><li key={item}>{item}</li>)}</ul><button type="button" className="button button-quiet" onClick={()=>void refresh()} style={{justifySelf:'start'}}><RefreshCw size={14}/> تلاش دوباره</button></div>}
         {tab === 'missions' && <div className="world-section-grid">
           <div className="world-list">{missions.length ? missions.map((mission) => {
             const state = progressMap.get(mission.id);

@@ -2,6 +2,8 @@ package com.kaveh.avenger.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -32,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.kaveh.avenger.ui.theme.KavehRadius
+import com.kaveh.avenger.ui.theme.KavehSpacing
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -40,6 +45,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.util.UUID
+import com.kaveh.avenger.ui.progress.OperationProgressController
 
 @Serializable
 private data class WorldMissionRow(
@@ -200,6 +206,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
     val badges = remember { mutableStateListOf<WorldBadgeRow>() }
     val myBadgeCodes = remember { mutableStateListOf<String>() }
     var score by remember { mutableStateOf(0L) }
+    var selectedTab by remember { mutableStateOf("missions") }
     var rankTitle by remember { mutableStateOf("تازه‌وارد") }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -279,13 +286,13 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
 
     LaunchedEffect(userId, isAdmin) { refresh() }
 
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(KavehSpacing.x3)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(KavehRadius.extraLarge),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.padding(KavehSpacing.x5), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("KAVEH UNIVERSE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 Text("جهان کاوه", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                 Text("با مشارکت واقعی رشد کن، مأموریت‌ها را کامل کن و در جامعه بدرخش.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -305,8 +312,28 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                 }
             }
         }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(selected = selectedTab == "missions", onClick = { selectedTab = "missions" }, label = { Text("مأموریت‌ها") })
+            FilterChip(selected = selectedTab == "events", onClick = { selectedTab = "events" }, label = { Text("رویدادها") })
+            FilterChip(selected = selectedTab == "leaderboard", onClick = { selectedTab = "leaderboard" }, label = { Text("برترین‌ها") })
+            FilterChip(selected = selectedTab == "honors", onClick = { selectedTab = "honors" }, label = { Text("تالار افتخار") })
+            if (isAdmin) FilterChip(selected = selectedTab == "admin", onClick = { selectedTab = "admin" }, label = { Text("مدیریت") })
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("مأموریت‌های فعال", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                when (selectedTab) {
+                    "events" -> "رویدادهای جامعه"
+                    "leaderboard" -> "جدول برترین‌های کاوه"
+                    "honors" -> "تالار افتخار"
+                    "admin" -> "کنترل مدیریتی جهان کاوه"
+                    else -> "مأموریت‌های فعال"
+                },
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
             OutlinedButton(onClick = { scope.launch { refresh() } }, enabled = !loading) { Text("به‌روزرسانی") }
         }
         if (loading) {
@@ -316,6 +343,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
             Button(onClick = { scope.launch { refresh() } }) { Text("تلاش دوباره") }
         } else {
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (selectedTab == "missions") {
                 items(missions, key = { it.id }) { mission ->
                     val state = progress.firstOrNull { it.missionId == mission.id }
                     val count = minOf(state?.progressCount ?: 0, mission.targetCount)
@@ -333,7 +361,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                     scope.launch {
                                         busy = true
                                         try {
-                                            supabase.postgrest["daily_missions"].update({ set("active", !mission.active) }) { filter { eq("id", mission.id) } }
+                                            OperationProgressController.run("به‌روزرسانی مأموریت") { progress ->
+                                                progress.advance(28, "بررسی مجوز و وضعیت مأموریت")
+                                                supabase.postgrest["daily_missions"].update({ set("active", !mission.active) }) { filter { eq("id", mission.id) } }
+                                                progress.advance(90, "وضعیت مأموریت در سرور ثبت شد")
+                                            }
                                             refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "تغییر وضعیت مأموریت ناموفق بود." }
                                         finally { busy = false }
@@ -343,6 +375,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
+                }
+                if (selectedTab == "events") {
                 item { Text("رویدادهای جامعه", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                 items(events, key = { it.id }) { event ->
                     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -357,14 +391,18 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                         scope.launch {
                                             busy = true
                                             try {
-                                                if (joined.contains(event.id)) {
-                                                    supabase.postgrest["platform_event_participants"].delete {
-                                                        filter { eq("event_id", event.id); eq("user_id", userId) }
+                                                OperationProgressController.run(if (joined.contains(event.id)) "خروج از رویداد" else "ثبت‌نام در رویداد") { progress ->
+                                                    progress.advance(24, "بررسی وضعیت عضویت")
+                                                    if (joined.contains(event.id)) {
+                                                        supabase.postgrest["platform_event_participants"].delete {
+                                                            filter { eq("event_id", event.id); eq("user_id", userId) }
+                                                        }
+                                                        joined.remove(event.id)
+                                                    } else {
+                                                        supabase.postgrest["platform_event_participants"].insert(WorldParticipantInsert(event.id, userId))
+                                                        joined.add(event.id)
                                                     }
-                                                    joined.remove(event.id)
-                                                } else {
-                                                    supabase.postgrest["platform_event_participants"].insert(WorldParticipantInsert(event.id, userId))
-                                                    joined.add(event.id)
+                                                    progress.advance(90, "وضعیت شرکت در رویداد ثبت شد")
                                                 }
                                             } catch (exception: Exception) {
                                                 error = exception.message ?: "تغییر عضویت رویداد ناموفق بود."
@@ -379,7 +417,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                     scope.launch {
                                         busy = true
                                         try {
-                                            supabase.postgrest["platform_events"].update({ set("status", "archived") }) { filter { eq("id", event.id) } }
+                                            OperationProgressController.run("پایان دادن به رویداد") { progress ->
+                                                progress.advance(26, "بررسی رویداد و دسترسی مدیر")
+                                                supabase.postgrest["platform_events"].update({ set("status", "archived") }) { filter { eq("id", event.id) } }
+                                                progress.advance(90, "پایان رویداد در سرور ثبت شد")
+                                            }
                                             refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "پایان رویداد ناموفق بود." }
                                         finally { busy = false }
@@ -389,6 +431,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
+                }
+                if (selectedTab == "honors") {
                 item { Text("تالار افتخار", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                 items(badges, key = { it.code }) { badge ->
                     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -401,7 +445,8 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
-                if (isAdmin) {
+                }
+                if (selectedTab == "admin" && isAdmin) {
                     item {
                         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -426,7 +471,12 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                             }
                                             busy = true
                                             try {
-                                                supabase.postgrest["daily_missions"].insert(WorldMissionInsert("android-${UUID.randomUUID()}", missionTitle.trim(), missionDescription.trim(), missionAction, target, reward, true, Instant.now().toString(), userId, missionBadgeCode.ifBlank { null }))
+                                                OperationProgressController.run("ساخت مأموریت") { progress ->
+                                                    progress.advance(22, "اعتبارسنجی عنوان، هدف و پاداش")
+                                                    progress.advance(52, "ثبت مأموریت در پایگاه داده")
+                                                    supabase.postgrest["daily_missions"].insert(WorldMissionInsert("android-${UUID.randomUUID()}", missionTitle.trim(), missionDescription.trim(), missionAction, target, reward, true, Instant.now().toString(), userId, missionBadgeCode.ifBlank { null }))
+                                                    progress.advance(90, "مأموریت با مجوز سرور ثبت شد")
+                                                }
                                                 missionTitle = ""; missionDescription = ""; missionBadgeCode = ""; refresh()
                                             } catch (exception: Exception) { error = exception.message ?: "ساخت مأموریت ناموفق بود." }
                                             finally { busy = false }
@@ -450,7 +500,12 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                             }
                                             busy = true
                                             try {
-                                                supabase.postgrest["platform_events"].insert(WorldEventInsert(eventTitle.trim(), eventSummary.trim(), eventBody.trim(), eventCategory, "published", Instant.now().toString(), 0, userId))
+                                                OperationProgressController.run("ایجاد و انتشار رویداد") { progress ->
+                                                    progress.advance(20, "اعتبارسنجی عنوان، توضیحات و دسته‌بندی")
+                                                    progress.advance(54, "ثبت رویداد در سرور")
+                                                    supabase.postgrest["platform_events"].insert(WorldEventInsert(eventTitle.trim(), eventSummary.trim(), eventBody.trim(), eventCategory, "published", Instant.now().toString(), 0, userId))
+                                                    progress.advance(92, "رویداد منتشر شد")
+                                                }
                                                 eventTitle = ""; eventSummary = ""; eventBody = ""; refresh()
                                             } catch (exception: Exception) { error = exception.message ?: "ساخت رویداد ناموفق بود." }
                                             finally { busy = false }
@@ -469,7 +524,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                         if (badgeCode.length < 3 || badgeTitle.trim().length < 2) { error = "کد یا عنوان نشان معتبر نیست."; return@launch }
                                         busy = true
                                         try {
-                                            supabase.postgrest["badges"].insert(WorldBadgeInsert(badgeCode, badgeTitle.trim(), badgeDescription.trim()))
+                                            OperationProgressController.run("ساخت نشان افتخار") { progress ->
+                                                progress.advance(26, "اعتبارسنجی شناسه و عنوان نشان")
+                                                supabase.postgrest["badges"].insert(WorldBadgeInsert(badgeCode, badgeTitle.trim(), badgeDescription.trim()))
+                                                progress.advance(90, "نشان در تالار افتخار ثبت شد")
+                                            }
                                             badgeCode = ""; badgeTitle = ""; badgeDescription = ""; refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "ساخت نشان ناموفق بود." }
                                         finally { busy = false }
@@ -482,7 +541,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                         if (awardUserId.isBlank() || selectedBadgeCode.isBlank()) { error = "شناسه کاربر و کد نشان لازم است."; return@launch }
                                         busy = true
                                         try {
-                                            supabase.postgrest["user_badges"].insert(WorldUserBadgeInsert(awardUserId, selectedBadgeCode, userId))
+                                            OperationProgressController.run("اعطای نشان به کاربر") { progress ->
+                                                progress.advance(24, "بررسی شناسه کاربر و مجوز مدیر")
+                                                supabase.postgrest["user_badges"].insert(WorldUserBadgeInsert(awardUserId, selectedBadgeCode, userId))
+                                                progress.advance(90, "اعطای نشان در سرور ثبت شد")
+                                            }
                                             awardUserId = ""; selectedBadgeCode = ""; refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "اعطای نشان ناموفق بود." }
                                         finally { busy = false }
@@ -492,6 +555,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                         }
                     }
                 }
+                if (selectedTab == "leaderboard") {
                 item {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -504,7 +568,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                 items(ranking, key = { it.userId }) { row ->
                     val isMe = row.userId == userId
                     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(KavehSpacing.x3), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .12f)) {
                                 Text("#" + (ranking.indexOf(row) + 1), modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                             }
@@ -515,6 +579,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                             Text("${row.score} XP", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
                         }
                     }
+                }
                 }
             }
         }

@@ -1,11 +1,15 @@
 package com.kaveh.avenger.ui.screens
 
+import com.kaveh.avenger.ui.progress.OperationProgressController
+
 import android.net.Uri
 import android.content.Context
 import android.content.Intent
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import android.media.MediaPlayer
+import android.media.MediaMetadataRetriever
+import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.MediaController
@@ -13,6 +17,7 @@ import android.widget.VideoView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
 import com.kaveh.avenger.BuildConfig
 import coil.ImageLoader
 import coil.compose.AsyncImage
@@ -35,6 +40,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -56,6 +62,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -70,6 +77,7 @@ import io.ktor.http.ContentType
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import java.util.UUID
 import java.io.File
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -260,6 +268,7 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
             error = exception.message ?: "دریافت دیدگاه‌ها ناموفق بود."
         }
     }
+
 
     LaunchedEffect(userId) { refresh() }
 
@@ -871,6 +880,8 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                         message = null
                         error = null
                         try {
+                            OperationProgressController.run("ذخیره هویت پروفایل") { progress ->
+                            progress.advance(10, "اعتبارسنجی اطلاعات و تنظیمات هویت")
                             var coverPath = profile?.coverPath
                             selectedCover?.let { uri ->
                                 val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
@@ -883,6 +894,7 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                     contentType = ContentType.parse(mime)
                                     upsert = false
                                 }
+                                progress.advance(42, "تصویر کاور در فضای رسانه ذخیره شد")
                             }
                             var profileMusicPath = if (removeProfileMusic) null else profile?.profileMusicPath
                             if (!removeProfileMusic) selectedMusic?.let { uri ->
@@ -896,8 +908,10 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                     contentType = ContentType.parse(mime)
                                     upsert = false
                                 }
+                                progress.advance(68, "موسیقی پروفایل بارگذاری شد")
                             }
                             require(themeAccent.matches(Regex("^#[0-9a-fA-F]{6}$")) && themeSurface.matches(Regex("^#[0-9a-fA-F]{6}$")) && themeText.matches(Regex("^#[0-9a-fA-F]{6}$"))) { "کد رنگ باید به شکل #RRGGBB باشد." }
+                            progress.advance(78, "تنظیمات پروفایل آماده ثبت نهایی است")
                             supabase.postgrest["profiles"].update({
                                 set("display_name", displayName.trim())
                                 set("bio", bio.trim())
@@ -914,12 +928,14 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                             }) {
                                 filter { eq("id", userId) }
                             }
+                            progress.advance(92, "تغییرات هویت در سرور ذخیره شد")
                             selectedCover = null
                             selectedMusic = null
                             removeProfileMusic = false
                             profilePlayer?.release(); profilePlayer = null; profileMusicPlaying = false
                             message = "پروفایل ذخیره شد."
                             loadProfile()
+                            }
                         } catch (exception: Exception) {
                             error = exception.message ?: "ذخیره پروفایل ناموفق بود."
                         } finally {
@@ -945,7 +961,9 @@ private data class ReelRow(
     @SerialName("video_path") val videoPath: String,
     @SerialName("views_count") val viewsCount: Long = 0,
     @SerialName("allow_comments") val allowComments: Boolean = true,
-    @SerialName("published_at") val publishedAt: String
+    @SerialName("published_at") val publishedAt: String,
+    @SerialName("cover_path") val coverPath: String? = null,
+    @SerialName("duration_seconds") val durationSeconds: Int? = null
 )
 
 @Serializable
@@ -954,7 +972,9 @@ private data class ReelInsertRow(
     val caption: String,
     @SerialName("video_path") val videoPath: String,
     @SerialName("mime_type") val mimeType: String,
-    val visibility: String = "public"
+    val visibility: String = "public",
+    @SerialName("cover_path") val coverPath: String? = null,
+    @SerialName("duration_seconds") val durationSeconds: Int? = null
 )
 
 @Serializable
@@ -1009,6 +1029,8 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
     val cards = remember { mutableStateListOf<ReelCardState>() }
     var loading by remember { mutableStateOf(true) }
     var busyReel by remember { mutableStateOf<String?>(null) }
+    var showOnlyMyReels by remember { mutableStateOf(false) }
+    var cinemaMode by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val viewedReels = remember { mutableSetOf<String>() }
 
@@ -1055,7 +1077,27 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
 
     LaunchedEffect(userId) { refresh() }
 
+    val myReels = cards.filter { it.reel.authorId == userId }
+    val myReelViews = myReels.sumOf { it.reel.viewsCount }
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+            Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    Text(myReels.size.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("ویدئوهای من", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    Text(myReelViews.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("بازدید ویدئوهای من", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    Text(cards.size.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("ویدئوهای قابل مشاهده", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Text("استودیوی سازندگان · انتشار عمومی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("برای هر ویدئو به‌صورت خودکار تصویر جلد ساخته می‌شود؛ حداکثر ۵۰ مگابایت و ۱۰ دقیقه.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(value = caption, onValueChange = { caption = it.take(2200) }, label = { Text("توضیح ریلز") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { videoPicker.launch("video/*") }, enabled = !uploading) { Text(if (selectedVideo == null) "انتخاب ویدئو" else "تغییر ویدئو") }
@@ -1065,20 +1107,64 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                     uploading = true
                     error = null
                     try {
+                        OperationProgressController.run("انتشار ریلز") { progress ->
+                        progress.advance(12, "اعتبارسنجی ویدئو و سقف حجم")
                         val mime = context.contentResolver.getType(uri) ?: "video/mp4"
                         require(mime.startsWith("video/")) { "فایل انتخاب‌شده ویدئو نیست." }
                         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                             ?: throw IllegalStateException("خواندن ویدئو ناموفق بود.")
                         require(bytes.size <= 50_000_000) { "حداکثر حجم ویدئو ۵۰ مگابایت است." }
-                        val path = "$userId/reels/${UUID.randomUUID()}"
-                        supabase.storage.from("post-media").upload(path, bytes) {
-                            contentType = ContentType.parse(mime)
-                            upsert = false
+                        progress.advance(30, "خواندن رسانه و استخراج مدت و کاور")
+                        var durationSeconds: Int? = null
+                        var coverBytes: ByteArray? = null
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(context, uri)
+                            durationSeconds = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                ?.toLongOrNull()?.div(1000)?.toInt()
+                            if (durationSeconds != null) require(durationSeconds in 1..600) { "مدت ریلز باید حداکثر ۱۰ دقیقه باشد." }
+                            retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { frame ->
+                                val output = ByteArrayOutputStream()
+                                frame.compress(Bitmap.CompressFormat.JPEG, 82, output)
+                                coverBytes = output.toByteArray()
+                                frame.recycle()
+                            }
+                        } finally {
+                            retriever.release()
                         }
-                        supabase.postgrest["reels"].insert(ReelInsertRow(userId, caption.trim(), path, mime))
-                        selectedVideo = null
-                        caption = ""
-                        refresh()
+                        val path = "$userId/reels/${UUID.randomUUID()}"
+                        val uploadedPaths = mutableListOf<String>()
+                        try {
+                            progress.advance(48, "انتقال ویدئو به مخزن رسانه")
+                            supabase.storage.from("post-media").upload(path, bytes) {
+                                contentType = ContentType.parse(mime)
+                                upsert = false
+                            }
+                            uploadedPaths.add(path)
+                            progress.advance(74, "ویدئو منتقل شد؛ ذخیره کاور")
+                            val coverPath = if (coverBytes != null) "$userId/reel-covers/${UUID.randomUUID()}.jpg" else null
+                            if (coverPath != null && coverBytes != null) {
+                                supabase.storage.from("post-media").upload(coverPath, coverBytes!!) {
+                                    contentType = ContentType.parse("image/jpeg")
+                                    upsert = false
+                                }
+                                uploadedPaths.add(coverPath)
+                            }
+                            progress.advance(88, "ثبت metadata ریلز")
+                            supabase.postgrest["reels"].insert(
+                                ReelInsertRow(userId, caption.trim(), path, mime, "public", coverPath, durationSeconds)
+                            )
+                            progress.advance(96, "ریلز در سرور منتشر شد")
+                            selectedVideo = null
+                            caption = ""
+                            refresh()
+                        } catch (exception: Exception) {
+                            if (uploadedPaths.isNotEmpty()) {
+                                runCatching { supabase.storage["post-media"].delete(*uploadedPaths.toTypedArray()) }
+                            }
+                            throw exception
+                        }
+                        }
                     } catch (exception: Exception) {
                         error = exception.message ?: "انتشار ریلز ناموفق بود."
                     } finally {
@@ -1087,17 +1173,31 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                 }
             }, enabled = selectedVideo != null && !uploading) { Text(if (uploading) "در حال بارگذاری…" else "انتشار ریلز") }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text("ویدئوهای کوتاه", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { scope.launch { refresh() } }) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی")
             }
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            FilterChip(selected = !showOnlyMyReels, onClick = { showOnlyMyReels = false }, label = { Text("همه ویدئوها") })
+            FilterChip(selected = showOnlyMyReels, onClick = { showOnlyMyReels = true }, label = { Text("ویدئوهای من") })
+            Spacer(modifier = Modifier.weight(1f))
+            TextButton(onClick = { cinemaMode = !cinemaMode }) {
+                Text(if (cinemaMode) "نمای عادی" else "نمای سینمایی")
+            }
+        }
+        val visibleReels = if (showOnlyMyReels) cards.filter { it.reel.authorId == userId } else cards
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (!loading && cards.isEmpty() && error == null) Text("هنوز ریلزی منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!loading && cards.isNotEmpty() && visibleReels.isEmpty()) Text("هنوز ریلزی از شما منتشر نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(cards, key = { it.reel.id }) { card ->
+            items(visibleReels, key = { it.reel.id }) { card ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
@@ -1106,8 +1206,16 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(card.author, fontWeight = FontWeight.SemiBold)
                         val videoUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/post-media/" + card.reel.videoPath
+                        card.reel.coverPath?.let { coverPath ->
+                            AsyncImage(
+                                model = BuildConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/post-media/" + coverPath,
+                                contentDescription = "تصویر جلد ریلز",
+                                modifier = Modifier.fillMaxWidth().height(110.dp),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                         AndroidView(
-                            modifier = Modifier.fillMaxWidth().height(250.dp),
+                            modifier = Modifier.fillMaxWidth().height(if (cinemaMode) 390.dp else 250.dp),
                             factory = { viewContext ->
                                 VideoView(viewContext).apply {
                                     tag = videoUrl
@@ -1138,6 +1246,7 @@ fun ReelsScreen(supabase: SupabaseClient, userId: String) {
                             },
                             onRelease = { view -> view.stopPlayback() }
                         )
+                        card.reel.durationSeconds?.let { duration -> Text("مدت ویدئو: ${duration / 60}:${(duration % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         if (card.reel.caption.isNotBlank()) Text(card.reel.caption)
                         if (card.reel.allowComments) {
                             Text("دیدگاه‌ها (" + card.comments.size + ")", fontWeight = FontWeight.SemiBold)
@@ -1559,6 +1668,44 @@ private data class CommunityRow(
 )
 
 @Serializable
+private data class CommunityConversationInsert(
+    val kind: String,
+    val title: String,
+    @SerialName("created_by") val createdBy: String
+)
+
+@Serializable
+private data class CommunityConversationIdRow(val id: String)
+
+@Serializable
+private data class CommunitySpaceMetadataRow(
+    @SerialName("conversation_id") val conversationId: String
+)
+
+@Serializable
+private data class CommunityOwnerMemberInsert(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("member_role") val memberRole: String = "owner"
+)
+
+@Serializable
+private data class GroupSpaceInsert(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("owner_id") val ownerId: String,
+    val description: String,
+    @SerialName("join_approval_required") val joinApprovalRequired: Boolean
+)
+
+@Serializable
+private data class ChannelSpaceInsert(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("owner_id") val ownerId: String,
+    val description: String,
+    val visibility: String = "public"
+)
+
+@Serializable
 private data class JoinCommunityArgs(
     @SerialName("p_conversation_id") val conversationId: String
 )
@@ -1573,15 +1720,32 @@ private data class CommunityRequestRow(
     @SerialName("conversation_id") val conversationId: String
 )
 
+@Serializable
+private data class CommunityJoinRequestRow(
+    val id: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("requester_id") val requesterId: String,
+    @SerialName("requested_at") val requestedAt: String
+)
+
 @Composable
 fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
     val scope = rememberCoroutineScope()
     val communities = remember { mutableStateListOf<CommunityRow>() }
+    val pendingRequests = remember { mutableStateListOf<CommunityJoinRequestRow>() }
     val members = remember { mutableStateOf<Set<String>>(emptySet()) }
     val pending = remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
     var busyId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var communityQuery by remember { mutableStateOf("") }
+    var communityFilter by remember { mutableStateOf("all") }
+    var showCreateSpace by remember { mutableStateOf(false) }
+    var createSpaceType by remember { mutableStateOf("group") }
+    var createSpaceTitle by remember { mutableStateOf("") }
+    var createSpaceDescription by remember { mutableStateOf("") }
+    var createSpaceApproval by remember { mutableStateOf(false) }
+    var creatingSpace by remember { mutableStateOf(false) }
 
     suspend fun refresh() {
         loading = true
@@ -1594,14 +1758,100 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             val myRequests = supabase.postgrest["conversation_join_requests"].select {
                 filter { eq("requester_id", userId); eq("status", "pending") }
             }.decodeList<CommunityRequestRow>()
+            val managerRequests = supabase.postgrest["conversation_join_requests"].select {
+                filter { eq("status", "pending") }
+                order(column = "requested_at", order = io.github.jan.supabase.postgrest.query.Order.ASCENDING)
+                limit(40)
+            }.decodeList<CommunityJoinRequestRow>().filter { it.requesterId != userId }
             communities.clear()
             communities.addAll(found)
+            pendingRequests.clear()
+            pendingRequests.addAll(managerRequests)
             members.value = myMembers.map { it.conversationId }.toSet()
             pending.value = myRequests.map { it.conversationId }.toSet()
         } catch (exception: Exception) {
             error = exception.message ?: "دریافت گروه‌ها و کانال‌ها ناموفق بود."
         } finally {
             loading = false
+        }
+    }
+
+
+    suspend fun createCommunitySpace() {
+        val title = createSpaceTitle.trim()
+        val description = createSpaceDescription.trim()
+        if (title.length !in 3..60 || description.length > 500) {
+            error = "نام باید ۳ تا ۶۰ نویسه و توضیحات حداکثر ۵۰۰ نویسه باشد."
+            return
+        }
+        creatingSpace = true
+        error = null
+        var createdConversationId: String? = null
+        var spaceCommitted = false
+        var rollbackSafe = true
+        try {
+            OperationProgressController.run(if (createSpaceType == "group") "ساخت گروه جدید" else "ساخت کانال عمومی") { progress ->
+                progress.advance(14, "اعتبارسنجی نام، توضیحات و نوع فضا")
+                val conversation = supabase.postgrest["conversations"].insert(
+                    CommunityConversationInsert(createSpaceType, title, userId)
+                ) { select() }.decodeList<CommunityConversationIdRow>().single()
+                createdConversationId = conversation.id
+                progress.advance(40, "ساخت فضای گفتگو در سرور")
+                supabase.postgrest["conversation_members"].insert(
+                    CommunityOwnerMemberInsert(conversation.id, userId)
+                )
+                progress.advance(64, "ثبت مالک و دسترسی سازنده")
+                try {
+                    if (createSpaceType == "group") {
+                        supabase.postgrest["group_spaces"].insert(
+                            GroupSpaceInsert(conversation.id, userId, description, createSpaceApproval)
+                        )
+                    } else {
+                        supabase.postgrest["channel_spaces"].insert(
+                            ChannelSpaceInsert(conversation.id, userId, description)
+                        )
+                    }
+                } catch (insertError: Exception) {
+                    val savedMetadata = try {
+                        if (createSpaceType == "group") {
+                            supabase.postgrest["group_spaces"].select {
+                                filter { eq("conversation_id", conversation.id) }
+                            }.decodeList<CommunitySpaceMetadataRow>().isNotEmpty()
+                        } else {
+                            supabase.postgrest["channel_spaces"].select {
+                                filter { eq("conversation_id", conversation.id) }
+                            }.decodeList<CommunitySpaceMetadataRow>().isNotEmpty()
+                        }
+                    } catch (verificationError: Exception) {
+                        rollbackSafe = false
+                        throw IllegalStateException(
+                            "نتیجه ساخت گروه یا کانال نامشخص است؛ برای جلوگیری از حذف فضای احتمالا ساخته‌شده، پاک‌سازی خودکار متوقف شد.",
+                            verificationError
+                        )
+                    }
+                    if (!savedMetadata) throw insertError
+                }
+                spaceCommitted = true
+                progress.advance(92, "تنظیمات و عضویت مالک ثبت شد")
+            }
+            showCreateSpace = false
+            createSpaceTitle = ""
+            createSpaceDescription = ""
+            createSpaceApproval = false
+            refresh()
+        } catch (exception: Exception) {
+            if (rollbackSafe && !spaceCommitted) {
+                createdConversationId?.let { conversationId ->
+                    runCatching {
+                        supabase.postgrest["conversations"].delete {
+                            filter { eq("id", conversationId); eq("created_by", userId) }
+                        }
+                    }
+                }
+            }
+            error = exception.message ?: "ساخت گروه یا کانال ناموفق بود."
+        } finally {
+            creatingSpace = false
         }
     }
 
@@ -1612,11 +1862,142 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
             Text("گروه‌ها و کانال‌ها", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { scope.launch { refresh() } }) { Icon(Icons.Outlined.Refresh, contentDescription = "تازه‌سازی") }
         }
+        Text("فضاهای موردعلاقه‌ات را پیدا کن و به جامعه‌های کاوه بپیوند.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Button(
+            onClick = { showCreateSpace = !showCreateSpace },
+            enabled = !creatingSpace,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (showCreateSpace) "بستن فرم ساخت فضا" else "ساخت گروه یا کانال جدید") }
+        if (showCreateSpace) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("ساخت فضای اجتماعی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (createSpaceType == "group") Button(onClick = { createSpaceType = "group" }, enabled = !creatingSpace) { Text("گروه") }
+                        else OutlinedButton(onClick = { createSpaceType = "group" }, enabled = !creatingSpace) { Text("گروه") }
+                        if (createSpaceType == "channel") Button(onClick = { createSpaceType = "channel" }, enabled = !creatingSpace) { Text("کانال عمومی") }
+                        else OutlinedButton(onClick = { createSpaceType = "channel" }, enabled = !creatingSpace) { Text("کانال عمومی") }
+                    }
+                    OutlinedTextField(
+                        value = createSpaceTitle,
+                        onValueChange = { createSpaceTitle = it.take(60) },
+                        label = { Text(if (createSpaceType == "group") "نام گروه" else "نام کانال") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !creatingSpace
+                    )
+                    OutlinedTextField(
+                        value = createSpaceDescription,
+                        onValueChange = { createSpaceDescription = it.take(500) },
+                        label = { Text("توضیحات (اختیاری)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        enabled = !creatingSpace
+                    )
+                    if (createSpaceType == "group") {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Checkbox(checked = createSpaceApproval, onCheckedChange = { createSpaceApproval = it }, enabled = !creatingSpace)
+                            Text("عضویت با تأیید مدیر")
+                        }
+                    }
+                    Button(
+                        onClick = { scope.launch { createCommunitySpace() } },
+                        enabled = !creatingSpace && createSpaceTitle.trim().length in 3..60,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (creatingSpace) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                        else Text(if (createSpaceType == "group") "ساخت گروه" else "ساخت کانال")
+                    }
+                }
+            }
+        }
+        OutlinedTextField(
+            value = communityQuery,
+            onValueChange = { communityQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("جست‌وجوی نام یا موضوع اجتماع") }
+        )
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("all" to "همه", "group" to "گروه‌ها", "channel" to "کانال‌ها", "joined" to "عضویت‌های من").forEach { (key, label) ->
+                if (communityFilter == key) {
+                    Button(onClick = { communityFilter = key }) { Text(label) }
+                } else {
+                    OutlinedButton(onClick = { communityFilter = key }) { Text(label) }
+                }
+            }
+        }
+        val visibleCommunities = communities.filter { community ->
+            val matchesQuery = (community.title + " " + community.description + " " + (community.username ?: "")).contains(communityQuery.trim(), ignoreCase = true)
+            val isMember = community.conversationId in members.value
+            val isPending = community.conversationId in pending.value
+            val matchesFilter = when (communityFilter) {
+                "group" -> community.kind == "group"
+                "channel" -> community.kind == "channel"
+                "joined" -> isMember || isPending
+                else -> true
+            }
+            matchesQuery && matchesFilter
+        }
+        if (pendingRequests.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("درخواست‌های عضویت برای فضاهای تحت مدیریت", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    pendingRequests.forEach { request ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("درخواست عضویت جدید", fontWeight = FontWeight.SemiBold)
+                                Text("شناسه کاربر: ${request.requesterId.take(8)}…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            OutlinedButton(enabled = busyId != request.id, onClick = {
+                                scope.launch {
+                                    busyId = request.id
+                                    try {
+                                        OperationProgressController.run("تأیید درخواست عضویت") { progress ->
+                                            progress.advance(24, "بررسی مجوز مدیر و وضعیت درخواست")
+                                            supabase.postgrest["conversation_join_requests"].update({
+                                                set("status", "approved")
+                                                set("reviewed_at", java.time.Instant.now().toString())
+                                                set("reviewed_by", userId)
+                                            }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                            progress.advance(90, "عضویت کاربر در سرور تأیید شد")
+                                        }
+                                        pendingRequests.removeAll { it.id == request.id }
+                                        refresh()
+                                    } catch (exception: Exception) { error = exception.message ?: "تأیید درخواست ناموفق بود." }
+                                    finally { busyId = null }
+                                }
+                            }) { Text("تأیید") }
+                            TextButton(enabled = busyId != request.id, onClick = {
+                                scope.launch {
+                                    busyId = request.id
+                                    try {
+                                        OperationProgressController.run("رد درخواست عضویت") { progress ->
+                                            progress.advance(24, "بررسی مجوز مدیر و وضعیت درخواست")
+                                            supabase.postgrest["conversation_join_requests"].update({
+                                                set("status", "rejected")
+                                                set("reviewed_at", java.time.Instant.now().toString())
+                                                set("reviewed_by", userId)
+                                            }) { filter { eq("id", request.id); eq("status", "pending") } }
+                                            progress.advance(90, "رد درخواست در سرور ثبت شد")
+                                        }
+                                        pendingRequests.removeAll { it.id == request.id }
+                                    } catch (exception: Exception) { error = exception.message ?: "رد درخواست ناموفق بود." }
+                                    finally { busyId = null }
+                                }
+                            }) { Text("رد") }
+                        }
+                    }
+                }
+            }
+        }
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (!loading && communities.isEmpty() && error == null) Text("هنوز گروه یا کانال عمومی‌ای ساخته نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!loading && communities.isNotEmpty() && visibleCommunities.isEmpty()) Text("اجتماعی با این جست‌وجو یا فیلتر پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("${visibleCommunities.size} اجتماع", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(communities, key = { it.conversationId }) { community ->
+            items(visibleCommunities, key = { it.conversationId }) { community ->
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(community.title, fontWeight = FontWeight.Bold)
@@ -1630,7 +2011,13 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
                                 scope.launch {
                                     busyId = community.conversationId
                                     try {
-                                        val result = supabase.postgrest.rpc("join_community", JoinCommunityArgs(community.conversationId)).decodeAs<String>()
+                                        val result = OperationProgressController.run("پیوستن به اجتماع",) { progress ->
+                                            progress.advance(20, "بررسی وضعیت عضویت و دسترسی اجتماع")
+                                            progress.advance(48, "ارسال درخواست عضویت به سرور")
+                                            val response = supabase.postgrest.rpc("join_community", JoinCommunityArgs(community.conversationId)).decodeAs<String>()
+                                            progress.advance(90, if (response == "pending") "درخواست عضویت برای مدیر ثبت شد" else "عضویت توسط سرور ثبت شد")
+                                            response
+                                        }
                                         if (result == "pending") pending.value = pending.value + community.conversationId
                                         else members.value = members.value + community.conversationId
                                     } catch (exception: Exception) {
@@ -1787,7 +2174,10 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                             val uploadedPaths = mutableListOf<String>()
                             var postCreated = false
                             try {
+                                OperationProgressController.run("انتشار پست و رسانه‌ها") { progress ->
+                                progress.advance(12, "اعتبارسنجی متن و رسانه‌های انتخاب‌شده")
                                 require(body.isNotBlank() || selectedMedia.isNotEmpty()) { "متن یا رسانه‌ای برای انتشار انتخاب کن." }
+                                progress.advance(28, "ثبت پست اولیه در سرور")
                                 supabase.postgrest["posts"].insert(
                                     SocialPostInsert(
                                         id = postId,
@@ -1798,6 +2188,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                     )
                                 )
                                 postCreated = true
+                                progress.advance(38, "پست ثبت شد؛ آماده‌سازی پیوست‌ها")
                                 selectedMedia.forEachIndexed { index, uri ->
                                     val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
                                     require(mime.startsWith("image/") || mime.startsWith("video/")) { "فقط عکس و ویدئو قابل پیوست است." }
@@ -1828,6 +2219,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                         val progressMonitor = scope.launch {
                                             resumableUpload.stateFlow.collect { state ->
                                                 uploadProgress = state.progress
+                                                val mediaPercent = (state.progress.toDouble() * 100).toInt().coerceIn(0, 100)
+                                                val overall = 40 + (((index + state.progress.toDouble()) / selectedMedia.size.coerceAtLeast(1)) * 48).toInt()
+                                                progress.advance(overall, "انتقال رسانه ${index + 1} از ${selectedMedia.size} · ${mediaPercent.toPersianProgressDigits()}٪")
                                             }
                                         }
                                         try {
@@ -1837,6 +2231,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                         }
                                         uploadedPaths.add(path)
                                         val displayName = contentDisplayName(context, uri, "media-${index + 1}")
+                                        progress.advance(91, "رسانه منتقل شد؛ ثبت مشخصات پیوست")
                                         supabase.postgrest["post_attachments"].insert(
                                             SocialPostAttachmentInsert(postId, userId, "post-media", path, displayName, mime, tempFile.length())
                                         )
@@ -1847,7 +2242,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
                                 body = ""
                                 selectedMedia = emptyList()
                                 uploadProgress = null
+                                progress.advance(97, "پست و تمام رسانه‌ها با موفقیت منتشر شدند")
                                 message = "پست و رسانه‌های پیوست‌شده با موفقیت منتشر شدند."
+                                }
                             } catch (exception: Exception) {
                                 var cleanupFailed = false
                                 if (uploadedPaths.isNotEmpty()) {
@@ -1895,3 +2292,9 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
         }
     }
 }
+
+
+private fun Int.toPersianProgressDigits(): String =
+    toString().map { digit ->
+        if (digit in '0'..'9') ('۰'.code + (digit - '0')).toChar() else digit
+    }.joinToString("")

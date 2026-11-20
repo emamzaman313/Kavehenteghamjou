@@ -6,6 +6,7 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/web-ci.yml"
+      - "supabase/config.toml"
   pull_request:
     branches: [main]
     paths:
@@ -14,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: web-ci-${{ github.ref }}
@@ -41,22 +42,11 @@ jobs:
           npm install --global npm@11.21.2
           npm --version
 
-      - name: Generate lockfile when repository has no lockfile yet
+      - name: Require committed npm lockfile
         run: |
           if [ ! -f package-lock.json ]; then
-            npm install --ignore-scripts --no-audit --no-fund
-          fi
-
-      - name: Commit generated npm lockfile
-        run: |
-          if [ -f package-lock.json ] && [ -n "$(git -C .. status --short -- web/package-lock.json)" ]; then
-            git -C .. config user.name "github-actions[bot]"
-            git -C .. config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git -C .. add web/package-lock.json
-            git -C .. commit -m "chore(web): add npm package lock"
-            git -C .. fetch origin main
-            git -C .. rebase origin/main
-            git -C .. push origin HEAD:main
+            echo "::error::web/package-lock.json must be committed; CI never generates or pushes lockfiles."
+            exit 1
           fi
 
       - name: Install locked dependencies

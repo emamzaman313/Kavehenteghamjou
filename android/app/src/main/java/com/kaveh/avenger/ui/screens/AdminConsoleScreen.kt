@@ -3,6 +3,8 @@ package com.kaveh.avenger.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -96,6 +99,8 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     val scope = rememberCoroutineScope()
     var section by remember { mutableStateOf("reports") }
     var reports by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var reportSearch by remember { mutableStateOf("") }
+    var reportFilter by remember { mutableStateOf("all") }
     var users by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var reason by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -112,6 +117,8 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     var overviewUsers by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var overviewPosts by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var auditRows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var auditSearch by remember { mutableStateOf("") }
+    var auditStatusFilter by remember { mutableStateOf("all") }
     var adminReels by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var adminTracks by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
 
@@ -130,6 +137,29 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
         "720h" to "۳۰ روز",
         "permanent" to "دائمی"
     )
+
+    val filteredReports = reports.filter { report ->
+        val status = report["status"]?.jsonPrimitive?.contentOrNull ?: "open"
+        val summary = report["target_summary"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val reasonText = report["reason"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val details = report["details"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val targetType = report["target_type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val searchable = listOf(summary, reasonText, details, targetType, report["id"]?.jsonPrimitive?.contentOrNull.orEmpty()).joinToString(" ")
+        (reportFilter == "all" || status == reportFilter) &&
+            (reportSearch.isBlank() || searchable.contains(reportSearch.trim(), ignoreCase = true))
+    }
+
+    val filteredAuditRows = auditRows.filter { event ->
+        val status = event["status"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val searchable = listOf(
+            event["action"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            event["target_type"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            event["target_id"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            event["actor_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        ).joinToString(" ")
+        (auditStatusFilter == "all" || status == auditStatusFilter) &&
+            (auditSearch.isBlank() || searchable.contains(auditSearch.trim(), ignoreCase = true))
+    }
 
     suspend fun loadOverview() {
         loading = true; error = null
@@ -270,7 +300,10 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("پنل مدیریت", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("نقش فعال: $role", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Button(onClick = { section = "overview"; scope.launch { loadOverview() } }) { Text("مرکز فرماندهی") }
             Button(onClick = { section = "reports"; scope.launch { loadReports() } }) { Text("گزارش‌ها") }
             if (role in listOf("owner", "admin")) Button(onClick = { section = "features"; scope.launch { loadFeatureFlags() } }) { Text("کنترل امکانات") }
@@ -432,22 +465,44 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
             if(adminTracks.isEmpty()) Text("آهنگی در کتابخانه ثبت نشده است.")
         } else if (section == "audit" && role in listOf("owner", "admin")) {
             Text("سوابق عملیات مدیران",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
-            auditRows.forEach { event ->
-                val action=event["action"]?.jsonPrimitive?.contentOrNull ?: "عملیات"
-                val target=event["target_type"]?.jsonPrimitive?.contentOrNull ?: "—"
-                val status=event["status"]?.jsonPrimitive?.contentOrNull ?: "—"
-                val actor=event["actor_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val created=event["created_at"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp)) {
-                    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Text(action,fontWeight=FontWeight.SemiBold)
-                        Text("نوع هدف: $target · وضعیت: $status",style=MaterialTheme.typography.bodySmall)
-                        Text("مدیر: " + actor.take(8) + "…",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(created,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = auditSearch,
+                onValueChange = { auditSearch = it.take(160) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("جست‌وجوی عملیات، مدیر یا شناسه هدف") }
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                FilterChip(selected = auditStatusFilter == "all", onClick = { auditStatusFilter = "all" }, label = { Text("همه ${auditRows.size}") })
+                FilterChip(selected = auditStatusFilter == "started", onClick = { auditStatusFilter = "started" }, label = { Text("در حال اجرا ${auditRows.count { it["status"]?.jsonPrimitive?.contentOrNull == "started" }}") })
+                FilterChip(selected = auditStatusFilter == "succeeded", onClick = { auditStatusFilter = "succeeded" }, label = { Text("موفق ${auditRows.count { it["status"]?.jsonPrimitive?.contentOrNull == "succeeded" }}") })
+                FilterChip(selected = auditStatusFilter == "failed", onClick = { auditStatusFilter = "failed" }, label = { Text("ناموفق ${auditRows.count { it["status"]?.jsonPrimitive?.contentOrNull == "failed" }}") })
+            }
+            if (filteredAuditRows.isEmpty()) {
+                Text(if (auditRows.isEmpty()) "هنوز سابقه‌ای ثبت نشده است." else "عملیاتی با این فیلتر پیدا نشد.")
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(filteredAuditRows, key = { it["id"]?.jsonPrimitive?.contentOrNull ?: it.hashCode().toString() }) { event ->
+                        val action=event["action"]?.jsonPrimitive?.contentOrNull ?: "عملیات"
+                        val target=event["target_type"]?.jsonPrimitive?.contentOrNull ?: "—"
+                        val status=event["status"]?.jsonPrimitive?.contentOrNull ?: "—"
+                        val statusLabel=when(status) { "started" -> "در حال اجرا"; "succeeded" -> "موفق"; "failed" -> "ناموفق"; else -> status }
+                        val actor=event["actor_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        val created=event["created_at"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp)) {
+                            Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                                Text(action,fontWeight=FontWeight.SemiBold)
+                                Text("نوع هدف: $target · وضعیت: $statusLabel",style=MaterialTheme.typography.bodySmall)
+                                Text("مدیر: " + actor.take(8) + "…",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(created,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
             }
-            if(auditRows.isEmpty()) Text("هنوز سابقه‌ای ثبت نشده است.")
         } else if (section == "features" && role in listOf("owner", "admin")) {
             Text("کنترل مرکزی امکانات",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
             featureFlags.forEach { flag ->
@@ -467,16 +522,49 @@ fun AdminConsoleScreen(supabase: SupabaseClient, role: String, onFeatureFlagChan
                 }
             }
         } else if (section == "reports") {
-            if (!loading && reports.isEmpty() && error == null) Text("گزارشی برای نمایش وجود ندارد.")
+            OutlinedTextField(
+                value = reportSearch,
+                onValueChange = { reportSearch = it.take(160) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("جست‌وجو در گزارش، دلیل یا محتوای هدف") }
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                FilterChip(selected = reportFilter == "all", onClick = { reportFilter = "all" }, label = { Text("همه ${reports.size}") })
+                FilterChip(selected = reportFilter == "open", onClick = { reportFilter = "open" }, label = { Text("باز ${reports.count { it["status"]?.jsonPrimitive?.contentOrNull == "open" }}") })
+                FilterChip(selected = reportFilter == "reviewing", onClick = { reportFilter = "reviewing" }, label = { Text("در بررسی ${reports.count { it["status"]?.jsonPrimitive?.contentOrNull == "reviewing" }}") })
+                FilterChip(selected = reportFilter == "resolved", onClick = { reportFilter = "resolved" }, label = { Text("تأییدشده ${reports.count { it["status"]?.jsonPrimitive?.contentOrNull == "resolved" }}") })
+                FilterChip(selected = reportFilter == "rejected", onClick = { reportFilter = "rejected" }, label = { Text("ردشده ${reports.count { it["status"]?.jsonPrimitive?.contentOrNull == "rejected" }}") })
+            }
+            if (!loading && filteredReports.isEmpty() && error == null) {
+                Text(if (reports.isEmpty()) "گزارشی برای نمایش وجود ندارد." else "با این فیلتر یا عبارت جست‌وجو گزارشی پیدا نشد.")
+            }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(reports, key = { it["id"]?.jsonPrimitive?.contentOrNull ?: it.hashCode().toString() }) { report ->
+                items(filteredReports, key = { it["id"]?.jsonPrimitive?.contentOrNull ?: it.hashCode().toString() }) { report ->
                     val id = report["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
                     val summary = report["target_summary"]?.jsonPrimitive?.contentOrNull ?: "محتوای گزارش‌شده"
                     val type = report["target_type"]?.jsonPrimitive?.contentOrNull ?: "نامشخص"
                     val status = report["status"]?.jsonPrimitive?.contentOrNull ?: "open"
                     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text("$type • $status", fontWeight = FontWeight.Bold)
+                            val typeLabel = when (type) {
+                                "post" -> "پست"
+                                "reel" -> "ریلز"
+                                "comment" -> "دیدگاه"
+                                "user" -> "کاربر"
+                                else -> "مورد نامشخص"
+                            }
+                            val statusLabel = when (status) {
+                                "open" -> "باز"
+                                "reviewing" -> "در حال بررسی"
+                                "resolved" -> "تأیید و بسته‌شده"
+                                "rejected" -> "ردشده"
+                                else -> status
+                            }
+                            Text("${typeLabel} • ${statusLabel}", fontWeight = FontWeight.Bold)
                             Text(summary)
                             Text("دلیل: ${report["reason"]?.jsonPrimitive?.contentOrNull ?: "—"}")
                             val details = report["details"]?.jsonPrimitive?.contentOrNull

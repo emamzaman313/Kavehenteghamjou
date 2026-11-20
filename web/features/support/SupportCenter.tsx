@@ -1,9 +1,11 @@
 'use client';
 
 import { LifeBuoy, MessageCircle, Plus, Send, RefreshCw, Paperclip, Download } from 'lucide-react';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
+import { filterSupportTickets } from '@/lib/support-ticket-filters';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 type Ticket = {
   id: string; conversation_id: string; requester_id: string; assigned_to: string | null;
@@ -21,6 +23,9 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   supabase: SupabaseClient; userId: string; notify: Notify; staff?: boolean;
 }) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
+  const [ticketSearch,setTicketSearch] = useState('');
+  const [statusFilter,setStatusFilter] = useState('all');
+  const [priorityFilter,setPriorityFilter] = useState('all');
   const [unreadTickets,setUnreadTickets] = useState<Record<string,boolean>>({});
   const [attachments,setAttachments] = useState<Record<string,{file:SupportAttachment;url:string}[]>>({});
   const [uploading,setUploading] = useState(false);
@@ -34,6 +39,16 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   const [reply,setReply] = useState('');
   const [creating,setCreating] = useState(false);
   const [showNew,setShowNew] = useState(false);
+  const messageRequestRef = useRef(0);
+
+  const { runOperation } = useOperationProgress();
+
+  const filteredTickets = filterSupportTickets(tickets, {
+    search: ticketSearch,
+    status: statusFilter,
+    priority: priorityFilter,
+    staff,
+  });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -82,8 +97,12 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   const loadMessages = useCallback(async (ticketId:string) => {
     const ticket = tickets.find(x=>x.id===ticketId);
     if (!ticket) return;
+    const requestId = ++messageRequestRef.current;
+    setMessages([]);
+    setAttachments({});
     const {data,error} = await supabase.from('messages').select('id,conversation_id,sender_id,body,created_at')
       .eq('conversation_id',ticket.conversation_id).is('deleted_at',null).order('created_at',{ascending:true}).limit(300);
+    if (requestId !== messageRequestRef.current) return;
     if (error) notify('دریافت پیام‌های پشتیبانی ناموفق بود: '+error.message,'error');
     else {
       const loaded = (data ?? []) as Message[];
@@ -92,11 +111,13 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
       if (messageIds.length) {
         const {data:links,error:linksError} = await supabase.from('message_attachments')
           .select('message_id,file_asset_id').in('message_id',messageIds);
+        if (requestId !== messageRequestRef.current) return;
         if (linksError) notify('دریافت پیوست‌های گفتگو ناموفق بود: '+linksError.message,'error');
         const fileIds = [...new Set((links ?? []).map(link=>link.file_asset_id))];
         if (fileIds.length) {
           const {data:assets,error:assetsError} = await supabase.from('file_assets')
             .select('id,original_name,bucket_id,object_path,mime_type,byte_size').in('id',fileIds);
+          if (requestId !== messageRequestRef.current) return;
           if (assetsError) notify('دریافت اطلاعات فایل‌ها ناموفق بود: '+assetsError.message,'error');
           const assetMap = new Map((assets ?? []).map(file=>[file.id,file as SupportAttachment]));
           const grouped: Record<string,{file:SupportAttachment;url:string}[]> = {};
@@ -105,10 +126,11 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
             if (!file) continue;
             const {data:signed,error:signedError} = await supabase.storage.from(file.bucket_id)
               .createSignedUrl(file.object_path,300,{download:file.original_name});
+            if (requestId !== messageRequestRef.current) return;
             if (signedError || !signed?.signedUrl) continue;
             grouped[link.message_id] = [...(grouped[link.message_id] ?? []),{file,url:signed.signedUrl}];
           }
-          setAttachments(current=>({...current,...grouped}));
+          if (requestId === messageRequestRef.current) setAttachments(grouped);
         }
       }
       const latestFetchedAt = loaded[loaded.length - 1]?.created_at;
@@ -129,7 +151,7 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     return ()=>{ void supabase.removeChannel(channel); };
   },[supabase,userId,refresh]);
   useEffect(()=>{
-    if (!active) { setMessages([]); return; }
+    if (!active) { messageRequestRef.current += 1; setMessages([]); setAttachments({}); return; }
     void loadMessages(active);
     const ticket = tickets.find(x=>x.id===active);
     if (!ticket) return;
@@ -143,13 +165,21 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     event.preventDefault();
     if (creating) return;
     setCreating(true);
-    const {data,error} = await supabase.rpc('create_support_ticket',{p_subject:subject.trim(),p_category:category,p_body:body.trim()});
-    setCreating(false);
-    if (error || !data) { notify('ثبت درخواست ناموفق بود: '+(error?.message ?? 'خطای نامشخص'),'error'); return; }
-    setSubject(''); setBody(''); setCategory('general'); setShowNew(false);
-    await refresh();
-    setActive(data as string);
-    notify('درخواست پشتیبانی ثبت شد.');
+    try {
+      const ticketId = await runOperation('ثبت درخواست پشتیبانی', async advance => {
+        advance(18, 'اعتبارسنجی عنوان و شرح درخواست');
+        const {data,error} = await supabase.rpc('create_support_ticket',{p_subject:subject.trim(),p_category:category,p_body:body.trim()});
+        if (error || !data) throw error ?? new Error('کد پیگیری درخواست دریافت نشد.');
+        advance(78, 'درخواست در سرور ثبت شد؛ دریافت اطلاعات تازه');
+        return data as string;
+      });
+      setSubject(''); setBody(''); setCategory('general'); setShowNew(false);
+      await refresh();
+      setActive(ticketId);
+      notify('درخواست پشتیبانی ثبت شد.');
+    } catch (cause) {
+      notify('ثبت درخواست ناموفق بود: '+(cause instanceof Error?cause.message:'خطای نامشخص'),'error');
+    } finally { setCreating(false); }
   };
 
   const sendReply = async (event:FormEvent) => {
@@ -158,15 +188,23 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     const text = reply.trim();
     if (!ticket || !text || sending) return;
     setSending(true);
-    const {data:sentMessage,error} = await supabase.from('messages')
-      .insert({conversation_id:ticket.conversation_id,sender_id:userId,body:text,format:'plain'})
-      .select('id').single();
-    setSending(false);
-    if (error) { notify('ارسال پاسخ ناموفق بود: '+error.message,'error'); return; }
-    if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch',{body:{message_id:sentMessage.id}});
-    setReply('');
-    await loadMessages(ticket.id);
-    await refresh();
+    try {
+      const messageId = await runOperation('ارسال پاسخ پشتیبانی', async advance => {
+        advance(20, 'آماده‌سازی پاسخ');
+        const {data:sentMessage,error} = await supabase.from('messages')
+          .insert({conversation_id:ticket.conversation_id,sender_id:userId,body:text,format:'plain'})
+          .select('id').single();
+        if (error || !sentMessage?.id) throw error ?? new Error('شناسه پیام دریافت نشد.');
+        advance(78, 'پاسخ در گفتگو ثبت شد');
+        return sentMessage.id;
+      });
+      void supabase.functions.invoke('notification-dispatch',{body:{message_id:messageId}});
+      setReply('');
+      await loadMessages(ticket.id);
+      await refresh();
+    } catch (cause) {
+      notify('ارسال پاسخ ناموفق بود: '+(cause instanceof Error?cause.message:'خطای نامشخص'),'error');
+    } finally { setSending(false); }
   };
 
   const sendAttachment = async (file:File) => {
@@ -180,45 +218,76 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     let path:string|null=null;
     let assetId:string|null=null;
     let messageId:string|null=null;
+    let attachmentCommitted=false;
+    let rollbackSafe=true;
     try {
-const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).join('_').replace(/[\u0000-\u001f]/g,'_').slice(0,180) || 'attachment';
-      const bytes = await file.arrayBuffer();
-      const digest = await crypto.subtle.digest('SHA-256',bytes);
-      const hash = Array.from(new Uint8Array(digest)).map(value=>value.toString(16).padStart(2,'0')).join('');
-      path = userId+'/'+crypto.randomUUID();
-      const {error:uploadError} = await supabase.storage.from('user-files').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
-      if (uploadError) throw uploadError;
-      const {data:asset,error:assetError} = await supabase.from('file_assets').insert({
-        owner_id:userId,bucket_id:'user-files',object_path:path,original_name:safeName,
-        mime_type:file.type||null,byte_size:file.size,sha256_hex:hash,status:'ready'
-      }).select('id').single();
-      if (assetError || !asset) throw assetError ?? new Error('ثبت مشخصات فایل ناموفق بود.');
-      assetId = asset.id;
-      const {data:message,error:messageError} = await supabase.from('messages').insert({
-        conversation_id:ticket.conversation_id,sender_id:userId,body:'📎 '+safeName,format:'plain'
-      }).select('id').single();
-      if (messageError || !message) throw messageError ?? new Error('ثبت پیام پیوست ناموفق بود.');
-      messageId = message.id;
-      const {error:linkError} = await supabase.from('message_attachments').insert({message_id:message.id,file_asset_id:asset.id,display_order:0});
-      if (linkError) throw linkError;
-      void supabase.functions.invoke('notification-dispatch',{body:{message_id:message.id}});
+      await runOperation('ارسال پیوست پشتیبانی', async advance => {
+        const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).join('_').replace(/[\u0000-\u001f]/g,'_').slice(0,180) || 'attachment';
+        advance(12, 'محاسبه صحت فایل و آماده‌سازی اطلاعات');
+        const bytes = await file.arrayBuffer();
+        const digest = await crypto.subtle.digest('SHA-256',bytes);
+        const hash = Array.from(new Uint8Array(digest)).map(value=>value.toString(16).padStart(2,'0')).join('');
+        path = userId+'/'+crypto.randomUUID();
+        advance(28, 'بارگذاری فایل در فضای خصوصی');
+        const {error:uploadError} = await supabase.storage.from('user-files').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+        if (uploadError) throw uploadError;
+        advance(58, 'ثبت مشخصات و اثرانگشت فایل');
+        const {data:asset,error:assetError} = await supabase.from('file_assets').insert({
+          owner_id:userId,bucket_id:'user-files',object_path:path,original_name:safeName,
+          mime_type:file.type||null,byte_size:file.size,sha256_hex:hash,status:'ready'
+        }).select('id').single();
+        if (assetError || !asset) throw assetError ?? new Error('ثبت مشخصات فایل ناموفق بود.');
+        assetId = asset.id;
+        const {data:message,error:messageError} = await supabase.from('messages').insert({
+          conversation_id:ticket.conversation_id,sender_id:userId,body:'📎 '+safeName,format:'plain'
+        }).select('id').single();
+        if (messageError || !message) throw messageError ?? new Error('ثبت پیام پیوست ناموفق بود.');
+        messageId = message.id;
+        advance(78, 'پیام ایجاد شد؛ اتصال امن فایل به گفتگو');
+        const {error:linkError} = await supabase.from('message_attachments').insert({message_id:message.id,file_asset_id:asset.id,display_order:0});
+        if (linkError) {
+          const {data:existingLink,error:verifyError} = await supabase.from('message_attachments')
+            .select('message_id').eq('message_id',message.id).eq('file_asset_id',asset.id).maybeSingle();
+          if (verifyError) {
+            rollbackSafe = false;
+            throw new Error('نتیجه اتصال فایل نامشخص است؛ برای جلوگیری از حذف فایل احتمالا ارسال‌شده، پاک‌سازی خودکار انجام نشد.');
+          }
+          if (!existingLink) throw linkError;
+        }
+        attachmentCommitted = true;
+        advance(90, 'پیوست در گفتگو ثبت شد');
+        void supabase.functions.invoke('notification-dispatch',{body:{message_id:message.id}});
+      });
       await loadMessages(ticket.id);
       await refresh();
       notify('فایل به گفتگوی پشتیبانی پیوست شد.');
     } catch (error) {
-      if (messageId) await supabase.from('messages').delete().eq('id',messageId);
-      if (assetId) await supabase.from('file_assets').delete().eq('id',assetId);
-      if (path) await supabase.storage.from('user-files').remove([path]);
-      notify('ارسال فایل ناموفق بود: '+(error instanceof Error?error.message:'خطای نامشخص'),'error');
+      if (!attachmentCommitted && rollbackSafe) {
+        if (messageId) await supabase.from('messages').delete().eq('id',messageId);
+        if (assetId) await supabase.from('file_assets').delete().eq('id',assetId);
+        if (path) await supabase.storage.from('user-files').remove([path]);
+      }
+      notify(attachmentCommitted
+        ? 'پیوست در گفتگو ثبت شد، اما تازه‌سازی نمایش با مشکل روبه‌رو شد: '+(error instanceof Error?error.message:'خطای نامشخص')
+        : 'ارسال فایل ناموفق بود: '+(error instanceof Error?error.message:'خطای نامشخص'),'error');
     } finally { setUploading(false); }
   };
 
   const updateTicketField = async (field:'status'|'priority', value:string) => {
     if (!active || !staff) return;
+    const now = new Date().toISOString();
     const patch = field==='status'
-      ? {status:value,updated_at:new Date().toISOString(),resolved_at:value==='resolved'?new Date().toISOString():null}
-      : {priority:value,updated_at:new Date().toISOString()};
-    const {error} = await supabase.from('support_tickets').update(patch).eq('id',active);
+      ? {status:value,updated_at:now,resolved_at:value==='resolved'||value==='closed'?now:null}
+      : {priority:value,updated_at:now};
+    // Keep compatibility with projects where the additive RPC migration is not applied yet.
+    const {error:rpcError} = await supabase.rpc('update_support_ticket', {
+      p_ticket_id: active,
+      p_status: field==='status' ? value : null,
+      p_priority: field==='priority' ? value : null,
+    });
+    const error = rpcError?.code === 'PGRST202'
+      ? (await supabase.from('support_tickets').update(patch).eq('id',active)).error
+      : rpcError;
     if (error) notify('به‌روزرسانی درخواست ناموفق بود: '+error.message,'error');
     else { notify('درخواست به‌روزرسانی شد.'); await refresh(); }
   };
@@ -228,11 +297,11 @@ const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).j
     <div className="panel-card support-header" style={{padding:18}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}><LifeBuoy size={24}/><div><strong>{staff?'صندوق پشتیبانی کاربران':'پشتیبانی و ارتباط با مدیریت'}</strong><p style={{margin:'5px 0 0',color:'var(--muted)',fontSize:11}}>{staff?'درخواست‌های کاربران را مشاهده و پاسخ دهید.':'درخواست خود را ثبت کنید و پاسخ مدیریت را همین‌جا دریافت کنید.'}</p></div></div>
-        <div style={{display:'flex',gap:8}}><button className="button button-quiet" type="button" onClick={()=>void refresh()}><RefreshCw size={15}/> تازه‌سازی</button>{!staff && <button className="button button-primary" type="button" onClick={()=>setShowNew(x=>!x)}><Plus size={15}/> درخواست جدید</button>}</div>
+        <div style={{display:'flex',gap:8}}><button className="button button-quiet" type="button" onClick={()=>void refresh()}><RefreshCw size={15}/> تازه‌سازی</button><button className="button button-primary" type="button" onClick={()=>setShowNew(x=>!x)}><Plus size={15}/> {staff?'ثبت درخواست شخصی':'درخواست جدید'}</button></div>
       </div>
     </div>
-    {showNew && !staff && <form className="panel-card" style={{padding:18,display:'grid',gap:12}} onSubmit={createTicket}>
-      <strong>ثبت درخواست جدید</strong>
+    {showNew && <form className="panel-card" style={{padding:18,display:'grid',gap:12}} onSubmit={createTicket}>
+      <strong>{staff?'ثبت درخواست شخصی برای پشتیبانی':'ثبت درخواست جدید'}</strong>
       <input required minLength={3} maxLength={180} value={subject} onChange={e=>setSubject(e.target.value)} placeholder="موضوع درخواست"/>
       <select value={category} onChange={e=>setCategory(e.target.value)}><option value="general">عمومی</option><option value="account">حساب کاربری</option><option value="technical">مشکل فنی</option><option value="report">گزارش تخلف</option><option value="billing">مالی</option><option value="other">سایر</option></select>
       <textarea required maxLength={10000} rows={4} value={body} onChange={e=>setBody(e.target.value)} placeholder="مشکل یا درخواست خود را با جزئیات بنویسید…"/>
@@ -240,8 +309,28 @@ const safeName = file.name.split('/').join('_').split(String.fromCharCode(92)).j
     </form>}
     <div className="support-center-layout">
       <div className="panel-card support-ticket-list" style={{padding:12,minWidth:0}}>
-        <strong style={{display:'block',padding:8,marginBottom:6}}>درخواست‌ها ({tickets.length})</strong>
-        {loading ? <p>در حال دریافت…</p> : tickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>هنوز درخواستی ثبت نشده است.</p> : tickets.map(ticket=><button className="support-ticket-item" key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
+        <strong style={{display:'block',padding:8,marginBottom:6}}>درخواست‌ها ({filteredTickets.length} از {tickets.length})</strong>
+        <input
+          className="field-input"
+          value={ticketSearch}
+          onChange={event=>setTicketSearch(event.target.value)}
+          placeholder={staff?'جست‌وجو بر اساس موضوع، کاربر یا شناسه…':'جست‌وجو در درخواست‌ها…'}
+          aria-label="جست‌وجو در درخواست‌های پشتیبانی"
+          style={{width:'100%',marginBottom:9}}
+        />
+        <div style={{display:'flex',gap:6,overflowX:'auto',padding:'2px 2px 9px',marginBottom:4}}>
+          {([{value:'all',label:'همه'},{value:'open',label:'جدید'},{value:'in_progress',label:'در حال بررسی'},{value:'waiting_user',label:'منتظر پاسخ'},{value:'resolved',label:'حل‌شده'},{value:'closed',label:'بسته'}] as const).map(item=>{
+            const count = item.value==='all' ? tickets.length : tickets.filter(ticket=>ticket.status===item.value).length;
+            return <button key={item.value} type="button" className={statusFilter===item.value?'button button-primary':'button button-quiet'} onClick={()=>setStatusFilter(item.value)} style={{whiteSpace:'nowrap',fontSize:10,padding:'6px 9px',minHeight:32}}>{item.label} {count}</button>;
+          })}
+        </div>
+        {staff && <div style={{display:'flex',gap:6,overflowX:'auto',padding:'2px 2px 9px',marginBottom:4}}>
+          {([{value:'all',label:'همه اولویت‌ها'},{value:'urgent',label:'فوری'},{value:'high',label:'بالا'},{value:'normal',label:'عادی'},{value:'low',label:'پایین'}] as const).map(item=>{
+            const count = item.value==='all' ? tickets.length : tickets.filter(ticket=>ticket.priority===item.value).length;
+            return <button key={item.value} type="button" className={priorityFilter===item.value?'button button-primary':'button button-quiet'} onClick={()=>setPriorityFilter(item.value)} style={{whiteSpace:'nowrap',fontSize:10,padding:'6px 9px',minHeight:32}}>{item.label} {count}</button>;
+          })}
+        </div>}
+        {loading ? <p>در حال دریافت…</p> : filteredTickets.length===0 ? <p style={{padding:10,color:'var(--muted)',fontSize:11}}>{tickets.length===0?'هنوز درخواستی ثبت نشده است.':'درخواستی با این فیلتر یا عبارت جست‌وجو پیدا نشد.'}</p> : filteredTickets.map(ticket=><button className="support-ticket-item" key={ticket.id} type="button" onClick={()=>setActive(ticket.id)} style={{display:'grid',width:'100%',textAlign:'right',gap:6,padding:12,marginBottom:7,borderRadius:12,border:active===ticket.id?'1px solid var(--accent)':'1px solid var(--line)',background:active===ticket.id?'rgba(22,139,255,.09)':'transparent',color:'var(--text)',cursor:'pointer'}}>
           <span style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><strong style={{fontSize:12}}>{ticket.subject}</strong>{unreadTickets[ticket.id] && <span aria-label="پیام خوانده‌نشده" style={{fontSize:9,background:'var(--accent)',color:'#fff',borderRadius:999,padding:'3px 7px',whiteSpace:'nowrap'}}>جدید</span>}</span>
           {staff && <small style={{color:'var(--muted)'}}>{ticket.requester?.display_name ?? ticket.requester_id.slice(0,8)}{ticket.requester?.username?' · @'+ticket.requester.username:''}</small>}
           <span style={{fontSize:10,color:'var(--muted)'}}>{categoryLabels[ticket.category]??ticket.category} · {statusLabels[ticket.status]??ticket.status} · اولویت {ticket.priority==='urgent'?'فوری':ticket.priority==='high'?'بالا':ticket.priority==='low'?'پایین':'عادی'}</span>

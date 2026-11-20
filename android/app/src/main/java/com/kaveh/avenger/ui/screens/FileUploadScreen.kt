@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,8 +18,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +38,10 @@ import com.kaveh.avenger.data.SupabaseClientProvider
 import com.kaveh.avenger.files.FileUploadRepository
 import com.kaveh.avenger.files.MAX_UPLOAD_BYTES
 import com.kaveh.avenger.files.UploadedFile
+import com.kaveh.avenger.files.VaultFile
+import com.kaveh.avenger.ui.progress.OperationProgressController
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import kotlinx.coroutines.launch
 
 @Composable
@@ -45,6 +52,11 @@ fun FileUploadScreen(userId: String) {
     var uploading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var uploaded by remember { mutableStateOf<UploadedFile?>(null) }
+    var vaultFiles by remember { mutableStateOf<List<VaultFile>>(emptyList()) }
+    var vaultLoading by remember { mutableStateOf(true) }
+    var vaultSearch by remember { mutableStateOf("") }
+    var pendingDownload by remember { mutableStateOf<VaultFile?>(null) }
+    var downloadingId by remember { mutableStateOf<String?>(null) }
     val selectedName = remember(selectedUri) {
         selectedUri?.let { uri ->
             context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -57,6 +69,34 @@ fun FileUploadScreen(userId: String) {
         selectedUri = uri
         error = null
         uploaded = null
+    }
+    val downloadPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { destination ->
+        val file = pendingDownload
+        if (destination != null && file != null) {
+            scope.launch {
+                downloadingId = file.id
+                error = null
+                try {
+                    OperationProgressController.run("دانلود امن فایل") { progress ->
+                        FileUploadRepository(SupabaseClientProvider.client).downloadToUri(context, file, destination) { percent, detail ->
+                            progress.advance(percent, detail)
+                        }
+                    }
+                } catch (exception: Exception) {
+                    error = exception.localizedMessage ?: "دانلود فایل ناموفق بود."
+                } finally {
+                    downloadingId = null
+                    pendingDownload = null
+                }
+            }
+        } else pendingDownload = null
+    }
+    LaunchedEffect(userId) {
+        vaultLoading = true
+        runCatching { FileUploadRepository(SupabaseClientProvider.client).list(userId) }
+            .onSuccess { vaultFiles = it }
+            .onFailure { error = it.localizedMessage ?: "دریافت فهرست فایل‌ها ناموفق بود." }
+        vaultLoading = false
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -86,7 +126,14 @@ fun FileUploadScreen(userId: String) {
                                 error = null
                                 uploaded = null
                                 try {
-                                    uploaded = FileUploadRepository(SupabaseClientProvider.client).upload(context, userId, uri)
+                                    uploaded = OperationProgressController.run("آپلود فایل به Vault خصوصی") { progress ->
+                                        val result = FileUploadRepository(SupabaseClientProvider.client).upload(context, userId, uri) { percent, detail ->
+                                            progress.advance(percent, detail)
+                                        }
+                                        progress.advance(98, "به‌روزرسانی فهرست فایل‌های فضای خصوصی")
+                                        vaultFiles = FileUploadRepository(SupabaseClientProvider.client).list(userId)
+                                        result
+                                    }
                                 } catch (exception: Exception) {
                                     error = exception.localizedMessage ?: "آپلود فایل انجام نشد."
                                 } finally {
@@ -125,8 +172,45 @@ fun FileUploadScreen(userId: String) {
         if (!error.isNullOrBlank()) {
             Text(error.orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
+        Text("فایل‌های من", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        OutlinedTextField(
+            value = vaultSearch,
+            onValueChange = { vaultSearch = it },
+            label = { Text("جست‌وجو در نام فایل‌ها") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
         Text(
-            "در این نسخه آپلود مستقیم و کنترل حجم فعال است. درصد پیشرفت، صف پس‌زمینه، ادامه پس از قطع شبکه و دانلود/اشتراک با مجوز اعضا در مرحلهٔ بعد ساخته می‌شوند.",
+            "ذخیره‌شده: ${vaultFiles.size} فایل · ${vaultFiles.sumOf { it.byte_size } / 1_000_000} مگابایت",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        when {
+            vaultLoading -> CircularProgressIndicator(Modifier.size(22.dp))
+            vaultFiles.isEmpty() -> Text("هنوز فایلی در فضای خصوصی ذخیره نکرده‌ای.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else -> LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(vaultFiles.filter { it.original_name.contains(vaultSearch, ignoreCase = true) }, key = { it.id }) { file ->
+                    OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(file.original_name, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text("${file.byte_size} بایت · ${file.mime_type ?: "نوع ناشناخته"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    pendingDownload = file
+                                    downloadPicker.launch(file.original_name)
+                                },
+                                enabled = downloadingId == null
+                            ) { Text(if (downloadingId == file.id) "در حال دریافت…" else "دانلود") }
+                        }
+                    }
+                }
+            }
+        }
+        if (downloadingId != null) Text("فایل با دسترسی خصوصی دریافت و ذخیره می‌شود…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        Text(
+            "فایل‌ها در مخزن خصوصی نگهداری می‌شوند و دانلود فقط با نشست معتبر و مجوز مالک انجام می‌شود.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

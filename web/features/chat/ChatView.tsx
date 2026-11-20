@@ -1,15 +1,18 @@
 'use client';
 import { ArrowDownToLine, ArrowLeft, Check, File, MessageCircle, Paperclip, Plus, Search, Send } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Conversation, FileAsset, Message, Profile } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
 import { safeDisplayName, validateUpload } from '@/lib/format';
-import { hashFile } from '@/lib/files';
+import { hashFile, saveBlobAs, verifyBlobIntegrity } from '@/lib/files';
 import { Avatar, EmptyState } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 export default function ChatView({ supabase, userId, notify }: { supabase: SupabaseClient; userId: string; notify: Notify }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationQuery, setConversationQuery] = useState('');
+  const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'spaces'>('all');
   const [members, setMembers] = useState<Record<string, Profile>>({});
   const [rankTitles, setRankTitles] = useState<Record<string, string>>({});
   const [peerByConversation, setPeerByConversation] = useState<Record<string, string>>({});
@@ -31,6 +34,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const [spaceDescription, setSpaceDescription] = useState('');
   const [spaceApproval, setSpaceApproval] = useState(false);
   const [creatingSpace, setCreatingSpace] = useState(false);
+  const { runOperation } = useOperationProgress();
   const [showMemberManager, setShowMemberManager] = useState(false);
   const [spaceMembers, setSpaceMembers] = useState<Profile[]>([]);
   const [joinRequests, setJoinRequests] = useState<{id:string;requester_id:string;requested_at:string;profile?:Profile}[]>([]);
@@ -210,16 +214,40 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const send = async (event: FormEvent) => {
     event.preventDefault(); if (!active || !draft.trim()) return;
     const text = draft.trim(); setDraft(''); setSending(true);
-    const { data: sentMessage, error } = await supabase.from('messages').insert({ conversation_id: active, sender_id: userId, body: text, format: 'plain' }).select('id').single();
-    setSending(false);
-    if (error) { setDraft(text); notify(`ارسال پیام ناموفق بود: ${error.message}`, 'error'); }
-    else { if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch', { body: { message_id: sentMessage.id } }); void loadMessages(active); void loadConversations(); }
+    try {
+      const sentMessage = await runOperation('ارسال پیام', async (advance) => {
+        advance(22, 'آماده‌سازی متن و گفتگوی فعال');
+        advance(54, 'ثبت پیام در سرور');
+        const { data, error } = await supabase.from('messages').insert({ conversation_id: active, sender_id: userId, body: text, format: 'plain' }).select('id').single();
+        if (error) throw error;
+        advance(90, 'پیام ثبت شد؛ همگام‌سازی گفتگو');
+        return data;
+      });
+      if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch', { body: { message_id: sentMessage.id } });
+      void loadMessages(active);
+      void loadConversations();
+    } catch (cause) {
+      setDraft(text);
+      notify(`ارسال پیام ناموفق بود: ${cause instanceof Error ? cause.message : 'خطای نامشخص'}`, 'error');
+    } finally { setSending(false); }
   };
 
   const downloadAttachment = async (file: FileAsset) => {
-    const { data, error } = await supabase.storage.from(file.bucket_id).createSignedUrl(file.object_path, 90, { download: safeDisplayName(file.original_name) });
-    if (error || !data?.signedUrl) notify(error?.message ?? 'لینک دانلود در دسترس نیست.', 'error');
-    else window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    const { data: blob, error } = await supabase.storage.from(file.bucket_id).download(file.object_path);
+    if (error || !blob) {
+      notify(error?.message ?? 'دریافت فایل از مخزن خصوصی ناموفق بود.', 'error');
+      return;
+    }
+    try {
+      const verified = await verifyBlobIntegrity(blob, file.byte_size, file.sha256_hex);
+      if (!verified) {
+        notify('سلامت فایل تأیید نشد؛ حجم یا اثرانگشت فایل با اطلاعات ثبت‌شده مطابقت ندارد.', 'error');
+        return;
+      }
+      saveBlobAs(blob, safeDisplayName(file.original_name));
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'بررسی سلامت فایل ناموفق بود.', 'error');
+    }
   };
 
   const uploadAttachment = async (file: File) => {
@@ -346,22 +374,61 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     if (description.length > 500) { notify('توضیحات حداکثر ۵۰۰ نویسه است.', 'error'); return; }
     setCreatingSpace(true);
     let conversationId: string | null = null;
+    let spaceCommitted = false;
+    let rollbackSafe = true;
     try {
-      const { data: conversation, error: conversationError } = await supabase.from('conversations').insert({ kind: spaceType, title, created_by: userId }).select('id').single();
-      if (conversationError || !conversation) throw conversationError ?? new Error('ساخت فضای گفتگو ناموفق بود.');
-      conversationId = conversation.id;
-      const { error: memberError } = await supabase.from('conversation_members').insert({ conversation_id: conversationId, user_id: userId, member_role: 'owner' });
-      if (memberError) throw memberError;
-      const metadata = spaceType === 'group' ? await supabase.from('group_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, join_approval_required: spaceApproval }) : await supabase.from('channel_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, visibility: 'public' });
-      if (metadata.error) throw metadata.error;
+      await runOperation(spaceType === 'group' ? 'ساخت گروه جدید' : 'ساخت کانال عمومی', async (advance) => {
+        advance(14, 'اعتبارسنجی نام، توضیحات و نوع فضا');
+        const { data: conversation, error: conversationError } = await supabase.from('conversations').insert({ kind: spaceType, title, created_by: userId }).select('id').single();
+        if (conversationError || !conversation) throw conversationError ?? new Error('ساخت فضای گفتگو ناموفق بود.');
+        conversationId = conversation.id;
+        advance(42, 'ساخت فضای گفتگو در سرور');
+        const { error: memberError } = await supabase.from('conversation_members').insert({ conversation_id: conversationId, user_id: userId, member_role: 'owner' });
+        if (memberError) throw memberError;
+        advance(66, 'ثبت سازنده و دسترسی مالک');
+        const metadata = spaceType === 'group'
+          ? await supabase.from('group_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, join_approval_required: spaceApproval })
+          : await supabase.from('channel_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, visibility: 'public' });
+        if (metadata.error) {
+          const metadataTable = spaceType === 'group' ? 'group_spaces' : 'channel_spaces';
+          const { data: savedMetadata, error: verifyError } = await supabase.from(metadataTable)
+            .select('conversation_id').eq('conversation_id', conversationId).maybeSingle();
+          if (verifyError) {
+            rollbackSafe = false;
+            throw new Error('نتیجه ساخت گروه یا کانال نامشخص است؛ برای جلوگیری از حذف فضای احتمالا ساخته‌شده، پاک‌سازی خودکار متوقف شد.');
+          }
+          if (!savedMetadata) throw metadata.error;
+        }
+        spaceCommitted = true;
+        advance(90, 'تنظیمات و عضویت مالک ثبت شد');
+      });
       notify(spaceType === 'group' ? 'گروه ساخته شد.' : 'کانال عمومی ساخته شد.');
       setShowCreateSpace(false); setSpaceTitle(''); setSpaceDescription(''); setSpaceApproval(false);
-      await loadConversations(); setActive(conversationId);
+      try {
+        await loadConversations();
+        if (conversationId) setActive(conversationId);
+      } catch {
+        notify('فضا ساخته شد، اما تازه‌سازی فهرست گفتگوها انجام نشد؛ دوباره همگام‌سازی کنید.', 'error');
+      }
     } catch (error) {
-      if (conversationId) await supabase.from('conversations').delete().eq('id', conversationId).eq('created_by', userId);
+      if (conversationId && rollbackSafe && !spaceCommitted) await supabase.from('conversations').delete().eq('id', conversationId).eq('created_by', userId);
       notify('ساخت گروه یا کانال انجام نشد: ' + (error instanceof Error ? error.message : 'خطای نامشخص'), 'error');
     } finally { setCreatingSpace(false); }
   };
+  const visibleConversations = useMemo(() => {
+    const query = conversationQuery.trim().toLocaleLowerCase('fa-IR');
+    return conversations.filter((conversation) => {
+      const peer = members[peerByConversation[conversation.id] ?? ''];
+      const title = conversation.title || peer?.display_name || (conversation.kind === 'group' ? 'گروه کاوه' : conversation.kind === 'channel' ? 'کانال کاوه' : 'گفتگوی خصوصی');
+      const preview = lastMessageByConversation[conversation.id]?.body ?? '';
+      const matchesQuery = !query || [title, peer?.username ?? '', preview].join(' ').toLocaleLowerCase('fa-IR').includes(query);
+      const matchesFilter = conversationFilter === 'all'
+        || (conversationFilter === 'unread' && (unreadByConversation[conversation.id] ?? 0) > 0)
+        || (conversationFilter === 'spaces' && conversation.kind !== 'direct');
+      return matchesQuery && matchesFilter;
+    });
+  }, [conversations, conversationQuery, conversationFilter, members, peerByConversation, lastMessageByConversation, unreadByConversation]);
+
   const activeConversation = conversations.find((c) => c.id === active);
   const otherProfile = active ? members[peerByConversation[active] ?? ''] : null;
   return <div className="chat-layout"><section className="chat-list-panel"><div className="chat-list-heading"><div><span className="eyebrow">ارتباطات شما</span><h1>گفتگوها</h1></div><div className="admin-user-actions"><button className="button button-primary button-square" onClick={() => setShowNew((v) => !v)} title="گفتگوی جدید"><Plus size={19}/></button><button className="button button-ghost" onClick={() => { setShowCreateSpace((v) => !v); setShowNew(false); }}>گروه/کانال</button></div></div>
@@ -375,7 +442,15 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
       {spaceType === "channel" && <small className="admin-security-note">کانال عمومی ساخته می‌شود؛ دسترسی نوشتن فعلاً فقط برای اعضای ثبت‌شده است.</small>}
       <div className="admin-user-actions"><button className="button button-primary" disabled={creatingSpace}>{creatingSpace ? "در حال ساخت…" : "ساخت"}</button><button type="button" className="button button-ghost" onClick={() => setShowCreateSpace(false)}>انصراف</button></div>
     </form>}
-    <div className="chat-list-scroll">{loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : conversations.length === 0 ? <EmptyState icon={<MessageCircle/>} title="گفتگویی نداری" description="از دکمهٔ + یک گفتگو با کاربر دیگری شروع کن."/> : conversations.map((c) => {
+    <div className="chat-inbox-tools">
+      <label className="chat-inbox-search"><Search size={15}/><input value={conversationQuery} onChange={(event) => setConversationQuery(event.target.value)} placeholder="جست‌وجوی گفتگوها…" aria-label="جست‌وجوی گفتگوها"/>{conversationQuery && <button type="button" onClick={() => setConversationQuery('')} aria-label="پاک‌کردن جست‌وجو">×</button>}</label>
+      <div className="chat-inbox-filters" role="group" aria-label="فیلتر گفتگوها">
+        <button type="button" className={conversationFilter === 'all' ? 'active' : ''} aria-pressed={conversationFilter === 'all'} onClick={() => setConversationFilter('all')}>همه <b>{conversations.length.toLocaleString('fa-IR')}</b></button>
+        <button type="button" className={conversationFilter === 'unread' ? 'active' : ''} aria-pressed={conversationFilter === 'unread'} onClick={() => setConversationFilter('unread')}>خوانده‌نشده</button>
+        <button type="button" className={conversationFilter === 'spaces' ? 'active' : ''} aria-pressed={conversationFilter === 'spaces'} onClick={() => setConversationFilter('spaces')}>گروه و کانال</button>
+      </div>
+    </div>
+    <div className="chat-list-scroll">{loading ? <div className="skeleton-list"><div className="skeleton-card"/><div className="skeleton-card"/></div> : conversations.length === 0 ? <EmptyState icon={<MessageCircle/>} title="گفتگویی نداری" description="از دکمهٔ + یک گفتگو با کاربر دیگری شروع کن."/> : visibleConversations.length === 0 ? <div className="chat-filter-empty"><Search size={20}/><strong>گفتگویی پیدا نشد</strong><span>فیلتر یا عبارت جست‌وجو را تغییر بده.</span></div> : visibleConversations.map((c) => {
       const p = members[peerByConversation[c.id] ?? ''];
       const title = c.title || (c.kind === 'direct' ? p?.display_name : c.kind === 'group' ? 'گروه کاوه' : 'کانال کاوه');
       return <button className={`conversation-row ${active === c.id ? 'selected' : ''}`} key={c.id} onClick={() => setActive(c.id)}><Avatar profile={{ display_name: title ?? 'گفتگو', avatar_url: p?.avatar_url }} size="md"/><span className="conversation-copy"><strong>{title ?? 'گفتگو'}</strong><small>{lastMessageByConversation[c.id]?.body || (c.kind === 'direct' ? 'گفتگوی خصوصی' : c.kind === 'group' ? 'گروه' : 'کانال')}</small></span><span className="conversation-time">{unreadByConversation[c.id] > 0 && <b className="unread-count">{unreadByConversation[c.id] > 99 ? '۹۹+' : unreadByConversation[c.id].toLocaleString('fa-IR')}</b>}{c.last_message_at ? new Date(c.last_message_at).toLocaleDateString('fa-IR') : ''}</span></button>;

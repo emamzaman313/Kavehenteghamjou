@@ -163,3 +163,76 @@
 - Web CI run `44377507753` در Commit `aa99add7` شامل فرم ورود با کد، پنل مدیر، helper و تست‌های آن بود؛ TypeScript، lint، test و build موفق شدند.
 - Security run `44377908908` برای Commit `456ef9e5` موفق شد؛ Secret scanning و dependency audit موفق، Dependency review به‌علت اجرا نشدن روی Pull Request skipped بود.
 - کد مهمان و پنل مدیر در محیط واقعی با مرورگر/درخواست POST end-to-end آزمایش نشده‌اند؛ ابزار اجرای این نشست امکان درخواست مستقیم به Edge Function را نداد. Deployment Vercel و درخواست واقعی کاربر باید برای اثبات کامل ورود آزمایش شوند.
+
+
+---
+
+## شاخه توسعه محصول — به‌روزرسانی ۲۰ نوامبر ۲۰۲۶
+
+این بخش وضعیت جدید شاخه `feat/kaveh-premium-experience` را ثبت می‌کند؛ گزارش تاریخی `main` بالا را بازنویسی نمی‌کند.
+
+- آخرین Commit کد هنگام ثبت این بخش: `97117704f89b2683cb7caef567682252db3a9521`.
+- PR مرتبط: [#3](https://github.com/emamzaman313/Kavehenteghamjou/pull/3)، همچنان Draft/Open و Merge نشده است.
+- اصلاحات فاز ۱ روی OTP اندروید، unread count دقیق، rollback آپلود ناموفق، حریم فیلد رمز، حذف mutation غیرضروری پس از ورود و rollback پیوست ناقص چت در تاریخچه همین شاخه ثبت شده‌اند.
+- روی وب، ناوبری صفحه‌کلیدپذیر بهبود یافت: پیوند پرش به محتوای اصلی، landmarkهای نام‌گذاری‌شده برای ناوبری، `aria-current=page` برای مسیر فعال، فوکوس‌پذیری main و live region برای اعلان‌های درون‌برنامه‌ای.
+- لایه دسترس‌پذیری CSS مشترک اضافه شد: focus-visible، رعایت reduced-motion، حداقل هدف لمسی در موبایل و استایل forced-colors.
+- این تغییرات دسترس‌پذیری هنوز از نظر screen reader و صفحه‌کلید به‌صورت دستی آزمایش نشده‌اند؛ تا پایان CI فقط کد پیاده‌سازی‌شده محسوب می‌شوند.
+- CI برای Commit `19745dc5ce51b257b686e6f171d8cc549849ca91` موفق شد: Android CI، Web CI و Security checks هر سه success.
+- CI برای Commit فعلی `97117704f89b2683cb7caef567682252db3a9521` در زمان ثبت: Android در حال اجرا، Web در صف، Security در صف. نتیجه نهایی هنوز تأیید نشده است.
+- تست واقعی دو حساب مستقل، نصب روی دستگاه فیزیکی، Android Release signing و تست دستی دسترس‌پذیری هنوز انجام نشده‌اند.
+- هیچ Production deployment/promotion، Merge یا Production migration انجام نشده است.
+
+
+---
+
+## Phase 1 follow-up — verified private downloads across Web and Android
+
+- Android chat attachments now include the persisted `sha256_hex` metadata when reading file assets. Before opening the Android save dialog, the download must pass both exact byte-size and SHA-256 validation using the shared `verifyFileIntegrity` helper. A missing or malformed digest fails closed; no unverified bytes are saved.
+- The Web chat and Vault download paths no longer open a signed URL directly. They download through the authenticated Supabase Storage client, which keeps private-bucket RLS in force, verify the Blob's exact size and SHA-256, and only then create a local browser download.
+- Added incremental Blob hashing in `web/lib/files.ts` and four unit tests covering a valid file, a size mismatch, a digest mismatch, and a missing/malformed digest.
+- The live Supabase inspection was read-only: `user-files` is still private with a 50,000,000-byte limit; the current `file_assets` table contained one row, no missing/blank digest rows and no oversized metadata rows. Owner-scoped file access, conversation-member shared reads, and attachment insertion tied to the sender and file owner were verified in the active RLS policies. No schema, policy or data changes were made.
+- Code commits: Android chat validation `25ccc3676ec548288ee5423547f3a3da012ccd04`; Web verified downloads `a30a7e15695a2f1b6a17489b903b85ebe0aee099` plus helper completion `c684faa3f133202256827f61e798ac884277670f`.
+- Exact-head CI for `c684faa3f133202256827f61e798ac884277670f`: Android CI success (unit tests and Debug APK/AAB), Web CI success (TypeScript, ESLint, unit tests and Next.js production build), and Security checks success (dependency review, dependency audit and Gitleaks).
+- Supabase Security Advisor still reports leaked-password protection disabled and flags the authenticated `public.create_support_ticket` SECURITY DEFINER function for review. The function was read-only inspected: it requires `auth.uid()`, validates inputs, has an empty search path and has no anon execute grant. It was not changed in this pass; leaked-password protection remains an owner-level Auth setting to review.
+- Manual multi-account Web/Android E2E, cross-account negative authorization tests, physical-device checks, Android Release signing and manual screen-reader/keyboard verification remain pending. This file-integrity slice is CI-validated, not a claim that all of Phase 1 or all product modules are complete.
+- No production migration, production data mutation, merge, Vercel deployment or production promotion was performed.
+
+
+---
+
+## Edge Function authentication contract — guest access code
+
+- Read-only inspection of the live project found `access-code-login` active at version 7 with gateway `verify_jwt=true`; `admin-console` is active at version 34 with `verify_jwt=false`. `notification-dispatch` and `rank-management` remain gateway-JWT protected.
+- Web and Android client configuration use the modern Supabase publishable key. The access-code handler intentionally exposes only `status` and `login` as public actions. Its `admin_get` and `admin_update` branches verify the actual user token with Auth `getUser()` and enforce site-admin roles in the handler.
+- Added `supabase/config.toml` to declare the intended function contract explicitly: guest-code access is reachable without depending on gateway handling of publishable keys; `admin-console` keeps its in-handler JWT/RBAC checks; notification dispatch and rank management retain gateway JWT verification. The access-code function import map remains explicitly pinned to its existing `deno.json`.
+- Added `web/tests/edge-function-config.test.ts` so CI checks these four deployment settings and catches accidental auth-mode drift.
+- Supabase documentation updated 2026-11-18 explains that publishable/secret API keys are not user JWTs, should be sent on `apikey`, and that functions using handler-side authorization should set `verify_jwt=false`. The compatibility behavior of the gateway is documented separately; this finding is a configuration-contract hardening, not proof that the current guest login is failing on every client.
+- The live deployment remains unchanged: the currently active `access-code-login` still reports `verify_jwt=true` until the owner approves and performs a function deployment using this branch configuration. No Edge Function, database, or production setting was changed.
+- Code commits: `2253615420e563d7aeef49e74450acbc40ea16fb` (function config) and `9d1003ac05e2d62cf27b55fe369c7f43694f4dfd` (configuration regression test).
+- Exact-head CI on `9d1003ac05e2d62cf27b55fe369c7f43694f4dfd`: Android CI success (unit tests + Debug APK/AAB), Web CI success (TypeScript, ESLint, tests including function config, Next.js production build), and Security checks success (Dependency Review, dependency audit and Gitleaks).
+- Owner action: authorize the one-function deployment after reviewing this PR. No Production deployment or PR merge was performed.
+
+
+---
+
+## Phase 1 continuation — CI verification and E2E authorization hardening (20 November 2026)
+
+- Active development branch: `feat/kaveh-premium-experience`.
+- Latest branch commit at this update: `55e2db63d29fe32c1fcce66d61015e24ee692b90` (strengthens the three-account chat E2E test).
+- PR #3 remains Draft/Open; no merge or production deployment was performed.
+- On the immediately preceding commit `973b53f255bc0059ad76c66e3a97d8aabdb08170`, Web CI run `44696753170` passed (TypeScript, ESLint, unit tests, Next.js production build) and Android CI run `44696753201` passed (Android unit tests, Debug APK and Debug AAB build/upload).
+- Security Checks run `44696753208` for that preceding commit was still pending at the time of verification; it is not counted as passed.
+- The E2E outsider-membership assertion was tightened: Account C now queries all visible membership rows for the private conversation and must receive an empty result. The earlier assertion only queried C's own user ID and could miss accidental visibility of A/B membership rows.
+- The E2E workflow still requires three dedicated test accounts and six GitHub Actions secrets. It has not been executed against live accounts; do not treat CI build success as E2E success.
+- Android Release signing, physical-device tests, and owner-approved deployment of the Edge Function config remain outstanding.
+- No live Supabase data/schema changes, Production migration, Vercel Production promotion, or PR merge were made in this continuation.
+
+---
+
+## Phase 2 continuation — resilient Kaveh World loading (20 November 2026)
+
+- Web Kaveh World refresh now reports failures from all eight parallel data queries instead of silently treating some failed queries as empty state.
+- Profile lookup failures for leaderboard labels are surfaced separately.
+- Unexpected exceptions during the multi-query refresh are caught and reported, and the loading state is always released in a `finally` block so a transient network/client exception cannot leave the page stuck in its loading state.
+- Implementation commit: `32cca07ce7f3897d35e1af9eebbe03a2c0b51301`.
+- Fresh Web, Android and Security CI for this exact code commit must pass before this slice is considered CI-validated. No database schema, RLS policy, production data, deployment, or merge was changed.

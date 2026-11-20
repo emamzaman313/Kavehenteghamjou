@@ -9,6 +9,7 @@ import { authErrorMessage, getOAuthCallbackError } from '@/lib/auth-errors';
 import type { ToastTone } from '@/lib/ui-types';
 import type { Profile } from '@/lib/types';
 import { Avatar, BrandMark } from '@/components/ui';
+import { OperationProgressProvider } from '@/components/OperationProgress';
 import LoginScreen from '@/features/auth/LoginScreen';
 import FeedView from '@/features/feed/FeedView';
 import ChatView from '@/features/chat/ChatView';
@@ -20,6 +21,9 @@ import SettingsView from '@/features/settings/SettingsView';
 import SocialHubView from '@/features/social/SocialHubView';
 import AdminAccessCodePanel from '@/features/admin/AdminAccessCodePanel';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
+import KavehExperienceLayer from '@/components/KavehExperienceLayer';
+import KavehCommandDock from '@/components/KavehCommandDock';
+import KavehPageStage from '@/components/KavehPageStage';
 import SupportCenter from '@/features/support/SupportCenter';
 import KavehWorldView from '@/features/world/KavehWorldView';
 
@@ -42,7 +46,7 @@ function toastMessage(setToasts: (fn: (items: Toast[]) => Toast[]) => void, text
   window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 4200);
 }
 
-export default function KavehApp() {
+function KavehAppContent() {
   const supabase = useMemo(() => getSupabase(), []);
   const configured = Boolean(supabase);
   const [session, setSession] = useState<Session | null>(null);
@@ -209,11 +213,14 @@ export default function KavehApp() {
     return true;
   });
   return <div className={`app-frame kaveh-premium-shell ${dark ? 'theme-dark' : 'theme-light'}`} style={{ '--remote-accent': appearance.accent, '--remote-background': appearance.background, '--remote-surface': appearance.surface, '--remote-radius': `${appearance.radius}px` } as CSSProperties}>
-    <aside className="sidebar">
+    <a className="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
+    <KavehExperienceLayer isAdmin={isAdmin} onNavigate={setTab} />
+    <KavehCommandDock activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
+    <aside className="sidebar" aria-label="ناوبری اصلی">
       <div className="sidebar-brand"><BrandMark/><div><strong>کاوه انتقامجو</strong><small>THE PRIVATE SOCIAL UNIVERSE</small></div></div>
       <div className="side-label"><span>01</span> فضای شما</div>
       <nav className="side-nav">
-        {visibleNavItems.map((item) => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span>{item.id === 'chats' && unread > 0 && <b className="nav-count">{unread}</b>}</button>)}
+        {visibleNavItems.map((item) => <button key={item.id} className={`nav-item ${tab === item.id ? 'active' : ''}`} aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span>{item.id === 'chats' && unread > 0 && <b className="nav-count">{unread}</b>}</button>)}
       </nav>
       <div className="side-divider"/>
       <div className="side-label"><span>02</span> حساب و تنظیمات</div>
@@ -229,12 +236,13 @@ export default function KavehApp() {
     </aside>
 
     <GlobalAudioPlayer supabase={supabase}/>
-    <main className="main-area">
+    <main className="main-area" id="main-content" tabIndex={-1}>
       <header className="topbar">
         <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', support: isSupportStaff ? 'صندوق پشتیبانی' : 'پشتیبانی و ارتباط با مدیریت', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
         <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>⌘ K</kbd></label><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title="تغییر تم"><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       <div className="content-scroll">
+        <KavehPageStage activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
         {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
         {tab === 'support' && <SupportCenter supabase={supabase} userId={session.user.id} notify={notify} staff={isSupportStaff}/>}
@@ -248,8 +256,13 @@ export default function KavehApp() {
         {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify} role={adminRole === 'owner' || adminRole === 'admin' ? adminRole : 'moderator'}/>}
         {tab === 'admin' && !isAdmin && <section className="panel-card"><div className="notice notice-error">دسترسی مدیریت برای این حساب فعال نیست.</div></section>}
       </div>
-      <nav className="mobile-nav">{visibleNavItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}{isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت</span></button>}</nav>
+      <nav className="mobile-nav" aria-label="ناوبری موبایل">{visibleNavItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : '' } aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}{isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت</span></button>}</nav>
     </main>
-    <div className="toast-stack" aria-live="polite">{toasts.map((item) => <div key={item.id} className={`toast ${item.tone === 'error' ? 'toast-error' : ''}`}><span>{item.tone === 'error' ? <X size={16}/> : <Check size={16}/>}</span>{item.text}</div>)}</div>
+    <div className="toast-stack" role="status" aria-live="polite" aria-atomic="false">{toasts.map((item) => <div key={item.id} className={`toast ${item.tone === 'error' ? 'toast-error' : ''}`}><span>{item.tone === 'error' ? <X size={16}/> : <Check size={16}/>}</span>{item.text}</div>)}</div>
   </div>;
+}
+
+
+export default function KavehApp() {
+  return <OperationProgressProvider><KavehAppContent/></OperationProgressProvider>;
 }

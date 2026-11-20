@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,10 +51,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.kaveh.avenger.ui.progress.OperationProgressController
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.rpc
+import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
@@ -62,6 +65,7 @@ import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.storage.storage
 import com.kaveh.avenger.files.FileUploadRepository
+import com.kaveh.avenger.files.verifyFileIntegrity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collect
@@ -138,7 +142,8 @@ private data class FileAssetRow(
     @SerialName("object_path") val objectPath: String,
     @SerialName("original_name") val originalName: String,
     @SerialName("mime_type") val mimeType: String? = null,
-    @SerialName("byte_size") val byteSize: Long
+    @SerialName("byte_size") val byteSize: Long,
+    @SerialName("sha256_hex") val sha256Hex: String? = null
 )
 
 @Serializable
@@ -185,6 +190,8 @@ fun ChatScreen(
     var loadingOlderMessages by remember { mutableStateOf(false) }
     var showNewConversation by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var inboxQuery by remember { mutableStateOf("") }
+    var inboxFilter by remember { mutableStateOf("all") }
     val searchResults = remember { mutableStateListOf<ProfileRow>() }
     var searchingPeople by remember { mutableStateOf(false) }
     var creatingConversationFor by remember { mutableStateOf<String?>(null) }
@@ -226,16 +233,17 @@ fun ChatScreen(
                     order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                     limit(1)
                 }.decodeList<MessageRow>().firstOrNull()
+                // Ask PostgREST for an exact server-side count. Fetching only the
+                // latest 100 rows undercounted unread messages in busy conversations.
                 val unreadCount = supabase.postgrest["messages"].select {
+                    count(Count.EXACT)
                     filter {
                         eq("conversation_id", conversation.id)
                         neq("sender_id", userId)
                         exact("deleted_at", null)
                         membership.lastReadAt?.let { gt("created_at", it) }
                     }
-                    order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
-                    limit(100)
-                }.decodeList<MessageRow>().size
+                }.countOrNull()?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: 0
 
                 ChatConversation(
                     id = conversation.id,
@@ -294,10 +302,16 @@ fun ChatScreen(
         creatingConversationFor = profile.id
         errorText = null
         try {
-            val conversationId = supabase.postgrest.rpc(
-                "create_direct_conversation",
-                DirectConversationParams(profile.id)
-            ).decodeAs<String>()
+            val conversationId = OperationProgressController.run("ایجاد گفتگوی خصوصی") { progress ->
+                progress.advance(22, "بررسی مخاطب و دسترسی حساب")
+                progress.advance(54, "ایجاد یا بازیابی گفتگو در سرور")
+                val result = supabase.postgrest.rpc(
+                    "create_direct_conversation",
+                    DirectConversationParams(profile.id)
+                ).decodeAs<String>()
+                progress.advance(90, "گفتگوی خصوصی آماده شد")
+                result
+            }
             loadConversations()
             activeConversation = conversations.firstOrNull { it.id == conversationId }
                 ?: ChatConversation(
@@ -408,31 +422,80 @@ fun ChatScreen(
 
     suspend fun uploadAttachment(uri: Uri) {
         val conversationId = activeConversation?.id ?: return
+        var uploadedFileId: String? = null
+        var uploadedObjectPath: String? = null
+        var createdMessageId: String? = null
+        var attachmentLinked = false
         uploadingAttachment = true
         errorText = null
         try {
-            val uploaded = FileUploadRepository(supabase).upload(context, userId, uri)
-            val message = supabase.postgrest.from("messages").insert(
-                MessageInsert(
-                    conversationId = conversationId,
-                    senderId = userId,
-                    body = "📎 ${uploaded.originalName}"
+            OperationProgressController.run("پیوست فایل به گفتگو") { progress ->
+                val uploaded = FileUploadRepository(supabase).upload(context, userId, uri) { percent, detail ->
+                    progress.advance(percent, detail)
+                }
+                uploadedFileId = uploaded.fileAssetId
+                uploadedObjectPath = uploaded.objectPath
+                progress.advance(84, "فایل منتقل شد؛ ثبت پیام و پیوست")
+                val message = supabase.postgrest.from("messages").insert(
+                    MessageInsert(
+                        conversationId = conversationId,
+                        senderId = userId,
+                        body = "📎 ${uploaded.originalName}"
+                    )
+                ) {
+                    select()
+                }.decodeList<MessageIdRow>().single()
+                createdMessageId = message.id
+                supabase.postgrest.from("message_attachments").insert(
+                    MessageAttachmentInsert(
+                        messageId = message.id,
+                        fileAssetId = uploaded.fileAssetId
+                    )
                 )
-            ) {
-                select()
-            }.decodeList<MessageIdRow>().single()
-            runCatching {
-                supabase.functions("notification-dispatch", body = NotificationDispatchArgs(message.id))
+                attachmentLinked = true
+                progress.advance(94, "پیام و پیوست با موفقیت ثبت شدند")
+                runCatching {
+                    supabase.functions("notification-dispatch", body = NotificationDispatchArgs(message.id))
+                }
+                loadMessages(conversationId)
+                loadConversations()
             }
-            supabase.postgrest.from("message_attachments").insert(
-                MessageAttachmentInsert(
-                    messageId = message.id,
-                    fileAssetId = uploaded.fileAssetId
-                )
-            )
-            loadMessages(conversationId)
-            loadConversations()
         } catch (exception: Exception) {
+            // A message insert or attachment-link failure must not strand an uploaded
+            // private object in the sender's Vault. Check the database first because a
+            // network error can happen after the attachment insert has committed.
+            if (!attachmentLinked && uploadedFileId != null && uploadedObjectPath != null) {
+                val linkCheck = runCatching {
+                    supabase.postgrest.from("message_attachments").select {
+                        filter { eq("file_asset_id", uploadedFileId!!) }
+                    }.decodeList<MessageAttachmentRow>()
+                }
+                if (linkCheck.getOrNull()?.isEmpty() == true) {
+                    createdMessageId?.let { messageId ->
+                        runCatching {
+                            supabase.postgrest.from("messages").delete {
+                                filter {
+                                    eq("id", messageId)
+                                    eq("sender_id", userId)
+                                }
+                            }
+                        }
+                    }
+                    val metadataRemoved = runCatching {
+                        supabase.postgrest.from("file_assets").delete {
+                            filter {
+                                eq("id", uploadedFileId!!)
+                                eq("owner_id", userId)
+                            }
+                        }
+                    }.isSuccess
+                    if (metadataRemoved) {
+                        runCatching {
+                            supabase.storage.from("user-files").delete(uploadedObjectPath!!)
+                        }
+                    }
+                }
+            }
             errorText = exception.message ?: "ارسال فایل ناموفق بود."
         } finally {
             uploadingAttachment = false
@@ -458,8 +521,17 @@ fun ChatScreen(
         downloadingFilePath = file.objectPath
         errorText = null
         try {
-            pendingDownloadBytes = supabase.storage.from(file.bucketId).downloadAuthenticated(file.objectPath)
-            saveFileLauncher.launch(file.originalName)
+            OperationProgressController.run("دانلود امن پیوست") { progress ->
+                progress.advance(28, "دریافت احراز هویت‌شده از مخزن خصوصی")
+                val downloadedBytes = supabase.storage.from(file.bucketId).downloadAuthenticated(file.objectPath)
+                progress.advance(68, "بررسی حجم و SHA-256 پیوست")
+                require(verifyFileIntegrity(downloadedBytes, file.byteSize, file.sha256Hex.orEmpty())) {
+                    "سلامت پیوست دریافتی تأیید نشد؛ حجم یا اثرانگشت فایل با اطلاعات ثبت‌شده مطابقت ندارد."
+                }
+                progress.advance(90, "سلامت پیوست تأیید شد؛ آماده ذخیره")
+                pendingDownloadBytes = downloadedBytes
+                saveFileLauncher.launch(file.originalName)
+            }
         } catch (exception: Exception) {
             errorText = exception.message ?: "دریافت فایل ناموفق بود."
             pendingDownloadBytes = null
@@ -704,6 +776,34 @@ fun ChatScreen(
             }
         }
 
+        if (activeConversation == null && !showNewConversation) {
+            OutlinedTextField(
+                value = inboxQuery,
+                onValueChange = { inboxQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("جست‌وجو در گفتگوها") },
+                placeholder = { Text("نام گفتگو یا متن آخرین پیام…") }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = inboxFilter == "all",
+                    onClick = { inboxFilter = "all" },
+                    label = { Text("همه") }
+                )
+                FilterChip(
+                    selected = inboxFilter == "unread",
+                    onClick = { inboxFilter = "unread" },
+                    label = { Text("خوانده‌نشده") }
+                )
+                FilterChip(
+                    selected = inboxFilter == "spaces",
+                    onClick = { inboxFilter = "spaces" },
+                    label = { Text("گروه و کانال") }
+                )
+            }
+        }
+
         if (activeConversation == null) {
             when {
                 loading -> CircularProgressIndicator()
@@ -718,8 +818,33 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(conversations, key = { it.id }) { conversation ->
+                else -> {
+                    val query = inboxQuery.trim()
+                    val visibleConversations = conversations.filter { conversation ->
+                        val matchesQuery = query.isBlank()
+                            || conversation.title.contains(query, ignoreCase = true)
+                            || conversation.lastMessagePreview.orEmpty().contains(query, ignoreCase = true)
+                        val matchesFilter = when (inboxFilter) {
+                            "unread" -> conversation.unreadCount > 0
+                            "spaces" -> conversation.kind != "direct"
+                            else -> true
+                        }
+                        matchesQuery && matchesFilter
+                    }
+                    if (visibleConversations.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                "گفتگویی با این فیلتر پیدا نشد.",
+                                modifier = Modifier.padding(18.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(visibleConversations, key = { it.id }) { conversation ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -763,6 +888,7 @@ fun ChatScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }
@@ -969,16 +1095,20 @@ fun ChatScreen(
                                 onClick = {
                                     scope.launch {
                                         try {
-                                            val forwarded = supabase.postgrest["messages"].insert(
-                                                MessageInsert(
-                                                    conversationId = target.id,
-                                                    senderId = userId,
-                                                    body = messageToForward.body,
-                                                    forwardedFrom = messageToForward.id
-                                                )
-                                            ) { select() }.decodeList<MessageIdRow>().single()
-                                            runCatching {
-                                                supabase.functions("notification-dispatch", body = NotificationDispatchArgs(forwarded.id))
+                                            OperationProgressController.run("ارسال مجدد پیام") { progress ->
+                                                progress.advance(24, "بررسی گفتگو و آماده‌سازی پیام")
+                                                val forwarded = supabase.postgrest["messages"].insert(
+                                                    MessageInsert(
+                                                        conversationId = target.id,
+                                                        senderId = userId,
+                                                        body = messageToForward.body,
+                                                        forwardedFrom = messageToForward.id
+                                                    )
+                                                ) { select() }.decodeList<MessageIdRow>().single()
+                                                progress.advance(90, "پیام در گفتگوی مقصد ثبت شد")
+                                                runCatching {
+                                                    supabase.functions("notification-dispatch", body = NotificationDispatchArgs(forwarded.id))
+                                                }
                                             }
                                             forwardingMessage = null
                                             loadConversations()
@@ -1018,18 +1148,22 @@ private suspend fun sendChatMessage(
     setSending(true)
     setError(null)
     try {
-        val created = supabase.postgrest["messages"].insert(
-            MessageInsert(
-                conversationId = conversationId,
-                senderId = userId,
-                body = text,
-                replyTo = replyTo
-            )
-        ) { select() }.decodeList<MessageIdRow>().single()
-        runCatching {
-            supabase.functions("notification-dispatch", body = NotificationDispatchArgs(created.id))
+        OperationProgressController.run("ارسال پیام") { progress ->
+            progress.advance(24, "آماده‌سازی پیام و مقصد")
+            val created = supabase.postgrest["messages"].insert(
+                MessageInsert(
+                    conversationId = conversationId,
+                    senderId = userId,
+                    body = text,
+                    replyTo = replyTo
+                )
+            ) { select() }.decodeList<MessageIdRow>().single()
+            progress.advance(88, "پیام در سرور ثبت شد")
+            runCatching {
+                supabase.functions("notification-dispatch", body = NotificationDispatchArgs(created.id))
+            }
+            refresh()
         }
-        refresh()
     } catch (exception: Exception) {
         restoreDraft(text)
         setError(exception.message ?: "ارسال پیام ناموفق بود.")

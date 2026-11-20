@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  two-account-chat:
-    name: Two-account Supabase chat, Realtime and private file test
+  three-account-chat:
+    name: Three-account Supabase chat, Realtime and private file authorization test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -20,6 +20,8 @@ jobs:
       KAVEH_E2E_USER_A_PASSWORD: ${{ secrets.KAVEH_E2E_USER_A_PASSWORD }}
       KAVEH_E2E_USER_B_EMAIL: ${{ secrets.KAVEH_E2E_USER_B_EMAIL }}
       KAVEH_E2E_USER_B_PASSWORD: ${{ secrets.KAVEH_E2E_USER_B_PASSWORD }}
+      KAVEH_E2E_USER_C_EMAIL: ${{ secrets.KAVEH_E2E_USER_C_EMAIL }}
+      KAVEH_E2E_USER_C_PASSWORD: ${{ secrets.KAVEH_E2E_USER_C_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -34,7 +36,7 @@ jobs:
         shell: bash
         run: |
           missing=0
-          for name in KAVEH_E2E_USER_A_EMAIL KAVEH_E2E_USER_A_PASSWORD KAVEH_E2E_USER_B_EMAIL KAVEH_E2E_USER_B_PASSWORD; do
+          for name in KAVEH_E2E_USER_A_EMAIL KAVEH_E2E_USER_A_PASSWORD KAVEH_E2E_USER_B_EMAIL KAVEH_E2E_USER_B_PASSWORD KAVEH_E2E_USER_C_EMAIL KAVEH_E2E_USER_C_PASSWORD; do
             if [ -z "${!name}" ]; then
               echo "::error::Required GitHub Actions secret $name is missing. See docs/chat-e2e-setup.md."
               missing=1
@@ -45,5 +47,5 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Run two-account chat acceptance test
+      - name: Run three-account chat and authorization acceptance test
         run: npm run test:e2e:chat
