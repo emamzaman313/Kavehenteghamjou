@@ -9,6 +9,14 @@ import { planProfileAssetCleanup } from '@/lib/profile-assets';
 import { Avatar, SectionHeader } from '@/components/ui';
 import { useOperationProgress } from '@/components/OperationProgress';
 
+const PROFILE_PALETTES = [
+  { name: 'یخی', accent: '#62c8ff', surface: '#102033', text: '#f2f8ff' },
+  { name: 'زمردی', accent: '#4fd1a5', surface: '#10251f', text: '#effcf6' },
+  { name: 'بنفش', accent: '#b49aff', surface: '#211a34', text: '#f7f2ff' },
+  { name: 'کهربایی', accent: '#f0b65c', surface: '#2a2115', text: '#fff8eb' },
+  { name: 'رز', accent: '#ff8fa8', surface: '#2b1821', text: '#fff1f4' },
+] as const;
+
 export default function ProfileView({ supabase, userId, profile, accountLabel, onSaved, notify }: { supabase: SupabaseClient; userId: string; profile: Profile | null; accountLabel: string; onSaved: () => Promise<void>; notify: Notify }) {
   const { runOperation } = useOperationProgress();
   const [name, setName] = useState(profile?.display_name ?? '');
@@ -179,7 +187,25 @@ export default function ProfileView({ supabase, userId, profile, accountLabel, o
     <label>پس‌زمینه کارت <input type="color" value={profileTheme.surface} onChange={e=>setProfileTheme(v=>({...v,surface:e.target.value}))}/></label>
     <label>رنگ نوشته <input type="color" value={profileTheme.text} onChange={e=>setProfileTheme(v=>({...v,text:e.target.value}))}/></label>
   </div>
-  <div className="profile-theme-preview" style={{background:profileTheme.surface,color:profileTheme.text,borderColor:profileTheme.accent}}><b style={{color:profileTheme.accent}}>پیش‌نمایش هویت شما</b><span>این ترکیب رنگ برای نمایش پروفایل شما ذخیره می‌شود.</span></div>
+  <div className="profile-palette-presets" role="group" aria-label="قالب‌های آماده پروفایل">
+    {PROFILE_PALETTES.map((palette) => <button key={palette.name} type="button" className={profileTheme.accent === palette.accent ? 'active' : ''} onClick={() => setProfileTheme({ accent: palette.accent, surface: palette.surface, text: palette.text })}>
+      <i style={{ background: palette.accent }}/>{palette.name}
+    </button>)}
+  </div>
+  <div className="profile-live-preview" style={{ '--profile-accent': profileTheme.accent, '--profile-surface': profileTheme.surface, '--profile-text': profileTheme.text } as React.CSSProperties} aria-label="پیش‌نمایش زنده پروفایل">
+    <div className="profile-live-cover" style={coverUrl ? { backgroundImage: 'linear-gradient(110deg,rgba(4,10,20,.12),rgba(4,10,20,.64)),url("' + coverUrl + '")' } : undefined}>
+      <span>پیش‌نمایش زنده</span><i/>
+    </div>
+    <div className="profile-live-body">
+      <Avatar profile={{ ...(profile ?? { display_name: name }), display_name: name, avatar_url: avatarPreview ?? profile?.avatar_url }} size="lg"/>
+      <div className="profile-live-identity"><strong>{name.trim() || 'نام نمایشی شما'}</strong><small dir="ltr">@{username || 'kaveh_user'}</small></div>
+      <span className="profile-live-mark"><ShieldCheck size={13}/>{accountLabel}</span>
+      <p>{bio.trim() || 'اینجا پیش‌نمایش معرفی کوتاه تو نمایش داده می‌شود.'}</p>
+      <div className="profile-live-badges">{badges.filter((badge) => featuredBadges.includes(badge.badge_code)).slice(0,6).map((badge) => <span key={badge.badge_code}>✦ {badge.title}</span>)}{featuredBadges.length === 0 && <small>نشان‌های منتخب اینجا دیده می‌شوند</small>}</div>
+      <div className="profile-live-footer"><span>کاوه انتقامجو</span><b>هویت دیجیتال من</b></div>
+    </div>
+  </div>
+  <small className="profile-preview-hint">تغییر رنگ، تصویر، نام و توضیحات را همین‌جا زنده ببین؛ با ذخیره، تنظیمات روی پروفایل اعمال می‌شوند.</small>
   <label className="profile-privacy-field"><LockKeyhole size={15}/> حریم خصوصی پروفایل
     <select value={profileVisibility} onChange={e=>setProfileVisibility(e.target.value as typeof profileVisibility)}><option value="public">عمومی — همه کاربران</option><option value="followers">دنبال‌کنندگان تأییدشده</option><option value="private">خصوصی — فقط خودم</option></select>
   </label>

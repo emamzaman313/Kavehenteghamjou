@@ -71,6 +71,7 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [appearanceRows, setAppearanceRows] = useState<{ id: string; version: number; config: { appearance?: { accent?: string; background?: string; surface?: string; radius?: number } }; is_published: boolean; created_at: string }[]>([]);
   const [appearanceDraft, setAppearanceDraft] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
+  const [appearancePreviewPage, setAppearancePreviewPage] = useState<'home' | 'chat' | 'reels' | 'profile'>('home');
   const [appearanceLoading, setAppearanceLoading] = useState(false);
   const [appearanceSaving, setAppearanceSaving] = useState(false);
   const [canRollbackAppearance, setCanRollbackAppearance] = useState(false);
@@ -874,11 +875,21 @@ export default function AdminAccessCodePanel({ supabase, notify, role }: { supab
       <label>رنگ کارت‌ها <input aria-label="رنگ کارت‌ها" type="color" value={appearanceDraft.surface} onChange={(event) => setAppearanceDraft((value) => ({ ...value, surface: event.target.value }))}/></label>
       <label className="admin-radius-control">گردی گوشه‌ها: {appearanceDraft.radius}px <input type="range" min="8" max="28" value={appearanceDraft.radius} onChange={(event) => setAppearanceDraft((value) => ({ ...value, radius: Number(event.target.value) }))}/></label>
     </div>
-    <div className="admin-appearance-preview" style={{ background: appearanceDraft.background, borderRadius: appearanceDraft.radius }}>
-      <div style={{ background: appearanceDraft.surface, borderRadius: Math.max(6, appearanceDraft.radius - 4) }}>
-        <b style={{ color: appearanceDraft.accent }}>پیش‌نمایش کاوه انتقامجو</b><p>این نمونه قبل از انتشار قابل مشاهده است.</p>
-        <button type="button" style={{ background: appearanceDraft.accent, borderRadius: appearanceDraft.radius }}>دکمه نمونه</button>
-      </div>
+    <div className="admin-preview-switcher" role="group" aria-label="صفحه نمونه برای پیش‌نمایش ظاهر">
+      {([{id:'home',label:'خانه'},{id:'chat',label:'گفتگو'},{id:'reels',label:'ریلز'},{id:'profile',label:'پروفایل'}] as const).map((page) => <button key={page.id} type="button" className={appearancePreviewPage === page.id ? 'active' : ''} aria-pressed={appearancePreviewPage === page.id} onClick={() => setAppearancePreviewPage(page.id)}>{page.label}</button>)}
+    </div>
+    <div className={'admin-appearance-preview admin-appearance-preview-' + appearancePreviewPage} style={{ background: appearanceDraft.background, borderRadius: appearanceDraft.radius, color: '#f4f1eb' }}>
+      <div className="admin-preview-topline"><span className="admin-preview-brand"><i style={{ background: appearanceDraft.accent }}>ک</i> کاوه انتقامجو</span><small>پیش‌نمایش تعاملی · {appearancePreviewPage === 'home' ? 'خانه' : appearancePreviewPage === 'chat' ? 'گفتگو' : appearancePreviewPage === 'reels' ? 'ریلز' : 'پروفایل'}</small></div>
+      {appearancePreviewPage === 'home' && <div className="admin-preview-feed">
+        <div className="admin-preview-hero" style={{ background: 'linear-gradient(115deg,' + appearanceDraft.surface + ',' + appearanceDraft.background + ')' }}><b style={{ color: appearanceDraft.accent }}>فضای ارتباطی مستقل</b><strong>جامعه‌ات را زنده نگه دار</strong><small>گفتگو، انتشار و اشتراک‌گذاری</small></div>
+        <div className="admin-preview-card" style={{ background: appearanceDraft.surface, borderRadius: Math.max(6,appearanceDraft.radius-4) }}><b>تازه‌ترین‌های جامعه</b><p>امروز چه چیزی برای به‌اشتراک‌گذاری داری؟</p><button type="button" style={{ background: appearanceDraft.accent, borderRadius: appearanceDraft.radius }}>ایجاد پست</button></div>
+      </div>}
+      {appearancePreviewPage === 'chat' && <div className="admin-preview-chat">
+        <div className="admin-preview-chat-list" style={{ background: appearanceDraft.surface }}><b>گفتگوها</b>{['گروه اصلی کاوه','گفتگوی خصوصی','کانال اطلاع‌رسانی'].map((label,i)=><span key={label}><i style={{ background: i===0?appearanceDraft.accent:'rgba(255,255,255,.18)' }}/>{label}</span>)}</div>
+        <div className="admin-preview-chat-room" style={{ background: appearanceDraft.surface, borderRadius: appearanceDraft.radius }}><b>گروه اصلی کاوه</b><p>به فضای گفتگو خوش آمدی.</p><button type="button" style={{ background: appearanceDraft.accent }}>ارسال پیام</button></div>
+      </div>}
+      {appearancePreviewPage === 'reels' && <div className="admin-preview-reels"><div className="admin-preview-video" style={{ borderColor: appearanceDraft.accent, borderRadius: appearanceDraft.radius }}><i>▶</i><b>نمای عمودی ریلز</b><small>ویدیوهای جامعه در یک جریان پیوسته</small></div><div><b style={{ color: appearanceDraft.accent }}>کاوش و تماشا</b><p>رنگ تأکیدی و سطح کارت‌ها را در زمینهٔ رسانه بررسی کن.</p></div></div>}
+      {appearancePreviewPage === 'profile' && <div className="admin-preview-profile" style={{ background: appearanceDraft.surface, borderRadius: appearanceDraft.radius }}><div style={{ background: 'linear-gradient(120deg,' + appearanceDraft.accent + ',' + appearanceDraft.background + ')' }}/><i style={{ borderColor: appearanceDraft.accent }}>ک</i><b>هویت کاربر کاوه</b><small>@kaveh_user</small><p>پیش‌نمایش کارت پروفایل با رنگ‌های انتخاب‌شده</p></div>}
     </div>
     <div className="admin-access-footer"><span>نسخه فعال: {appearanceRows.find((row) => row.is_published)?.version ?? '—'}</span><button className="button button-primary" type="button" disabled={appearanceSaving} onClick={() => void publishAppearance()}><Save size={15}/>{appearanceSaving ? 'در حال انتشار…' : 'انتشار تنظیمات'}</button></div>
     <div className="admin-appearance-history"><strong>تاریخچه نسخه‌ها</strong>{appearanceRows.map((row) => <div className="admin-appearance-version" key={row.id}><span>نسخه {row.version} · {new Date(row.created_at).toLocaleString('fa-IR')} {row.is_published ? '· فعال' : ''}</span>{!row.is_published && canRollbackAppearance && <button className="button button-quiet" type="button" disabled={appearanceSaving} onClick={() => void rollbackAppearance(row.version)}><RotateCcw size={14}/> بازگردانی</button>}</div>)}</div>
