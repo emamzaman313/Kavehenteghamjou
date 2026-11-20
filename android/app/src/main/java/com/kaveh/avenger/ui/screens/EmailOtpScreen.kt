@@ -32,11 +32,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.auth.EmailOtpRepository
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal fun normalizeEmailOtpInput(value: String): String =
     value.mapNotNull { it.digitToIntOrNull() }.take(6).joinToString("")
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
 @Composable
 fun EmailOtpScreen(
@@ -199,7 +199,7 @@ fun EmailOtpScreen(
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = code,
-                        onValueChange = { code = it.filter(Char::isDigit).map { digit -> digit.digitToInt().toString() }.joinToString(""); errorMessage = "" },
+                        onValueChange = { code = normalizeEmailOtpInput(it); errorMessage = "" },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("کد تأیید ایمیل") },
                         placeholder = { Text("تمام ارقام کد دریافتی") },
@@ -227,6 +227,7 @@ fun EmailOtpScreen(
                                 isLoading = true
                                 errorMessage = ""
                                 try {
+                                    if (code.length != 6) throw IllegalArgumentException("کد باید دقیقاً ۶ رقم باشد.")
                                     if (code.length != 6) throw IllegalArgumentException("کد باید دقیقاً ۶ رقم باشد.")
                                     authRepository.verifyCode(email, code)
                                     setupPasswordMode = true
