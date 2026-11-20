@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FileAsset } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
 import { formatBytes, formatDate, safeDisplayName, validateUpload } from '@/lib/format';
-import { hashFile } from '@/lib/files';
+import { hashFile, saveBlobAs, verifyBlobIntegrity } from '@/lib/files';
 import { EmptyState, SectionHeader } from '@/components/ui';
 
 export default function FilesView({ supabase, userId, notify }: { supabase: SupabaseClient; userId: string; notify: Notify }) {
@@ -46,9 +46,21 @@ export default function FilesView({ supabase, userId, notify }: { supabase: Supa
     else notify(`بارگذاری پایان یافت: ${succeeded} موفق، ${failed} ناموفق.`, 'error');
   };
   const download = async (file: FileAsset) => {
-    const { data, error } = await supabase.storage.from(file.bucket_id).createSignedUrl(file.object_path, 90, { download: safeDisplayName(file.original_name) });
-    if (error || !data?.signedUrl) { notify(`دریافت لینک امن ناموفق بود: ${error?.message ?? 'خطای نامشخص'}`, 'error'); return; }
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    const { data: blob, error } = await supabase.storage.from(file.bucket_id).download(file.object_path);
+    if (error || !blob) {
+      notify(`دریافت فایل از مخزن خصوصی ناموفق بود: ${error?.message ?? 'خطای نامشخص'}`, 'error');
+      return;
+    }
+    try {
+      const verified = await verifyBlobIntegrity(blob, file.byte_size, file.sha256_hex);
+      if (!verified) {
+        notify('سلامت فایل تأیید نشد؛ حجم یا اثرانگشت فایل با اطلاعات ثبت‌شده مطابقت ندارد.', 'error');
+        return;
+      }
+      saveBlobAs(blob, safeDisplayName(file.original_name));
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'بررسی سلامت فایل ناموفق بود.', 'error');
+    }
   };
   const filteredFiles = files.filter((file) => {
     const nameMatches = file.original_name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());

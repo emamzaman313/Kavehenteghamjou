@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Conversation, FileAsset, Message, Profile } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
 import { safeDisplayName, validateUpload } from '@/lib/format';
-import { hashFile } from '@/lib/files';
+import { hashFile, saveBlobAs, verifyBlobIntegrity } from '@/lib/files';
 import { Avatar, EmptyState } from '@/components/ui';
 
 export default function ChatView({ supabase, userId, notify }: { supabase: SupabaseClient; userId: string; notify: Notify }) {
@@ -217,9 +217,21 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   };
 
   const downloadAttachment = async (file: FileAsset) => {
-    const { data, error } = await supabase.storage.from(file.bucket_id).createSignedUrl(file.object_path, 90, { download: safeDisplayName(file.original_name) });
-    if (error || !data?.signedUrl) notify(error?.message ?? 'لینک دانلود در دسترس نیست.', 'error');
-    else window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    const { data: blob, error } = await supabase.storage.from(file.bucket_id).download(file.object_path);
+    if (error || !blob) {
+      notify(error?.message ?? 'دریافت فایل از مخزن خصوصی ناموفق بود.', 'error');
+      return;
+    }
+    try {
+      const verified = await verifyBlobIntegrity(blob, file.byte_size, file.sha256_hex);
+      if (!verified) {
+        notify('سلامت فایل تأیید نشد؛ حجم یا اثرانگشت فایل با اطلاعات ثبت‌شده مطابقت ندارد.', 'error');
+        return;
+      }
+      saveBlobAs(blob, safeDisplayName(file.original_name));
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'بررسی سلامت فایل ناموفق بود.', 'error');
+    }
   };
 
   const uploadAttachment = async (file: File) => {
