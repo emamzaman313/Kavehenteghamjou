@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
 import { Avatar, EmptyState, SectionHeader } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 type Community = { conversation_id: string; title: string; description: string; kind: string; username: string | null; owner_id: string; join_approval_required: boolean; member_count: number; membership: string };
 type JoinRequest = { id: string; conversation_id: string; requester_id: string; requested_at: string; requester_name: string };
@@ -22,6 +23,7 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   const [communityQuery, setCommunityQuery] = useState('');
   const [communityFilter, setCommunityFilter] = useState<'all' | 'groups' | 'channels' | 'joined'>('all');
   const [communitiesRefreshing, setCommunitiesRefreshing] = useState(false);
+  const { runOperation } = useOperationProgress();
   const filteredCommunities = communities.filter((item) => {
     const matchesQuery = (item.title + ' ' + item.description + ' ' + (item.username ?? '')).toLocaleLowerCase('fa').includes(communityQuery.trim().toLocaleLowerCase('fa'));
     const matchesType = communityFilter === 'all' || (communityFilter === 'groups' && item.kind === 'group') || (communityFilter === 'channels' && item.kind === 'channel') || (communityFilter === 'joined' && item.membership !== 'none');
@@ -89,20 +91,42 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
 
   const joinCommunity = async (id: string) => {
     setJoining(id);
-    const { data, error } = await supabase.rpc('join_community', { p_conversation_id: id });
+    let data: string;
+    try {
+      data = await runOperation('پیوستن به گروه یا کانال', async (advance) => {
+        advance(18, 'بررسی وضعیت عضویت و نوع دسترسی فضا');
+        advance(48, 'ارسال درخواست عضویت به سرور');
+        const response = await supabase.rpc('join_community', { p_conversation_id: id });
+        if (response.error) throw response.error;
+        advance(88, response.data === 'pending' ? 'درخواست برای مدیر ارسال شد' : 'عضویت توسط سرور تأیید شد');
+        return String(response.data);
+      });
+    } catch (cause) {
+      setJoining(null);
+      notify('عضویت ناموفق بود: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     setJoining(null);
-    if (error) return notify('عضویت ناموفق بود: ' + error.message, 'error');
     setCommunities((old) => old.map((item) => item.conversation_id === id ? { ...item, membership: data === 'pending' ? 'pending' : 'member' } : item));
     notify(data === 'pending' ? 'درخواست عضویت برای مدیر گروه ارسال شد.' : data === 'member' ? 'از قبل عضو این فضا هستید.' : 'به کانال یا گروه پیوستید.');
   };
 
   const reviewJoinRequest = async (request: JoinRequest, status: 'approved' | 'rejected') => {
-    const { error } = await supabase.from('conversation_join_requests').update({
-      status,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: userId,
-    }).eq('id', request.id).eq('status', 'pending');
-    if (error) return notify('بررسی درخواست عضویت انجام نشد: ' + error.message, 'error');
+    try {
+      await runOperation(status === 'approved' ? 'تأیید درخواست عضویت' : 'رد درخواست عضویت', async (advance) => {
+        advance(24, 'بررسی مجوز مدیر و وضعیت درخواست');
+        const { error } = await supabase.from('conversation_join_requests').update({
+          status,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: userId,
+        }).eq('id', request.id).eq('status', 'pending');
+        if (error) throw error;
+        advance(88, 'تصمیم مدیر در سرور ثبت شد');
+      });
+    } catch (cause) {
+      notify('بررسی درخواست عضویت انجام نشد: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
+      return;
+    }
     notify(status === 'approved' ? 'درخواست عضویت تأیید شد.' : 'درخواست عضویت رد شد.');
     await loadCommunities();
   };
@@ -112,19 +136,28 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     if (query.trim().length < 2) return;
     setLoading(true);
     const safe = query.trim().replace(/[,%()]/g, '');
-    const { data, error } = await supabase.from('profiles').select('*').or('username.ilike.%' + safe + '%,display_name.ilike.%' + safe + '%').neq('id', userId).limit(24);
-    if (error) notify(error.message, 'error'); else {
-      const results = (data ?? []) as Profile[];
-      setPeople(results);
-      const ids = results.map((person) => person.id);
-      if (ids.length) {
-        const { data: follows, error: followError } = await supabase.from('follows')
-          .select('following_id,status').eq('follower_id', userId).in('following_id', ids);
-        if (followError) notify('دریافت وضعیت دنبال‌کردن ناموفق بود: ' + followError.message, 'error');
-        else setFollowStatusByUser(Object.fromEntries((follows ?? []).map((row) => [row.following_id, row.status])));
-      } else setFollowStatusByUser({});
+    try {
+      await runOperation('جست‌وجوی کاربران', async (advance) => {
+        advance(20, 'آماده‌سازی عبارت جست‌وجو');
+        const { data, error } = await supabase.from('profiles').select('*').or('username.ilike.%' + safe + '%,display_name.ilike.%' + safe + '%').neq('id', userId).limit(24);
+        if (error) throw error;
+        const results = (data ?? []) as Profile[];
+        setPeople(results);
+        advance(66, 'دریافت وضعیت ارتباط با کاربران پیدا‌شده');
+        const ids = results.map((person) => person.id);
+        if (ids.length) {
+          const { data: follows, error: followError } = await supabase.from('follows')
+            .select('following_id,status').eq('follower_id', userId).in('following_id', ids);
+          if (followError) throw followError;
+          setFollowStatusByUser(Object.fromEntries((follows ?? []).map((row) => [row.following_id, row.status])));
+        } else setFollowStatusByUser({});
+        advance(92, 'نتایج جست‌وجو آماده شد');
+      });
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'جست‌وجو ناموفق بود.', 'error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -153,11 +186,21 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
   const follow = async (id: string) => {
     setFollowBusy(id);
     const current = followStatusByUser[id];
-    const result = current
-      ? await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', id)
-      : await supabase.from('follows').insert({ follower_id: userId, following_id: id, status: 'pending' });
+    let failed: string | null = null;
+    try {
+      await runOperation(current ? 'لغو دنبال‌کردن' : 'ارسال درخواست دنبال‌کردن', async (advance) => {
+        advance(26, 'بررسی وضعیت ارتباط دو حساب');
+        const result = current
+          ? await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', id)
+          : await supabase.from('follows').insert({ follower_id: userId, following_id: id, status: 'pending' });
+        if (result.error) throw result.error;
+        advance(90, 'رابطه اجتماعی در سرور ذخیره شد');
+      });
+    } catch (cause) {
+      failed = cause instanceof Error ? cause.message : 'خطای ناشناخته';
+    }
     setFollowBusy(null);
-    if (result.error) notify(result.error.message, 'error');
+    if (failed) notify(failed, 'error');
     else {
       setFollowStatusByUser((old) => {
         const next = { ...old };
@@ -168,8 +211,19 @@ export default function DiscoverView({ supabase, userId, initialSearch, notify, 
     }
   };
   const startChat = async (id: string) => {
-    const { error } = await supabase.rpc('create_direct_conversation', { p_other_user_id: id });
-    if (error) notify(error.message, 'error'); else { notify('گفتگو آماده است.'); onOpenChat(); }
+    try {
+      await runOperation('ایجاد گفتگوی خصوصی', async (advance) => {
+        advance(22, 'بررسی شناسه مخاطب و دسترسی');
+        advance(52, 'ایجاد یا بازیابی گفتگوی خصوصی در سرور');
+        const { error } = await supabase.rpc('create_direct_conversation', { p_other_user_id: id });
+        if (error) throw error;
+        advance(90, 'گفتگوی امن آماده شد');
+      });
+      notify('گفتگو آماده است.');
+      onOpenChat();
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'ایجاد گفتگو ناموفق بود.', 'error');
+    }
   };
 
   return <div className="page-stack">
