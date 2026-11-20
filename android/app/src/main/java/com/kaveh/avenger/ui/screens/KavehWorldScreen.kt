@@ -35,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.kaveh.avenger.ui.theme.KavehRadius
+import com.kaveh.avenger.ui.theme.KavehSpacing
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -283,13 +285,13 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
 
     LaunchedEffect(userId, isAdmin) { refresh() }
 
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(KavehSpacing.x3)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(KavehRadius.extraLarge),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.padding(KavehSpacing.x5), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("KAVEH UNIVERSE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 Text("جهان کاوه", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                 Text("با مشارکت واقعی رشد کن، مأموریت‌ها را کامل کن و در جامعه بدرخش.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -535,7 +537,7 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                 items(ranking, key = { it.userId }) { row ->
                     val isMe = row.userId == userId
                     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(KavehSpacing.x3), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .12f)) {
                                 Text("#" + (ranking.indexOf(row) + 1), modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                             }
