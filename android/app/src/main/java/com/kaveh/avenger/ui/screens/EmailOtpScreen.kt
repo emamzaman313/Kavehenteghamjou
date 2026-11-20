@@ -46,6 +46,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.auth.EmailOtpRepository
+import com.kaveh.avenger.auth.normalizePasswordDigits
+import com.kaveh.avenger.auth.signupPasswordChecks
+import com.kaveh.avenger.auth.signupPasswordErrorMessage
 import com.kaveh.avenger.ui.progress.OperationProgressController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -74,9 +77,13 @@ fun EmailOtpScreen(
     var resendSeconds by remember { mutableStateOf(0) }
     var showPassword by remember { mutableStateOf(false) }
     var showPasswordConfirm by remember { mutableStateOf(false) }
-    val passwordStrength = when { password.isEmpty() -> 0; password.length < 8 -> 1; password.length < 12 -> 2; else -> 3 }
+    val passwordChecks = signupPasswordChecks(password, passwordConfirm)
+    val passwordRules = passwordChecks.filter { it.id != "match" }
+    val passwordReady = passwordRules.all { it.passed }
+    val passwordMatches = passwordChecks.first { it.id == "match" }.passed
+    val passedPasswordRules = passwordRules.count { it.passed }
+    val passwordStrength = when { password.isEmpty() -> 0; passedPasswordRules <= 1 -> 1; passedPasswordRules <= 3 -> 2; else -> 3 }
     val stageProgress = when { setupPasswordMode -> 1f; codeSent -> .66f; passwordLoginMode -> 0f; else -> .33f }
-    val passwordMatches = password.isNotEmpty() && password == passwordConfirm
 
     LaunchedEffect(resendSeconds) {
         if (resendSeconds > 0) {
@@ -126,7 +133,12 @@ fun EmailOtpScreen(
                     progress.advance(90, "نشست معتبر حساب ایجاد شد")
                 }
             } catch (error: Exception) {
-                errorMessage = "ایمیل یا رمز عبور صحیح نیست. اگر حساب ندارید، ثبت‌نام با کد ایمیل را انجام دهید."
+                val providerMessage = error.message.orEmpty().lowercase()
+                errorMessage = if ("weak_password" in providerMessage || ("password" in providerMessage && "weak" in providerMessage)) {
+                    "رمز این حساب با شرایط امنیتی فعلی سازگار نیست. با کد ایمیل وارد بخش ساخت رمز شوید و رمز تازه‌ای انتخاب کنید."
+                } else {
+                    "ایمیل یا رمز عبور صحیح نیست. اگر حساب ندارید، ثبت‌نام با کد ایمیل را انجام دهید."
+                }
             } finally {
                 isLoading = false
                 password = ""
@@ -135,12 +147,9 @@ fun EmailOtpScreen(
     }
 
     fun savePassword() {
-        if (password.length < 8) {
-            errorMessage = "رمز عبور باید حداقل ۸ نویسه داشته باشد. استفاده از حروف فارسی یا انگلیسی، عدد و نماد آزاد است."
-            return
-        }
-        if (password != passwordConfirm) {
-            errorMessage = "تکرار رمز عبور دقیقاً با رمز اول یکسان نیست."
+        val validationError = signupPasswordErrorMessage(password, passwordConfirm)
+        if (validationError != null) {
+            errorMessage = validationError
             return
         }
         scope.launch {
@@ -162,7 +171,7 @@ fun EmailOtpScreen(
                 errorMessage = when {
                     "weak_password" in providerMessage || ("password" in providerMessage && "weak" in providerMessage) ->
                         if ("pwned" in providerMessage) "این رمز در نشت‌های اطلاعاتی شناخته‌شده دیده شده است. رمز دیگری انتخاب کنید."
-                        else "رمز عبور پذیرفته نشد. حداقل ۸ نویسه انتخاب کنید و دوباره تلاش کنید."
+                        else "رمز پذیرفته نشد. حداقل ۱۰ نویسه با حروف کوچک و بزرگ انگلیسی، عدد و نماد انتخاب کنید."
                     else -> error.message ?: "ذخیره رمز عبور انجام نشد. دوباره تلاش کنید."
                 }
             } finally {
@@ -266,14 +275,14 @@ fun EmailOtpScreen(
                     Spacer(Modifier.height(14.dp))
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = it; errorMessage = "" },
+                        onValueChange = { password = normalizePasswordDigits(it); errorMessage = "" },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(if (setupPasswordMode) "انتخاب رمز عبور" else "رمز عبور") },
-                        placeholder = { Text(if (setupPasswordMode) "حداقل ۸ نویسه؛ رمز دلخواه شما" else "رمز حساب شما") },
+                        placeholder = { Text(if (setupPasswordMode) "حداقل ۱۰ نویسه؛ حروف کوچک و بزرگ، عدد و نماد" else "رمز حساب شما") },
                         singleLine = true,
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        supportingText = { if (setupPasswordMode) Text("حداقل ۸ نویسه؛ حروف فارسی و انگلیسی قابل استفاده‌اند.") },
+                        supportingText = { if (setupPasswordMode) Text("۱۰ نویسه، حرف کوچک و بزرگ انگلیسی، عدد و نماد؛ ارقام فارسی خودکار تبدیل می‌شوند.") },
                         trailingIcon = { androidx.compose.material3.TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "پنهان" else "نمایش") } }
                     )
                     if (setupPasswordMode) {
@@ -295,16 +304,21 @@ fun EmailOtpScreen(
                                     color = when (passwordStrength) { 1 -> Color(0xFFE3A15D); 2 -> Color(0xFF69BDF1); 3 -> Color(0xFF68D3A2); else -> MaterialTheme.colorScheme.outline },
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(if (password.length >= 8) "✓ حداقل ۸ نویسه" else "○ حداقل ۸ نویسه", style = MaterialTheme.typography.labelSmall, color = if (password.length >= 8) Color(0xFF64C99B) else MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(if (passwordMatches) "✓ رمزها یکسان‌اند" else "○ تطابق رمزها", style = MaterialTheme.typography.labelSmall, color = if (passwordMatches) Color(0xFF64C99B) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    passwordChecks.forEach { check ->
+                                        Text(
+                                            "${if (check.passed) "✓" else "○"} ${check.label}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (check.passed) Color(0xFF64C99B) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
                             value = passwordConfirm,
-                            onValueChange = { passwordConfirm = it; errorMessage = "" },
+                            onValueChange = { passwordConfirm = normalizePasswordDigits(it); errorMessage = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("تکرار رمز عبور") },
                             placeholder = { Text("دقیقاً همان رمز را دوباره وارد کنید") },
@@ -366,7 +380,7 @@ fun EmailOtpScreen(
                         }
                     },
                     enabled = !isLoading && when {
-                        setupPasswordMode -> password.length >= 8 && password == passwordConfirm
+                        setupPasswordMode -> passwordReady && passwordMatches
                         passwordLoginMode -> email.contains("@") && password.isNotBlank()
                         codeSent -> code.length == 6
                         else -> email.contains("@") && email.substringAfter("@").contains(".")
