@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,7 +32,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.auth.EmailOtpRepository
+
+internal fun normalizeEmailOtpInput(value: String): String =
+    value.mapNotNull { it.digitToIntOrNull() }.take(6).joinToString("")
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @Composable
 fun EmailOtpScreen(
@@ -51,8 +56,17 @@ fun EmailOtpScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf(initialMessage.orEmpty()) }
     var infoMessage by remember { mutableStateOf(if (passwordSetupRequired) "ایمیل شما تأیید شده است؛ برای تکمیل ثبت‌نام رمز عبور بسازید." else "") }
+    var resendSeconds by remember { mutableStateOf(0) }
+
+    LaunchedEffect(resendSeconds) {
+        if (resendSeconds > 0) {
+            delay(1_000)
+            resendSeconds -= 1
+        }
+    }
 
     fun sendCode() {
+        if (isLoading || resendSeconds > 0) return
         scope.launch {
             isLoading = true
             errorMessage = ""
@@ -60,9 +74,13 @@ fun EmailOtpScreen(
             try {
                 authRepository.sendCode(email)
                 codeSent = true
+                code = ""
                 passwordLoginMode = false
-                infoMessage = "کد تأیید به ایمیل شما ارسال شد. تمام ارقام کد را وارد کنید."
+                resendSeconds = 30
+                infoMessage = "کد تأیید به ایمیل شما ارسال شد. فقط کد آخرین ایمیل را وارد کنید."
             } catch (error: Exception) {
+                val providerMessage = error.message.orEmpty().lowercase()
+                if ("rate" in providerMessage || "too many" in providerMessage || "429" in providerMessage) resendSeconds = 30
                 errorMessage = error.message ?: "ارسال کد انجام نشد. دوباره تلاش کنید."
             } finally {
                 isLoading = false
@@ -209,6 +227,7 @@ fun EmailOtpScreen(
                                 isLoading = true
                                 errorMessage = ""
                                 try {
+                                    if (code.length != 6) throw IllegalArgumentException("کد باید دقیقاً ۶ رقم باشد.")
                                     authRepository.verifyCode(email, code)
                                     setupPasswordMode = true
                                     infoMessage = "ایمیل تأیید شد. اکنون رمز عبور خود را انتخاب کنید."
@@ -223,7 +242,7 @@ fun EmailOtpScreen(
                     enabled = !isLoading && when {
                         setupPasswordMode -> password.length >= 10 && password == passwordConfirm
                         passwordLoginMode -> email.contains("@") && password.isNotBlank()
-                        codeSent -> code.isNotBlank()
+                        codeSent -> code.length == 6
                         else -> email.contains("@") && email.substringAfter("@").contains(".")
                     },
                     modifier = Modifier.fillMaxWidth().height(54.dp),
@@ -249,6 +268,7 @@ fun EmailOtpScreen(
                             passwordLoginMode = !passwordLoginMode
                             codeSent = false
                             code = ""
+                            resendSeconds = 0
                             password = ""
                             errorMessage = ""
                             infoMessage = ""
@@ -263,11 +283,13 @@ fun EmailOtpScreen(
                 if (codeSent && !setupPasswordMode) {
                     Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = { codeSent = false; code = ""; errorMessage = ""; infoMessage = "" },
+                        onClick = { codeSent = false; code = ""; resendSeconds = 0; errorMessage = ""; infoMessage = "" },
                         enabled = !isLoading,
                         colors = ButtonDefaults.textButtonColors()
                     ) { Text("تغییر ایمیل") }
-                    Button(onClick = { sendCode() }, enabled = !isLoading) { Text("ارسال دوباره کد") }
+                    Button(onClick = { sendCode() }, enabled = !isLoading && resendSeconds == 0) {
+                        Text(if (resendSeconds > 0) "ارسال دوباره کد پس از $resendSeconds ثانیه" else "ارسال دوباره کد")
+                    }
                 }
                 Spacer(Modifier.height(18.dp))
                 Text(
