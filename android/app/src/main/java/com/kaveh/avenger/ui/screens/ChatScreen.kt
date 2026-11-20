@@ -410,10 +410,16 @@ fun ChatScreen(
 
     suspend fun uploadAttachment(uri: Uri) {
         val conversationId = activeConversation?.id ?: return
+        var uploadedFileId: String? = null
+        var uploadedObjectPath: String? = null
+        var createdMessageId: String? = null
+        var attachmentLinked = false
         uploadingAttachment = true
         errorText = null
         try {
             val uploaded = FileUploadRepository(supabase).upload(context, userId, uri)
+            uploadedFileId = uploaded.fileAssetId
+            uploadedObjectPath = uploaded.objectPath
             val message = supabase.postgrest.from("messages").insert(
                 MessageInsert(
                     conversationId = conversationId,
@@ -423,18 +429,55 @@ fun ChatScreen(
             ) {
                 select()
             }.decodeList<MessageIdRow>().single()
-            runCatching {
-                supabase.functions("notification-dispatch", body = NotificationDispatchArgs(message.id))
-            }
+            createdMessageId = message.id
             supabase.postgrest.from("message_attachments").insert(
                 MessageAttachmentInsert(
                     messageId = message.id,
                     fileAssetId = uploaded.fileAssetId
                 )
             )
+            attachmentLinked = true
+            runCatching {
+                supabase.functions("notification-dispatch", body = NotificationDispatchArgs(message.id))
+            }
             loadMessages(conversationId)
             loadConversations()
         } catch (exception: Exception) {
+            // A message insert or attachment-link failure must not strand an uploaded
+            // private object in the sender's Vault. Check the database first because a
+            // network error can happen after the attachment insert has committed.
+            if (!attachmentLinked && uploadedFileId != null && uploadedObjectPath != null) {
+                val linkCheck = runCatching {
+                    supabase.postgrest.from("message_attachments").select {
+                        filter { eq("file_asset_id", uploadedFileId!!) }
+                    }.decodeList<MessageAttachmentRow>()
+                }
+                if (linkCheck.getOrNull()?.isEmpty() == true) {
+                    createdMessageId?.let { messageId ->
+                        runCatching {
+                            supabase.postgrest.from("messages").delete {
+                                filter {
+                                    eq("id", messageId)
+                                    eq("sender_id", userId)
+                                }
+                            }
+                        }
+                    }
+                    val metadataRemoved = runCatching {
+                        supabase.postgrest.from("file_assets").delete {
+                            filter {
+                                eq("id", uploadedFileId!!)
+                                eq("owner_id", userId)
+                            }
+                        }
+                    }.isSuccess
+                    if (metadataRemoved) {
+                        runCatching {
+                            supabase.storage.from("user-files").delete(uploadedObjectPath!!)
+                        }
+                    }
+                }
+            }
             errorText = exception.message ?: "ارسال فایل ناموفق بود."
         } finally {
             uploadingAttachment = false
