@@ -2511,6 +2511,7 @@ html[data-kaveh-density="compact"] .settings-mini-preview-card { padding:8px; }
 .public-profile-details>p{margin:0 0 17px;white-space:pre-wrap;line-height:2;font-size:13px}
 .public-profile-badges{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
 .public-profile-badges span{padding:8px 11px;border:1px solid color-mix(in srgb,var(--public-accent) 30%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--public-accent) 9%,var(--surface));font-size:10px;color:var(--text)}
+.public-profile-badges span{display:inline-flex;align-items:center;gap:7px}.public-profile-badges svg{image-rendering:pixelated;flex:none}
 .public-profile-music{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--surface-2)}
 .public-profile-music>svg{color:var(--public-accent)}
 .public-profile-music>div{display:grid;gap:3px;min-width:110px}
