@@ -22,6 +22,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
   const [showSignupPasswordConfirm, setShowSignupPasswordConfirm] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [authLightMode, setAuthLightMode] = useState(false);
+  const [themeReady, setThemeReady] = useState(false);
   const [openSecurityTip, setOpenSecurityTip] = useState<number | null>(0);
   const [accessEnabled, setAccessEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +38,16 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
     .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
     .replace(/\D/g, '');
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem('kaveh.auth.theme');
+    setAuthLightMode(savedTheme === 'light');
+    setThemeReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (themeReady) window.localStorage.setItem('kaveh.auth.theme', authLightMode ? 'light' : 'dark');
+  }, [authLightMode, themeReady]);
 
   // Keep the last email on this device so returning users land on password login.
   useEffect(() => {
@@ -268,7 +279,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     <div className="auth-orbit auth-orbit-one" aria-hidden="true"><i/><i/><i/></div><div className="auth-orbit auth-orbit-two" aria-hidden="true"><i/><i/></div>
     <div className="auth-glow auth-glow-a"/><div className="auth-glow auth-glow-b"/>
     <div className="auth-topbar"><span className="auth-top-brand"><BrandMark/><span><b>KAVEH</b><small>فضای ارتباطی مستقل</small></span></span>
-      <button type="button" className="auth-theme-toggle" onClick={() => setAuthLightMode(value => !value)}>{authLightMode ? <Moon size={17}/> : <Sun size={17}/>}<span>{authLightMode ? 'حالت شب' : 'حالت روشن'}</span></button>
+      <button type="button" className={"auth-theme-toggle "+(authLightMode ? "is-light" : "is-dark")} onClick={() => setAuthLightMode(value => !value)} aria-pressed={authLightMode} aria-label={authLightMode ? "تغییر به حالت شب" : "تغییر به حالت روز"}><span className="auth-theme-track"><span className="auth-theme-thumb"><Sun className="theme-sun" size={15}/><Moon className="theme-moon" size={15}/></span><span className="auth-theme-stars"><i/><i/><i/></span></span><span className="auth-theme-copy"><b>{authLightMode ? "روز روشن" : "شب آرام"}</b><small>{authLightMode ? "Light mode" : "Dark mode"}</small></span><span className="auth-theme-spark" aria-hidden="true">✦</span></button>
     </div>
     <div className="auth-stage-layout">
     <aside className="auth-showcase" aria-label="ویژگی‌های کاوه">
