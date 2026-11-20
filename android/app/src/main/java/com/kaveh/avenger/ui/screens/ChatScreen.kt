@@ -54,6 +54,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.rpc
+import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
@@ -226,16 +227,17 @@ fun ChatScreen(
                     order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
                     limit(1)
                 }.decodeList<MessageRow>().firstOrNull()
+                // Ask PostgREST for an exact server-side count. Fetching only the
+                // latest 100 rows undercounted unread messages in busy conversations.
                 val unreadCount = supabase.postgrest["messages"].select {
+                    count(Count.EXACT)
                     filter {
                         eq("conversation_id", conversation.id)
                         neq("sender_id", userId)
                         exact("deleted_at", null)
                         membership.lastReadAt?.let { gt("created_at", it) }
                     }
-                    order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
-                    limit(100)
-                }.decodeList<MessageRow>().size
+                }.countOrNull() ?: 0
 
                 ChatConversation(
                     id = conversation.id,
