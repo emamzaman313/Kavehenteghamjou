@@ -1,7 +1,7 @@
 'use client';
 
 import { LifeBuoy, MessageCircle, Plus, Send, RefreshCw, Paperclip, Download } from 'lucide-react';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Notify } from '@/lib/ui-types';
 import { filterSupportTickets } from '@/lib/support-ticket-filters';
@@ -39,6 +39,7 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   const [reply,setReply] = useState('');
   const [creating,setCreating] = useState(false);
   const [showNew,setShowNew] = useState(false);
+  const messageRequestRef = useRef(0);
 
   const { runOperation } = useOperationProgress();
 
@@ -96,8 +97,12 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
   const loadMessages = useCallback(async (ticketId:string) => {
     const ticket = tickets.find(x=>x.id===ticketId);
     if (!ticket) return;
+    const requestId = ++messageRequestRef.current;
+    setMessages([]);
+    setAttachments({});
     const {data,error} = await supabase.from('messages').select('id,conversation_id,sender_id,body,created_at')
       .eq('conversation_id',ticket.conversation_id).is('deleted_at',null).order('created_at',{ascending:true}).limit(300);
+    if (requestId !== messageRequestRef.current) return;
     if (error) notify('دریافت پیام‌های پشتیبانی ناموفق بود: '+error.message,'error');
     else {
       const loaded = (data ?? []) as Message[];
@@ -106,11 +111,13 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
       if (messageIds.length) {
         const {data:links,error:linksError} = await supabase.from('message_attachments')
           .select('message_id,file_asset_id').in('message_id',messageIds);
+        if (requestId !== messageRequestRef.current) return;
         if (linksError) notify('دریافت پیوست‌های گفتگو ناموفق بود: '+linksError.message,'error');
         const fileIds = [...new Set((links ?? []).map(link=>link.file_asset_id))];
         if (fileIds.length) {
           const {data:assets,error:assetsError} = await supabase.from('file_assets')
             .select('id,original_name,bucket_id,object_path,mime_type,byte_size').in('id',fileIds);
+          if (requestId !== messageRequestRef.current) return;
           if (assetsError) notify('دریافت اطلاعات فایل‌ها ناموفق بود: '+assetsError.message,'error');
           const assetMap = new Map((assets ?? []).map(file=>[file.id,file as SupportAttachment]));
           const grouped: Record<string,{file:SupportAttachment;url:string}[]> = {};
@@ -119,10 +126,11 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
             if (!file) continue;
             const {data:signed,error:signedError} = await supabase.storage.from(file.bucket_id)
               .createSignedUrl(file.object_path,300,{download:file.original_name});
+            if (requestId !== messageRequestRef.current) return;
             if (signedError || !signed?.signedUrl) continue;
             grouped[link.message_id] = [...(grouped[link.message_id] ?? []),{file,url:signed.signedUrl}];
           }
-          setAttachments(current=>({...current,...grouped}));
+          if (requestId === messageRequestRef.current) setAttachments(grouped);
         }
       }
       const latestFetchedAt = loaded[loaded.length - 1]?.created_at;
@@ -143,7 +151,7 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     return ()=>{ void supabase.removeChannel(channel); };
   },[supabase,userId,refresh]);
   useEffect(()=>{
-    if (!active) { setMessages([]); return; }
+    if (!active) { messageRequestRef.current += 1; setMessages([]); setAttachments({}); return; }
     void loadMessages(active);
     const ticket = tickets.find(x=>x.id===active);
     if (!ticket) return;
@@ -267,10 +275,11 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
 
   const updateTicketField = async (field:'status'|'priority', value:string) => {
     if (!active || !staff) return;
-    const patch = field==='status'
-      ? {status:value,updated_at:new Date().toISOString(),resolved_at:value==='resolved'?new Date().toISOString():null}
-      : {priority:value,updated_at:new Date().toISOString()};
-    const {error} = await supabase.from('support_tickets').update(patch).eq('id',active);
+    const {error} = await supabase.rpc('update_support_ticket', {
+      p_ticket_id: active,
+      p_status: field==='status' ? value : null,
+      p_priority: field==='priority' ? value : null,
+    });
     if (error) notify('به‌روزرسانی درخواست ناموفق بود: '+error.message,'error');
     else { notify('درخواست به‌روزرسانی شد.'); await refresh(); }
   };
@@ -280,11 +289,11 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
     <div className="panel-card support-header" style={{padding:18}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}><LifeBuoy size={24}/><div><strong>{staff?'صندوق پشتیبانی کاربران':'پشتیبانی و ارتباط با مدیریت'}</strong><p style={{margin:'5px 0 0',color:'var(--muted)',fontSize:11}}>{staff?'درخواست‌های کاربران را مشاهده و پاسخ دهید.':'درخواست خود را ثبت کنید و پاسخ مدیریت را همین‌جا دریافت کنید.'}</p></div></div>
-        <div style={{display:'flex',gap:8}}><button className="button button-quiet" type="button" onClick={()=>void refresh()}><RefreshCw size={15}/> تازه‌سازی</button>{!staff && <button className="button button-primary" type="button" onClick={()=>setShowNew(x=>!x)}><Plus size={15}/> درخواست جدید</button>}</div>
+        <div style={{display:'flex',gap:8}}><button className="button button-quiet" type="button" onClick={()=>void refresh()}><RefreshCw size={15}/> تازه‌سازی</button><button className="button button-primary" type="button" onClick={()=>setShowNew(x=>!x)}><Plus size={15}/> {staff?'ثبت درخواست شخصی':'درخواست جدید'}</button></div>
       </div>
     </div>
-    {showNew && !staff && <form className="panel-card" style={{padding:18,display:'grid',gap:12}} onSubmit={createTicket}>
-      <strong>ثبت درخواست جدید</strong>
+    {showNew && <form className="panel-card" style={{padding:18,display:'grid',gap:12}} onSubmit={createTicket}>
+      <strong>{staff?'ثبت درخواست شخصی برای پشتیبانی':'ثبت درخواست جدید'}</strong>
       <input required minLength={3} maxLength={180} value={subject} onChange={e=>setSubject(e.target.value)} placeholder="موضوع درخواست"/>
       <select value={category} onChange={e=>setCategory(e.target.value)}><option value="general">عمومی</option><option value="account">حساب کاربری</option><option value="technical">مشکل فنی</option><option value="report">گزارش تخلف</option><option value="billing">مالی</option><option value="other">سایر</option></select>
       <textarea required maxLength={10000} rows={4} value={body} onChange={e=>setBody(e.target.value)} placeholder="مشکل یا درخواست خود را با جزئیات بنویسید…"/>
