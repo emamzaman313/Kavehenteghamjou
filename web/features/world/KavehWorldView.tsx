@@ -54,54 +54,55 @@ export default function KavehWorldView({ supabase, userId, isAdmin, notify }: { 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-    const now = new Date().toISOString();
-    const [missionResult, progressResult, eventResult, joinedResult, levelResult, rankResult, badgeResult, myBadgeResult] = await Promise.all([
-      isAdmin ? supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').order('created_at', { ascending: false }) : supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').eq('active', true).lte('starts_at', now).or('ends_at.is.null,ends_at.gt.' + now).order('created_at', { ascending: false }),
-      supabase.from('mission_progress').select('mission_id,progress_count,completed_at,reward_claimed_at').eq('user_id', userId),
-      isAdmin ? supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').order('starts_at', { ascending: false }).limit(50) : supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').eq('status', 'published').or('ends_at.is.null,ends_at.gt.' + now).order('starts_at', { ascending: false }).limit(30),
-      supabase.from('platform_event_participants').select('event_id').eq('user_id', userId),
-      supabase.from('rank_levels').select('code,title,min_score,sort_order,accent_token').order('sort_order'),
-      supabase.from('user_rank_state').select('user_id,score,rank_code').order('score', { ascending: false }).limit(12),
-      supabase.from('badges').select('code,title,description,icon_key,accent_token'),
-      supabase.from('user_badges').select('badge_code').eq('user_id', userId),
-    ]);
-    const initialErrors = [
-      ['مأموریت‌ها', missionResult.error],
-      ['پیشرفت مأموریت‌ها', progressResult.error],
-      ['رویدادها', eventResult.error],
-      ['عضویت رویدادها', joinedResult.error],
-      ['سطوح رتبه', levelResult.error],
-      ['جدول رتبه‌بندی', rankResult.error],
-      ['نشان‌ها', badgeResult.error],
-      ['نشان‌های شما', myBadgeResult.error],
-    ] as const;
-    const firstInitialError = initialErrors.find(([, error]) => error);
-    if (firstInitialError) notify('بخشی از اطلاعات جهان کاوه بارگذاری نشد (' + firstInitialError[0] + '): ' + firstInitialError[1]?.message, 'error');
-    if (!missionResult.error) setMissions((missionResult.data ?? []) as Mission[]);
-    if (!progressResult.error) setProgress((progressResult.data ?? []) as Progress[]);
-    if (!eventResult.error) setEvents((eventResult.data ?? []) as EventRow[]);
-    if (!joinedResult.error) setJoined(new Set((joinedResult.data ?? []).map((row) => row.event_id)));
-    const rankLevels = (levelResult.data ?? []) as RankLevel[];
-    setLevels(rankLevels);
-    const rankRows = (rankResult.data ?? []) as RankRow[];
-    const ids = rankRows.map((row) => row.user_id);
-    const { data: profiles, error: profileError } = ids.length
-      ? await supabase.from('profiles').select('id,display_name,username').in('id', ids)
-      : { data: [], error: null };
-    if (profileError) notify('نام کاربران جدول رتبه‌بندی بارگذاری نشد: ' + profileError.message, 'error');
-    const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-    setRanking(rankRows.map((row) => {
-      const profile = profileMap.get(row.user_id);
-      return { row, name: profile?.display_name || profile?.username || 'کاربر کاوه', username: profile?.username ?? null, rank: rankLevels.find((level) => level.code === row.rank_code) ?? null };
-    }));
-    const mine = rankRows.find((row) => row.user_id === userId);
-    if (mine) setMyRank({ score: mine.score, rank: rankLevels.find((level) => level.code === mine.rank_code) ?? null });
-    else {
-      const { data: own } = await supabase.from('user_rank_state').select('score,rank_code').eq('user_id', userId).maybeSingle();
-      setMyRank(own ? { score: own.score, rank: rankLevels.find((level) => level.code === own.rank_code) ?? null } : { score: 0, rank: rankLevels[0] ?? null });
-    }
-    if (!badgeResult.error) setBadges((badgeResult.data ?? []) as BadgeRow[]);
-    if (!myBadgeResult.error) setMyBadges((myBadgeResult.data ?? []).map((row) => row.badge_code));
+      const now = new Date().toISOString();
+      const [missionResult, progressResult, eventResult, joinedResult, levelResult, rankResult, badgeResult, myBadgeResult] = await Promise.all([
+        isAdmin ? supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').order('created_at', { ascending: false }) : supabase.from('daily_missions').select('id,code,title,description,action_key,target_count,reward_points,reward_badge_code,active,starts_at,ends_at').eq('active', true).lte('starts_at', now).or('ends_at.is.null,ends_at.gt.' + now).order('created_at', { ascending: false }),
+        supabase.from('mission_progress').select('mission_id,progress_count,completed_at,reward_claimed_at').eq('user_id', userId),
+        isAdmin ? supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').order('starts_at', { ascending: false }).limit(50) : supabase.from('platform_events').select('id,title,summary,body,category,banner_path,status,starts_at,ends_at,points_reward,participant_count').eq('status', 'published').or('ends_at.is.null,ends_at.gt.' + now).order('starts_at', { ascending: false }).limit(30),
+        supabase.from('platform_event_participants').select('event_id').eq('user_id', userId),
+        supabase.from('rank_levels').select('code,title,min_score,sort_order,accent_token').order('sort_order'),
+        supabase.from('user_rank_state').select('user_id,score,rank_code').order('score', { ascending: false }).limit(12),
+        supabase.from('badges').select('code,title,description,icon_key,accent_token'),
+        supabase.from('user_badges').select('badge_code').eq('user_id', userId),
+      ]);
+      const initialErrors = [
+        ['مأموریت‌ها', missionResult.error],
+        ['پیشرفت مأموریت‌ها', progressResult.error],
+        ['رویدادها', eventResult.error],
+        ['عضویت رویدادها', joinedResult.error],
+        ['سطوح رتبه', levelResult.error],
+        ['جدول رتبه‌بندی', rankResult.error],
+        ['نشان‌ها', badgeResult.error],
+        ['نشان‌های شما', myBadgeResult.error],
+      ] as const;
+      const firstInitialError = initialErrors.find(([, error]) => error);
+      if (firstInitialError) notify('بخشی از اطلاعات جهان کاوه بارگذاری نشد (' + firstInitialError[0] + '): ' + firstInitialError[1]?.message, 'error');
+      if (!missionResult.error) setMissions((missionResult.data ?? []) as Mission[]);
+      if (!progressResult.error) setProgress((progressResult.data ?? []) as Progress[]);
+      if (!eventResult.error) setEvents((eventResult.data ?? []) as EventRow[]);
+      if (!joinedResult.error) setJoined(new Set((joinedResult.data ?? []).map((row) => row.event_id)));
+      const rankLevels = (levelResult.data ?? []) as RankLevel[];
+      setLevels(rankLevels);
+      const rankRows = (rankResult.data ?? []) as RankRow[];
+      const ids = rankRows.map((row) => row.user_id);
+      const { data: profiles, error: profileError } = ids.length
+        ? await supabase.from('profiles').select('id,display_name,username').in('id', ids)
+        : { data: [], error: null };
+      if (profileError) notify('نام کاربران جدول رتبه‌بندی بارگذاری نشد: ' + profileError.message, 'error');
+      const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+      setRanking(rankRows.map((row) => {
+        const profile = profileMap.get(row.user_id);
+        return { row, name: profile?.display_name || profile?.username || 'کاربر کاوه', username: profile?.username ?? null, rank: rankLevels.find((level) => level.code === row.rank_code) ?? null };
+      }));
+      const mine = rankRows.find((row) => row.user_id === userId);
+      if (mine) setMyRank({ score: mine.score, rank: rankLevels.find((level) => level.code === mine.rank_code) ?? null });
+      else {
+        const { data: own } = await supabase.from('user_rank_state').select('score,rank_code').eq('user_id', userId).maybeSingle();
+        setMyRank(own ? { score: own.score, rank: rankLevels.find((level) => level.code === own.rank_code) ?? null } : { score: 0, rank: rankLevels[0] ?? null });
+      }
+      if (!badgeResult.error) setBadges((badgeResult.data ?? []) as BadgeRow[]);
+      if (!myBadgeResult.error) setMyBadges((myBadgeResult.data ?? []).map((row) => row.badge_code));
+
     } catch (cause) {
       notify('همگام‌سازی جهان کاوه با خطای غیرمنتظره روبه‌رو شد: ' + (cause instanceof Error ? cause.message : 'خطای ناشناخته'), 'error');
     } finally {
