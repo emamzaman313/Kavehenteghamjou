@@ -1960,3 +1960,22 @@ html[data-kaveh-motion="reduced"] *,html[data-kaveh-motion="reduced"] *::before,
 .settings-mini-preview-card small { margin-top:4px; color:var(--muted); font-size:8px; }
 html[data-kaveh-density="compact"] .settings-mini-preview-card { padding:8px; }
 @media(max-width:640px) { .settings-accent-picker button { flex:1; justify-content:center; } .settings-choice-block { align-items:flex-start; } }
+
+
+/* Authentication: clear entry points and a calm, compact activity notice. */
+.auth-mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:5px;margin:0 0 19px;border:1px solid rgba(148,190,226,.14);border-radius:14px;background:rgba(5,13,25,.52)}
+.auth-mode-switch button{min-height:41px;border:1px solid transparent;border-radius:10px;background:transparent;color:#9eafc3;font:inherit;font-size:11px;font-weight:750;cursor:pointer;transition:background .2s,color .2s,border-color .2s}
+.auth-mode-switch button.active{color:#eaf6ff;background:linear-gradient(135deg,rgba(32,111,174,.32),rgba(35,76,120,.24));border-color:rgba(128,216,255,.24);box-shadow:inset 0 1px rgba(255,255,255,.06)}
+.auth-mode-switch button:focus-visible{outline:2px solid #80d8ff;outline-offset:2px}
+.operation-progress-stack{inset-block-start:12px;inset-inline:12px;justify-items:end;pointer-events:none}
+.operation-progress-card{width:min(330px,100%);padding:10px 12px;border-radius:14px;background:rgba(8,19,34,.94);border-color:rgba(128,190,235,.17);box-shadow:0 12px 32px rgba(0,0,0,.22)}
+.operation-progress-icon{width:24px;height:24px}
+.operation-progress-copy strong{font-size:11px}
+.operation-progress-copy small{font-size:9px}
+.operation-progress-heading>b{font-size:10px;color:#9dcdf0}
+.operation-pulse{width:8px;height:8px;border-radius:50%;background:#80d8ff;box-shadow:0 0 0 4px rgba(128,216,255,.12);animation:operation-pulse 1.6s ease-in-out infinite}
+.operation-progress-track>i.operation-indeterminate{position:relative;animation:operation-flow 1.35s ease-in-out infinite alternate}
+@keyframes operation-flow{from{transform:translateX(0)}to{transform:translateX(190%)}}
+@keyframes operation-pulse{50%{opacity:.48;box-shadow:0 0 0 7px rgba(128,216,255,.04)}}
+@media(max-width:650px){.operation-progress-stack{inset-block-start:8px;inset-inline:8px}.operation-progress-card{width:min(300px,100%);padding:9px 11px}}
+@media(prefers-reduced-motion:reduce){.operation-pulse,.operation-progress-track>i.operation-indeterminate{animation:none}}

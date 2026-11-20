@@ -12,7 +12,7 @@ import { normalizeAccessCode } from '@/lib/access-code';
 type LoginStep = 'email' | 'sent' | 'setup' | 'password' | 'access';
 
 export default function LoginScreen({ supabase, configured }: { supabase: SupabaseClient | null; configured: boolean }) {
-  const [step, setStep] = useState<LoginStep>('email');
+  const [step, setStep] = useState<LoginStep>('password');
   const [email, setEmail] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [emailOtp, setEmailOtp] = useState('');
@@ -29,6 +29,17 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
     .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
     .replace(/\D/g, '');
+
+  // Keep the last email on this device so returning users land on password login.
+  useEffect(() => {
+    const rememberedEmail = window.localStorage.getItem('kaveh.auth.email');
+    if (rememberedEmail) setEmail((current) => current || rememberedEmail);
+  }, []);
+
+  useEffect(() => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.includes('@')) window.localStorage.setItem('kaveh.auth.email', normalizedEmail);
+  }, [email]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -251,6 +262,11 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       {!configured && <div className="notice notice-error">تنظیمات اتصال Supabase در محیط وب کامل نیست. مدیر فنی باید متغیرهای عمومی Supabase را در محیط Production بررسی کند.</div>}
       {error && <div className="notice notice-error" role="alert" aria-live="polite">{error}</div>}
       {notice && <div className="notice notice-success" role="status" aria-live="polite">{notice}</div>}
+
+      {(step === 'email' || step === 'password') && <div className="auth-mode-switch" role="tablist" aria-label="نوع ورود">
+        <button type="button" role="tab" aria-selected={step === 'password'} className={step === 'password' ? 'active' : ''} onClick={() => openStep('password')}>ورود به حساب</button>
+        <button type="button" role="tab" aria-selected={step === 'email'} className={step === 'email' ? 'active' : ''} onClick={() => openStep('email')}>ثبت‌نام جدید</button>
+      </div>}
 
       {step === 'email' && <>
         <form className="auth-form" onSubmit={(event) => void sendSignupCode(event)}>

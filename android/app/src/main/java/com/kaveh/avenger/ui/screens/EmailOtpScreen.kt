@@ -53,7 +53,7 @@ fun EmailOtpScreen(
     var password by remember { mutableStateOf("") }
     var passwordConfirm by remember { mutableStateOf("") }
     var codeSent by remember { mutableStateOf(false) }
-    var passwordLoginMode by remember { mutableStateOf(false) }
+    var passwordLoginMode by remember { mutableStateOf(!passwordSetupRequired) }
     var setupPasswordMode by remember { mutableStateOf(passwordSetupRequired) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf(initialMessage.orEmpty()) }

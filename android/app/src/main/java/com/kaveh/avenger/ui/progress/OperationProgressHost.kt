@@ -7,11 +7,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,18 +71,14 @@ fun OperationProgressHost(modifier: Modifier = Modifier) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (current.status == OperationStatus.RUNNING) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(2.dp),
-                            color = statusColor,
-                            strokeWidth = 2.dp
-                        )
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
                     }
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(current.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Text(current.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        if (current.status == OperationStatus.FAILURE) "خطا" else "${current.percent.toPersianDigits()}٪",
+                        if (current.status == OperationStatus.RUNNING) "در حال انجام" else if (current.status == OperationStatus.FAILURE) "خطا" else "${current.percent.toPersianDigits()}٪",
                         style = MaterialTheme.typography.titleSmall,
                         color = statusColor,
                         fontWeight = FontWeight.ExtraBold

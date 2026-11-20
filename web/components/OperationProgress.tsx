@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { CheckCircle2, LoaderCircle, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { advanceOperationPercent, formatOperationPercent } from '@/lib/operation-progress';
 
 type OperationStatus = 'running' | 'success' | 'error';
@@ -74,16 +74,16 @@ export function OperationProgressProvider({ children }: { children: ReactNode })
           <section className={`operation-progress-card operation-${operation.status}`} key={operation.id} role="status">
             <div className="operation-progress-heading">
               <span className="operation-progress-icon">
-                {operation.status === 'success' ? <CheckCircle2 size={19}/> : operation.status === 'error' ? <XCircle size={19}/> : <LoaderCircle size={19} className="operation-spinner"/>}
+                {operation.status === 'success' ? <CheckCircle2 size={19}/> : operation.status === 'error' ? <XCircle size={19}/> : <span className="operation-pulse" aria-hidden="true"/>}
               </span>
               <div className="operation-progress-copy">
                 <strong>{operation.title}</strong>
                 <small>{operation.detail}</small>
               </div>
-              <b>{operation.status === 'error' ? 'خطا' : formatOperationPercent(operation.progress)}</b>
+              <b>{operation.status === 'running' ? 'در حال انجام' : operation.status === 'error' ? 'خطا' : formatOperationPercent(operation.progress)}</b>
             </div>
             <div className="operation-progress-track" role="progressbar" aria-label={operation.title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={operation.progress}>
-              <i style={{ width: `${operation.progress}%` }}/>
+              <i className={operation.status === 'running' ? 'operation-indeterminate' : ''} style={{ width: operation.status === 'running' ? '34%' : `${operation.progress}%` }}/>
             </div>
           </section>
         ))}
