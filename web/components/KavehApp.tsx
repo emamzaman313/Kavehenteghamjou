@@ -52,11 +52,11 @@ function KavehAppContent() {
   const supabase = useMemo(() => getSupabase(), []);
   const configured = Boolean(supabase);
   const [session, setSession] = useState<Session | null>(null);
-  const onlineUserIds = useOnlinePresence(supabase, session?.user.id, profile?.display_name ?? 'کاربر کاوه');
   const [authReady, setAuthReady] = useState(!supabase);
   const [tab, setTab] = useState<Tab>('home');
   const [publicProfileUsername, setPublicProfileUsername] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const onlineUserIds = useOnlinePresence(supabase, session?.user.id, profile?.display_name ?? 'کاربر کاوه');
   const [dark, setDark] = useState(true);
   const [themeHydrated, setThemeHydrated] = useState(false);
   const [appearance, setAppearance] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
@@ -118,6 +118,21 @@ function KavehAppContent() {
   }, [supabase, session?.user.id]);
 
   const notify = useCallback((text: string, tone: Toast['tone'] = 'success') => toastMessage(setToasts, text, tone), []);
+
+  const handleSignOut = useCallback(async () => {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) {
+      notify('خروج از حساب انجام نشد: ' + error.message, 'error');
+      return;
+    }
+    window.sessionStorage.removeItem('kaveh.signup.password.pending');
+    setProfile(null);
+    setSession(null);
+    setUnread(0);
+    setTab('home');
+    notify('با موفقیت از حساب خارج شدی.');
+  }, [supabase, notify]);
 
   useEffect(() => {
     if (!supabase || !session?.user.id) {
@@ -191,9 +206,38 @@ function KavehAppContent() {
 
   const loadProfile = useCallback(async () => {
     if (!supabase || !session?.user.id) return;
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-    if (error) notify(`دریافت پروفایل ناموفق بود: ${error.message}`, 'error');
-    else setProfile(data as Profile | null);
+    const user = session.user;
+    const { data: existing, error: readError } = await supabase.from('profiles')
+      .select('*').eq('id', user.id).maybeSingle();
+    if (readError) {
+      notify(`دریافت پروفایل ناموفق بود: ${readError.message}`, 'error');
+      return;
+    }
+    if (existing) {
+      setProfile(existing as Profile);
+      return;
+    }
+    // Older accounts may predate the profile trigger. Create a row for this
+    // exact auth user; never create a second auth identity or a guest account.
+    const metadataName = String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? '').trim();
+    const emailName = (user.email ?? '').split('@')[0]?.trim();
+    const displayName = metadataName || emailName || 'کاربر کاوه';
+    const { error: createError } = await supabase.from('profiles').upsert({
+      id: user.id,
+      display_name: displayName,
+      avatar_url: typeof user.user_metadata?.avatar_url === 'string' ? user.user_metadata.avatar_url : null,
+    }, { onConflict: 'id', ignoreDuplicates: true });
+    if (createError) {
+      notify(`ساخت پروفایل حساب ناموفق بود: ${createError.message}`, 'error');
+      return;
+    }
+    const { data: created, error: reloadError } = await supabase.from('profiles')
+      .select('*').eq('id', user.id).maybeSingle();
+    if (reloadError || !created) {
+      notify(`بازیابی پروفایل حساب ناموفق بود: ${reloadError?.message ?? 'پروفایل ساخته نشد'}`, 'error');
+      return;
+    }
+    setProfile(created as Profile);
   }, [supabase, session, notify]);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
@@ -269,7 +313,7 @@ function KavehAppContent() {
         {isAdmin && <button className={`nav-item ${tab === 'admin' ? 'active' : ''}`} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت سایت</span></button>}
       </nav>
       <div className="sidebar-bottom">
-        <div className="mini-profile"><Avatar profile={profile} size="md"/><div className="mini-profile-text"><strong>{profile?.display_name || session.user.user_metadata?.full_name || 'کاربر کاوه'}</strong><small>{profile?.username ? `@${profile.username}` : session.user.email}</small></div><button className="icon-button" title="خروج" onClick={() => void supabase.auth.signOut()}><LogOut size={17}/></button></div>
+        <div className="mini-profile"><Avatar profile={profile} size="md"/><div className="mini-profile-text"><strong>{profile?.display_name || session.user.user_metadata?.full_name || 'کاربر کاوه'}</strong><small>{profile?.username ? `@${profile.username}` : session.user.email}</small></div><button className="icon-button" title="خروج" onClick={() => void handleSignOut()}><LogOut size={17}/></button></div>
         <div className="online-indicator"><i/> <span>اتصال امن برقرار است</span><small>LIVE</small></div>
       </div>
     </aside>
@@ -278,7 +322,7 @@ function KavehAppContent() {
     <main className="main-area" id="main-content" tabIndex={-1}>
       <header className="topbar">
         <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', support: isSupportStaff ? 'صندوق پشتیبانی' : 'پشتیبانی و ارتباط با مدیریت', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
-        <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" aria-label="جست‌وجوی اعضا" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>Enter ↵</kbd></label><button className="icon-button mobile-search-button" onClick={() => setTab('discover')} title="جست‌وجوی اعضا" aria-label="رفتن به جست‌وجوی اعضا"><Search size={19}/></button><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-label={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-pressed={!dark}><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
+        <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" aria-label="جست‌وجوی اعضا" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>Enter ↵</kbd></label><button className="icon-button mobile-search-button" onClick={() => setTab('discover')} title="جست‌وجوی اعضا" aria-label="رفتن به جست‌وجوی اعضا"><Search size={19}/></button><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-label={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-pressed={!dark}><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void handleSignOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       {tab === 'home' && (homeSpotlight.text || homeSpotlight.image_path) && <section className="home-admin-spotlight" aria-label="پیام مدیریت سایت">
         {homeSpotlight.image_path && <img src={supabase.storage.from('post-media').getPublicUrl(homeSpotlight.image_path).data.publicUrl} alt="تصویر منتخب مدیریت"/>}
@@ -296,7 +340,7 @@ function KavehAppContent() {
         {tab === 'discover' && <DiscoverView supabase={supabase} userId={session.user.id} initialSearch={search} notify={notify} onOpenChat={() => setTab('chats')}/>}
         {tab === 'profile' && <ProfileView supabase={supabase} userId={session.user.id} profile={profile} accountLabel={session.user.user_metadata?.access_method === 'shared_code' ? 'حساب مهمان مستقل' : session.user.email ? 'حساب ایمیل' : 'حساب کاربری'} onSaved={loadProfile} notify={notify}/>}
         {tab === 'notifications' && <NotificationsView supabase={supabase} userId={session.user.id} notify={notify} onUnreadChange={setUnread}/>}
-        {tab === 'settings' && <SettingsView supabase={supabase} userId={session.user.id} dark={dark} onTheme={setDark} notify={notify} onSignOut={() => void supabase.auth.signOut()}/>}
+        {tab === 'settings' && <SettingsView supabase={supabase} userId={session.user.id} dark={dark} onTheme={setDark} notify={notify} onSignOut={handleSignOut}/>}
         {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify} role={adminRole === 'owner' || adminRole === 'admin' ? adminRole : 'moderator'}/>}
         {tab === 'admin' && !isAdmin && <section className="panel-card"><div className="notice notice-error">دسترسی مدیریت برای این حساب فعال نیست.</div></section>}
         </>}
