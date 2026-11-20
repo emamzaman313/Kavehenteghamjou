@@ -268,57 +268,6 @@ fun ExploreFeedScreen(supabase: SupabaseClient, userId: String) {
         }
     }
 
-    suspend fun createCommunitySpace() {
-        val title = createSpaceTitle.trim()
-        val description = createSpaceDescription.trim()
-        if (title.length !in 3..60 || description.length > 500) {
-            error = "نام باید ۳ تا ۶۰ نویسه و توضیحات حداکثر ۵۰۰ نویسه باشد."
-            return
-        }
-        creatingSpace = true
-        error = null
-        var createdConversationId: String? = null
-        try {
-            OperationProgressController.run(if (createSpaceType == "group") "ساخت گروه جدید" else "ساخت کانال عمومی") { progress ->
-                progress.advance(14, "اعتبارسنجی نام، توضیحات و نوع فضا")
-                val conversation = supabase.postgrest["conversations"].insert(
-                    CommunityConversationInsert(createSpaceType, title, userId)
-                ) { select() }.decodeList<CommunityConversationIdRow>().single()
-                createdConversationId = conversation.id
-                progress.advance(40, "ساخت فضای گفتگو در سرور")
-                supabase.postgrest["conversation_members"].insert(
-                    CommunityOwnerMemberInsert(conversation.id, userId)
-                )
-                progress.advance(64, "ثبت مالک و دسترسی سازنده")
-                if (createSpaceType == "group") {
-                    supabase.postgrest["group_spaces"].insert(
-                        GroupSpaceInsert(conversation.id, userId, description, createSpaceApproval)
-                    )
-                } else {
-                    supabase.postgrest["channel_spaces"].insert(
-                        ChannelSpaceInsert(conversation.id, userId, description)
-                    )
-                }
-                progress.advance(92, "تنظیمات و عضویت مالک ثبت شد")
-            }
-            showCreateSpace = false
-            createSpaceTitle = ""
-            createSpaceDescription = ""
-            createSpaceApproval = false
-            refresh()
-        } catch (exception: Exception) {
-            createdConversationId?.let { conversationId ->
-                runCatching {
-                    supabase.postgrest["conversations"].delete {
-                        filter { eq("id", conversationId); eq("created_by", userId) }
-                    }
-                }
-            }
-            error = exception.message ?: "ساخت گروه یا کانال ناموفق بود."
-        } finally {
-            creatingSpace = false
-        }
-    }
 
     LaunchedEffect(userId) { refresh() }
 
@@ -1798,6 +1747,59 @@ fun CommunitiesScreen(supabase: SupabaseClient, userId: String) {
         }
     }
 
+
+    suspend fun createCommunitySpace() {
+        val title = createSpaceTitle.trim()
+        val description = createSpaceDescription.trim()
+        if (title.length !in 3..60 || description.length > 500) {
+            error = "نام باید ۳ تا ۶۰ نویسه و توضیحات حداکثر ۵۰۰ نویسه باشد."
+            return
+        }
+        creatingSpace = true
+        error = null
+        var createdConversationId: String? = null
+        try {
+            OperationProgressController.run(if (createSpaceType == "group") "ساخت گروه جدید" else "ساخت کانال عمومی") { progress ->
+                progress.advance(14, "اعتبارسنجی نام، توضیحات و نوع فضا")
+                val conversation = supabase.postgrest["conversations"].insert(
+                    CommunityConversationInsert(createSpaceType, title, userId)
+                ) { select() }.decodeList<CommunityConversationIdRow>().single()
+                createdConversationId = conversation.id
+                progress.advance(40, "ساخت فضای گفتگو در سرور")
+                supabase.postgrest["conversation_members"].insert(
+                    CommunityOwnerMemberInsert(conversation.id, userId)
+                )
+                progress.advance(64, "ثبت مالک و دسترسی سازنده")
+                if (createSpaceType == "group") {
+                    supabase.postgrest["group_spaces"].insert(
+                        GroupSpaceInsert(conversation.id, userId, description, createSpaceApproval)
+                    )
+                } else {
+                    supabase.postgrest["channel_spaces"].insert(
+                        ChannelSpaceInsert(conversation.id, userId, description)
+                    )
+                }
+                progress.advance(92, "تنظیمات و عضویت مالک ثبت شد")
+            }
+            showCreateSpace = false
+            createSpaceTitle = ""
+            createSpaceDescription = ""
+            createSpaceApproval = false
+            refresh()
+        } catch (exception: Exception) {
+            createdConversationId?.let { conversationId ->
+                runCatching {
+                    supabase.postgrest["conversations"].delete {
+                        filter { eq("id", conversationId); eq("created_by", userId) }
+                    }
+                }
+            }
+            error = exception.message ?: "ساخت گروه یا کانال ناموفق بود."
+        } finally {
+            creatingSpace = false
+        }
+    }
+
     LaunchedEffect(userId) { refresh() }
 
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2237,7 +2239,7 @@ fun PublishPostScreen(supabase: SupabaseClient, userId: String) {
 }
 
 
-private fun Float.toPersianProgressDigits(): String =
-    (this * 100).toInt().toString().map { digit ->
+private fun Int.toPersianProgressDigits(): String =
+    toString().map { digit ->
         if (digit in '0'..'9') ('۰'.code + (digit - '0')).toChar() else digit
     }.joinToString("")
