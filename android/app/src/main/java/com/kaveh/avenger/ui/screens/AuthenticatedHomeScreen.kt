@@ -1,6 +1,8 @@
 package com.kaveh.avenger.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -272,7 +274,7 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         ) {
             Spacer(Modifier.height(14.dp))
             when (selectedTab) {
-                MainTab.Home -> HomeOverview(email, rankNames)
+                MainTab.Home -> HomeOverview(email, rankNames, onNavigate = { selectedTab = it })
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
                     userId = userId
@@ -298,8 +300,9 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
 }
 
 @Composable
-private fun HomeOverview(email: String?, rankNames: List<String>) {
+private fun HomeOverview(email: String?, rankNames: List<String>, onNavigate: (MainTab) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        QuickNavigationRail(onNavigate)
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(30.dp),
@@ -373,6 +376,53 @@ private fun HomeOverview(email: String?, rankNames: List<String>) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+
+@Composable
+private fun QuickNavigationRail(onNavigate: (MainTab) -> Unit) {
+    val actions = listOf(
+        Triple(MainTab.Chats, "گفتگوها", Icons.Outlined.ChatBubbleOutline),
+        Triple(MainTab.Publish, "انتشار", Icons.Outlined.AddCircleOutline),
+        Triple(MainTab.Explore, "اکتشاف", Icons.Outlined.Explore),
+        Triple(MainTab.Reels, "تماشای ریلز", Icons.Outlined.PlayCircleOutline),
+        Triple(MainTab.World, "جهان کاوه", Icons.Outlined.Home),
+        Triple(MainTab.Profile, "پروفایل", Icons.Outlined.PersonOutline)
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("میان‌برهای فضای شما", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("دسترسی فوری", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            actions.forEach { (tab, label, icon) ->
+                Surface(
+                    onClick = { onNavigate(tab) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+                    tonalElevation = 2.dp,
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp))
+                        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+            }
+        }
     }
 }
 

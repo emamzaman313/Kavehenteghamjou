@@ -22,6 +22,7 @@ import SocialHubView from '@/features/social/SocialHubView';
 import AdminAccessCodePanel from '@/features/admin/AdminAccessCodePanel';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
 import KavehExperienceLayer from '@/components/KavehExperienceLayer';
+import KavehCommandDock from '@/components/KavehCommandDock';
 import SupportCenter from '@/features/support/SupportCenter';
 import KavehWorldView from '@/features/world/KavehWorldView';
 
@@ -213,6 +214,7 @@ function KavehAppContent() {
   return <div className={`app-frame kaveh-premium-shell ${dark ? 'theme-dark' : 'theme-light'}`} style={{ '--remote-accent': appearance.accent, '--remote-background': appearance.background, '--remote-surface': appearance.surface, '--remote-radius': `${appearance.radius}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
     <KavehExperienceLayer isAdmin={isAdmin} onNavigate={setTab} />
+    <KavehCommandDock activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
     <aside className="sidebar" aria-label="ناوبری اصلی">
       <div className="sidebar-brand"><BrandMark/><div><strong>کاوه انتقامجو</strong><small>THE PRIVATE SOCIAL UNIVERSE</small></div></div>
       <div className="side-label"><span>01</span> فضای شما</div>
