@@ -7,6 +7,7 @@ import type { FileAsset } from '@/lib/types';
 import type { Notify } from '@/lib/ui-types';
 import { formatBytes, safeDisplayName, validateUpload } from '@/lib/format';
 import { Avatar } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 const MAX_FILES = 4;
 
@@ -23,6 +24,7 @@ export default function PostComposer({ supabase, userId, notify, onPublished }: 
   const [cloudLoading, setCloudLoading] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const { runOperation } = useOperationProgress();
 
   const addFiles = (selected: FileList | File[]) => {
     const next = Array.from(selected);
@@ -58,42 +60,51 @@ export default function PostComposer({ supabase, userId, notify, onPublished }: 
     event.preventDefault();
     if (publishing || (!body.trim() && !files.length)) return;
     setPublishing(true);
-    const { data: post, error: postError } = await supabase.from('posts').insert({
-      author_id: userId, body: body.trim(), visibility: 'public',
-      comments_enabled: true, published_at: new Date().toISOString(),
-    }).select('id').single();
-    if (postError || !post?.id) {
-      setPublishing(false);
-      return notify(`انتشار پست ناموفق بود: ${postError?.message ?? 'خطای ناشناخته'}`, 'error');
-    }
-
+    let postId: string | null = null;
     const uploaded: string[] = [];
     try {
-      for (const file of files) {
-        const path = `${userId}/${crypto.randomUUID()}`;
-        const { error } = await supabase.storage.from('post-media').upload(path, file, {
-          upsert: false, contentType: file.type || 'application/octet-stream', cacheControl: '3600',
-        });
-        if (error) throw error;
-        uploaded.push(path);
-        const { error: rowError } = await supabase.from('post_attachments').insert({
-          post_id: post.id, author_id: userId, bucket_id: 'post-media',
-          object_path: path, original_name: safeDisplayName(file.name),
-          mime_type: file.type || null, byte_size: file.size,
-        });
-        if (rowError) throw rowError;
-      }
-    } catch (error) {
+      await runOperation('انتشار پست و پیوست‌ها', async (advance) => {
+        advance(12, 'اعتبارسنجی متن، تعداد و اندازه فایل‌ها');
+        const { data: post, error: postError } = await supabase.from('posts').insert({
+          author_id: userId, body: body.trim(), visibility: 'public',
+          comments_enabled: true, published_at: new Date().toISOString(),
+        }).select('id').single();
+        if (postError || !post?.id) throw postError ?? new Error('ایجاد پست در سرور انجام نشد.');
+        postId = post.id;
+        advance(34, 'پست اولیه ثبت شد؛ آماده‌سازی پیوست‌ها');
+
+        for (let index = 0; index < files.length; index++) {
+          const file = files[index];
+          const base = 38 + Math.round((index / Math.max(1, files.length)) * 48);
+          advance(base, `انتقال فایل ${index + 1} از ${files.length}: ${safeDisplayName(file.name)}`);
+          const path = `${userId}/${crypto.randomUUID()}`;
+          const { error } = await supabase.storage.from('post-media').upload(path, file, {
+            upsert: false, contentType: file.type || 'application/octet-stream', cacheControl: '3600',
+          });
+          if (error) throw error;
+          uploaded.push(path);
+          advance(Math.min(90, base + 8), `ثبت پیوست ${index + 1} از ${files.length} در پست`);
+          const { error: rowError } = await supabase.from('post_attachments').insert({
+            post_id: post.id, author_id: userId, bucket_id: 'post-media',
+            object_path: path, original_name: safeDisplayName(file.name),
+            mime_type: file.type || null, byte_size: file.size,
+          });
+          if (rowError) throw rowError;
+          advance(Math.min(94, base + 14), `پیوست ${index + 1} از ${files.length} ثبت شد`);
+        }
+        advance(96, 'پست و تمام پیوست‌ها با موفقیت ثبت شدند');
+      });
+      setBody('');
+      setFiles([]);
+      notify('پست با موفقیت منتشر شد.');
+      onPublished();
+    } catch (cause) {
       if (uploaded.length) await supabase.storage.from('post-media').remove(uploaded);
-      await supabase.from('posts').delete().eq('id', post.id).eq('author_id', userId);
+      if (postId) await supabase.from('posts').delete().eq('id', postId).eq('author_id', userId);
+      notify(`انتشار پست ناموفق بود: ${cause instanceof Error ? cause.message : 'خطای ناشناخته'}`, 'error');
+    } finally {
       setPublishing(false);
-      return notify(`بارگذاری رسانه ناموفق بود: ${error instanceof Error ? error.message : 'خطای ناشناخته'}`, 'error');
     }
-    setPublishing(false);
-    setBody('');
-    setFiles([]);
-    notify('پست با موفقیت منتشر شد.');
-    onPublished();
   };
 
   return <form className="composer-card" onSubmit={(event) => void publish(event)}>
