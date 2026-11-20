@@ -35,9 +35,22 @@ class EmailOtpRepository(private val supabase: SupabaseClient) {
     }
 
     suspend fun loginWithPassword(email: String, password: String) {
-        supabase.auth.signInWith(Email) {
-            this.email = email.trim().lowercase()
-            this.password = password
+        val normalizedPassword = normalizePasswordDigits(password)
+        try {
+            supabase.auth.signInWith(Email) {
+                this.email = email.trim().lowercase()
+                this.password = normalizedPassword
+            }
+        } catch (error: Exception) {
+            val message = error.message.orEmpty().lowercase()
+            val invalidCredentials = message.contains("invalid_credentials") ||
+                message.contains("invalid login credentials")
+            // Preserve passwords saved verbatim by older app versions.
+            if (!invalidCredentials || normalizedPassword == password) throw error
+            supabase.auth.signInWith(Email) {
+                this.email = email.trim().lowercase()
+                this.password = password
+            }
         }
     }
 }
