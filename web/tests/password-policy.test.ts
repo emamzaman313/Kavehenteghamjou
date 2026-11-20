@@ -28,6 +28,6 @@ describe("signup password policy", () => {
   });
 
   it("rejects passwords shorter than ten characters", () => {
-    expect(getSignupPasswordError("KavEh9!", "KavEh9!")).toContain("حداقل ۱۰ نویسه");
+    expect(getSignupPasswordError("KavEh9!", "KavEh9!")).toContain("حداقل 10 نویسه");
   });
 });
