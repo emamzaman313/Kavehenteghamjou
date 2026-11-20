@@ -879,6 +879,8 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                         message = null
                         error = null
                         try {
+                            OperationProgressController.run("ذخیره هویت پروفایل") { progress ->
+                            progress.advance(10, "اعتبارسنجی اطلاعات و تنظیمات هویت")
                             var coverPath = profile?.coverPath
                             selectedCover?.let { uri ->
                                 val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
@@ -891,6 +893,7 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                     contentType = ContentType.parse(mime)
                                     upsert = false
                                 }
+                                progress.advance(42, "تصویر کاور در فضای رسانه ذخیره شد")
                             }
                             var profileMusicPath = if (removeProfileMusic) null else profile?.profileMusicPath
                             if (!removeProfileMusic) selectedMusic?.let { uri ->
@@ -904,8 +907,10 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                                     contentType = ContentType.parse(mime)
                                     upsert = false
                                 }
+                                progress.advance(68, "موسیقی پروفایل بارگذاری شد")
                             }
                             require(themeAccent.matches(Regex("^#[0-9a-fA-F]{6}$")) && themeSurface.matches(Regex("^#[0-9a-fA-F]{6}$")) && themeText.matches(Regex("^#[0-9a-fA-F]{6}$"))) { "کد رنگ باید به شکل #RRGGBB باشد." }
+                            progress.advance(78, "تنظیمات پروفایل آماده ثبت نهایی است")
                             supabase.postgrest["profiles"].update({
                                 set("display_name", displayName.trim())
                                 set("bio", bio.trim())
@@ -922,12 +927,14 @@ fun EditableProfileScreen(supabase: SupabaseClient, userId: String, email: Strin
                             }) {
                                 filter { eq("id", userId) }
                             }
+                            progress.advance(92, "تغییرات هویت در سرور ذخیره شد")
                             selectedCover = null
                             selectedMusic = null
                             removeProfileMusic = false
                             profilePlayer?.release(); profilePlayer = null; profileMusicPlaying = false
                             message = "پروفایل ذخیره شد."
                             loadProfile()
+                            }
                         } catch (exception: Exception) {
                             error = exception.message ?: "ذخیره پروفایل ناموفق بود."
                         } finally {
