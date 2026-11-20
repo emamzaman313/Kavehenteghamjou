@@ -1,5 +1,7 @@
 package com.kaveh.avenger.ui.screens
 
+import com.kaveh.avenger.ui.progress.OperationProgressController
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -208,12 +210,16 @@ fun SupportCenterScreen(
         updatingTicket = true
         error = null
         try {
-            supabase.postgrest["support_tickets"].update({
-                set(field, value)
-            }) {
-                filter { eq("id", ticket.id) }
+            OperationProgressController.run("به‌روزرسانی درخواست پشتیبانی") { progress ->
+                progress.advance(22, "بررسی مجوز و اطلاعات تغییر")
+                supabase.postgrest["support_tickets"].update({
+                    set(field, value)
+                }) {
+                    filter { eq("id", ticket.id) }
+                }
+                progress.advance(78, "تغییر در سرور ثبت شد؛ دریافت وضعیت تازه")
+                refreshTickets()
             }
-            refreshTickets()
         } catch (exception: Exception) {
             error = exception.message ?: "به‌روزرسانی درخواست ناموفق بود."
         } finally {
@@ -228,21 +234,25 @@ fun SupportCenterScreen(
         creating = true
         error = null
         try {
-            val ticketId = supabase.postgrest.rpc(
-                "create_support_ticket",
-                buildJsonObject {
-                    put("p_subject", JsonPrimitive(cleanSubject))
-                    put("p_category", JsonPrimitive(category))
-                    put("p_body", JsonPrimitive(cleanBody))
-                }
-            ).decodeAs<String>()
-            subject = ""
-            body = ""
-            category = "general"
-            showCreate = false
-            refreshTickets()
-            selected = tickets.firstOrNull { it.id == ticketId }
-                ?: tickets.firstOrNull()
+            OperationProgressController.run("ارسال درخواست پشتیبانی") { progress ->
+                progress.advance(18, "اعتبارسنجی عنوان و شرح درخواست")
+                val ticketId = supabase.postgrest.rpc(
+                    "create_support_ticket",
+                    buildJsonObject {
+                        put("p_subject", JsonPrimitive(cleanSubject))
+                        put("p_category", JsonPrimitive(category))
+                        put("p_body", JsonPrimitive(cleanBody))
+                    }
+                ).decodeAs<String>()
+                progress.advance(76, "درخواست در سرور ثبت شد؛ دریافت کد پیگیری")
+                subject = ""
+                body = ""
+                category = "general"
+                showCreate = false
+                refreshTickets()
+                selected = tickets.firstOrNull { it.id == ticketId }
+                    ?: tickets.firstOrNull()
+            }
         } catch (exception: Exception) {
             error = exception.message ?: "ثبت درخواست پشتیبانی ناموفق بود."
         } finally {
