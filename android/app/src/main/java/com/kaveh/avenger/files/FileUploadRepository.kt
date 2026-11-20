@@ -136,7 +136,9 @@ class FileUploadRepository(private val supabase: SupabaseClient) {
     suspend fun downloadToUri(context: Context, file: VaultFile, destination: Uri) {
         require(file.bucket_id == "user-files") { "مخزن فایل معتبر نیست." }
         val bytes = supabase.storage.from("user-files").downloadAuthenticated(file.object_path)
-        require(bytes.size.toLong() == file.byte_size) { "حجم فایل دریافتی با اطلاعات ثبت‌شده مطابقت ندارد." }
+        require(verifyFileIntegrity(bytes, file.byte_size, file.sha256_hex)) {
+            "سلامت فایل دریافتی تأیید نشد؛ حجم یا اثرانگشت فایل با اطلاعات ثبت‌شده مطابقت ندارد."
+        }
         context.contentResolver.openOutputStream(destination, "w")?.use { output ->
             output.write(bytes)
             output.flush()
