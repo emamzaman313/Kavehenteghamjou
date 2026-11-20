@@ -7,6 +7,7 @@ import type { Notify } from '@/lib/ui-types';
 import { safeDisplayName, validateUpload } from '@/lib/format';
 import { hashFile, saveBlobAs, verifyBlobIntegrity } from '@/lib/files';
 import { Avatar, EmptyState } from '@/components/ui';
+import { useOperationProgress } from '@/components/OperationProgress';
 
 export default function ChatView({ supabase, userId, notify }: { supabase: SupabaseClient; userId: string; notify: Notify }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -31,6 +32,7 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const [spaceDescription, setSpaceDescription] = useState('');
   const [spaceApproval, setSpaceApproval] = useState(false);
   const [creatingSpace, setCreatingSpace] = useState(false);
+  const { runOperation } = useOperationProgress();
   const [showMemberManager, setShowMemberManager] = useState(false);
   const [spaceMembers, setSpaceMembers] = useState<Profile[]>([]);
   const [joinRequests, setJoinRequests] = useState<{id:string;requester_id:string;requested_at:string;profile?:Profile}[]>([]);
@@ -210,10 +212,22 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
   const send = async (event: FormEvent) => {
     event.preventDefault(); if (!active || !draft.trim()) return;
     const text = draft.trim(); setDraft(''); setSending(true);
-    const { data: sentMessage, error } = await supabase.from('messages').insert({ conversation_id: active, sender_id: userId, body: text, format: 'plain' }).select('id').single();
-    setSending(false);
-    if (error) { setDraft(text); notify(`ارسال پیام ناموفق بود: ${error.message}`, 'error'); }
-    else { if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch', { body: { message_id: sentMessage.id } }); void loadMessages(active); void loadConversations(); }
+    try {
+      const sentMessage = await runOperation('ارسال پیام', async (advance) => {
+        advance(22, 'آماده‌سازی متن و گفتگوی فعال');
+        advance(54, 'ثبت پیام در سرور');
+        const { data, error } = await supabase.from('messages').insert({ conversation_id: active, sender_id: userId, body: text, format: 'plain' }).select('id').single();
+        if (error) throw error;
+        advance(90, 'پیام ثبت شد؛ همگام‌سازی گفتگو');
+        return data;
+      });
+      if (sentMessage?.id) void supabase.functions.invoke('notification-dispatch', { body: { message_id: sentMessage.id } });
+      void loadMessages(active);
+      void loadConversations();
+    } catch (cause) {
+      setDraft(text);
+      notify(`ارسال پیام ناموفق بود: ${cause instanceof Error ? cause.message : 'خطای نامشخص'}`, 'error');
+    } finally { setSending(false); }
   };
 
   const downloadAttachment = async (file: FileAsset) => {
@@ -359,13 +373,21 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     setCreatingSpace(true);
     let conversationId: string | null = null;
     try {
-      const { data: conversation, error: conversationError } = await supabase.from('conversations').insert({ kind: spaceType, title, created_by: userId }).select('id').single();
-      if (conversationError || !conversation) throw conversationError ?? new Error('ساخت فضای گفتگو ناموفق بود.');
-      conversationId = conversation.id;
-      const { error: memberError } = await supabase.from('conversation_members').insert({ conversation_id: conversationId, user_id: userId, member_role: 'owner' });
-      if (memberError) throw memberError;
-      const metadata = spaceType === 'group' ? await supabase.from('group_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, join_approval_required: spaceApproval }) : await supabase.from('channel_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, visibility: 'public' });
-      if (metadata.error) throw metadata.error;
+      await runOperation(spaceType === 'group' ? 'ساخت گروه جدید' : 'ساخت کانال عمومی', async (advance) => {
+        advance(14, 'اعتبارسنجی نام، توضیحات و نوع فضا');
+        const { data: conversation, error: conversationError } = await supabase.from('conversations').insert({ kind: spaceType, title, created_by: userId }).select('id').single();
+        if (conversationError || !conversation) throw conversationError ?? new Error('ساخت فضای گفتگو ناموفق بود.');
+        conversationId = conversation.id;
+        advance(42, 'ساخت فضای گفتگو در سرور');
+        const { error: memberError } = await supabase.from('conversation_members').insert({ conversation_id: conversationId, user_id: userId, member_role: 'owner' });
+        if (memberError) throw memberError;
+        advance(66, 'ثبت سازنده و دسترسی مالک');
+        const metadata = spaceType === 'group'
+          ? await supabase.from('group_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, join_approval_required: spaceApproval })
+          : await supabase.from('channel_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, visibility: 'public' });
+        if (metadata.error) throw metadata.error;
+        advance(90, 'تنظیمات و عضویت مالک ثبت شد');
+      });
       notify(spaceType === 'group' ? 'گروه ساخته شد.' : 'کانال عمومی ساخته شد.');
       setShowCreateSpace(false); setSpaceTitle(''); setSpaceDescription(''); setSpaceApproval(false);
       await loadConversations(); setActive(conversationId);
