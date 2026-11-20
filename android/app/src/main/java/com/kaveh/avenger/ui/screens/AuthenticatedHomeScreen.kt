@@ -94,6 +94,7 @@ private data class MobileFeatureFlagRow(val key:String,val enabled:Boolean)
 @Composable
 fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
+    val ambientGlowColor = MaterialTheme.colorScheme.primary
     val ambientTransition = rememberInfiniteTransition(label = "kaveh-ambient")
     val ambientShift by ambientTransition.animateFloat(
         initialValue = 0f,
@@ -253,8 +254,8 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.105f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.025f),
+                                ambientGlowColor.copy(alpha = 0.105f),
+                                ambientGlowColor.copy(alpha = 0.025f),
                                 androidx.compose.ui.graphics.Color.Transparent
                             ),
                             center = glowCenter,
