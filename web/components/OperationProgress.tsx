@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CheckCircle2, LoaderCircle, XCircle } from 'lucide-react';
+import { advanceOperationPercent, formatOperationPercent } from '@/lib/operation-progress';
 
 type OperationStatus = 'running' | 'success' | 'error';
 type OperationItem = {
@@ -34,9 +35,8 @@ export function OperationProgressProvider({ children }: { children: ReactNode })
     }].slice(-4));
 
     const advance: Advance = (progress, detail) => {
-      const next = Math.max(6, Math.min(95, Math.round(progress)));
       setOperations((current) => current.map((item) => item.id === id && item.status === 'running'
-        ? { ...item, progress: Math.max(item.progress, next), detail }
+        ? { ...item, progress: advanceOperationPercent(item.progress, progress), detail }
         : item));
     };
 
@@ -80,7 +80,7 @@ export function OperationProgressProvider({ children }: { children: ReactNode })
                 <strong>{operation.title}</strong>
                 <small>{operation.detail}</small>
               </div>
-              <b>{operation.status === 'error' ? 'خطا' : `${operation.progress.toLocaleString('fa-IR')}٪`}</b>
+              <b>{operation.status === 'error' ? 'خطا' : formatOperationPercent(operation.progress)}</b>
             </div>
             <div className="operation-progress-track" role="progressbar" aria-label={operation.title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={operation.progress}>
               <i style={{ width: `${operation.progress}%` }}/>
