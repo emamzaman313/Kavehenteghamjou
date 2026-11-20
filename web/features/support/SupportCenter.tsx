@@ -275,11 +275,19 @@ export default function SupportCenter({ supabase, userId, notify, staff = false 
 
   const updateTicketField = async (field:'status'|'priority', value:string) => {
     if (!active || !staff) return;
-    const {error} = await supabase.rpc('update_support_ticket', {
+    const now = new Date().toISOString();
+    const patch = field==='status'
+      ? {status:value,updated_at:now,resolved_at:value==='resolved'||value==='closed'?now:null}
+      : {priority:value,updated_at:now};
+    // Keep compatibility with projects where the additive RPC migration is not applied yet.
+    const {error:rpcError} = await supabase.rpc('update_support_ticket', {
       p_ticket_id: active,
       p_status: field==='status' ? value : null,
       p_priority: field==='priority' ? value : null,
     });
+    const error = rpcError?.code === 'PGRST202'
+      ? (await supabase.from('support_tickets').update(patch).eq('id',active)).error
+      : rpcError;
     if (error) notify('به‌روزرسانی درخواست ناموفق بود: '+error.message,'error');
     else { notify('درخواست به‌روزرسانی شد.'); await refresh(); }
   };
