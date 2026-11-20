@@ -72,7 +72,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kaveh.avenger.R
 import com.kaveh.avenger.data.SupabaseClientProvider
+import com.kaveh.avenger.notifications.NotificationDestination
 import com.kaveh.avenger.notifications.PushTokenRegistration
+import com.kaveh.avenger.notifications.parseNotificationDestination
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.SerialName
@@ -94,7 +96,13 @@ private data class MobileFeatureFlagRow(val key:String,val enabled:Boolean)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend () -> Unit) {
+fun AuthenticatedHomeScreen(
+    email: String?,
+    userId: String,
+    onSignOut: suspend () -> Unit,
+    notificationClickUrl: String? = null,
+    onNotificationClickConsumed: () -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
     val ambientGlowColor = MaterialTheme.colorScheme.primary
     var ambientMotionEnabled by remember { mutableStateOf(true) }
@@ -109,6 +117,8 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         label = "ambient-drift"
     )
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
+    var previousTab by remember { mutableStateOf(MainTab.Home) }
+    var notificationConversationIds by remember(userId) { mutableStateOf<Set<String>?>(null) }
     var adminRole by remember { mutableStateOf<String?>(null) }
     var rankNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var featureFlags by remember { mutableStateOf<Map<String,Boolean>>(emptyMap()) }
@@ -134,6 +144,31 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
         }
     }
     val isAdmin = adminRole in setOf("owner","admin")
+    LaunchedEffect(notificationClickUrl) {
+        if (notificationClickUrl == null) return@LaunchedEffect
+        val destination = parseNotificationDestination(notificationClickUrl)
+        if (destination == null) {
+            onNotificationClickConsumed()
+            return@LaunchedEffect
+        }
+        when (destination) {
+            is NotificationDestination.Conversation -> {
+                notificationConversationIds = setOf(destination.id)
+                selectedTab = MainTab.Chats
+            }
+            NotificationDestination.Inbox -> {
+                notificationConversationIds = null
+                selectedTab = MainTab.Notifications
+            }
+        }
+        onNotificationClickConsumed()
+    }
+    LaunchedEffect(selectedTab) {
+        if (previousTab == MainTab.Chats && selectedTab != MainTab.Chats) {
+            notificationConversationIds = null
+        }
+        previousTab = selectedTab
+    }
     fun featureOn(key:String)=isAdmin || featureFlags[key] != false
     val tabs = MainTab.entries.filter { tab ->
         if(tab==MainTab.Admin || tab==MainTab.World) false else when(tab) {
@@ -287,7 +322,8 @@ fun AuthenticatedHomeScreen(email: String?, userId: String, onSignOut: suspend (
                  })
                 MainTab.Chats -> ChatScreen(
                     supabase = SupabaseClientProvider.client,
-                    userId = userId
+                    userId = userId,
+                    conversationIds = notificationConversationIds,
                 )
                 MainTab.Support -> SupportCenterScreen(
                     supabase = SupabaseClientProvider.client,

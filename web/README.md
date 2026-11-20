@@ -39,6 +39,6 @@ Enable Google as an Auth provider and configure the Google Web OAuth Client ID a
 - Private file upload up to exactly 50,000,000 bytes, arbitrary file types, Unicode filename metadata, streaming SHA-256 calculation and signed URL download
 - Profile editing, server-owned rank/badge display, notifications and user settings
 
-The browser uploader currently uses the standard Supabase Storage upload method; resumable/multipart upload, true byte-level progress, and durable retry queue are not implemented yet. The PWA manifest is present, but installable PWA acceptance is incomplete because the original brand icon is not available in this workspace and no service worker has been added.
+The browser uploader supports measured byte-level progress and rollback of orphaned uploads. Resumable/multipart upload and a durable retry queue are not implemented yet. The web app registers a service worker and provides a network-only offline fallback page. For privacy, it does not cache authenticated pages, messages, or user files. The app icon and standalone manifest are included; web push delivery is not provided by the service worker.
 
-Group/channel administration, stories, calls, push delivery and the admin console are not represented as completed features. The existing database does not expose a safe admin role table/policy contract; the web UI intentionally does not grant admin powers from client metadata.
+Community discovery and join-request moderation are available; full group/channel administration, stories, calls, and browser push delivery remain incomplete. Admin access is checked by server-side functions and role policies, not client metadata alone.

@@ -81,7 +81,12 @@ async function sendPush(account: Record<string, string>, token: string, title: s
         token,
         notification: { title, body },
         data,
-        android: { priority: "high", notification: { channel_id: "kaveh_general_notifications" } },
+        android: {
+          priority: data.priority === "high" ? "high" : "normal",
+          notification: {
+            channel_id: data.priority === "high" ? "kaveh_urgent_notifications" : "kaveh_general_notifications",
+          },
+        },
       },
     }),
   });
@@ -136,8 +141,16 @@ Deno.serve(async (request: Request) => {
   const settings = new Map((settingRows.data ?? []).map((row) => [row.user_id, row.notifications ?? {}]));
   const notice = notices[0];
   const title = "پیام جدید در کاوه انتقامجو";
-  const messageBody = String(notice.payload?.message ?? message.body ?? "پیام جدید دریافت کردید.").slice(0, 180);
-  const data = { kind: "chat_message", conversation_id: String(message.conversation_id), message_id: messageId };
+  // Keep private message text out of system notifications and email previews by default.
+  const messageBody = "پیام جدید دریافت کردید.";
+  const conversationId = String(message.conversation_id);
+  const data = {
+    kind: "chat_message",
+    conversation_id: conversationId,
+    message_id: messageId,
+    priority: "high",
+    click_url: `/chat?conversation_id=${encodeURIComponent(conversationId)}`,
+  };
 
   let pushSent = 0;
   let emailSent = 0;
