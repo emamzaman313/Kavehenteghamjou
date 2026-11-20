@@ -372,6 +372,8 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
     if (description.length > 500) { notify('توضیحات حداکثر ۵۰۰ نویسه است.', 'error'); return; }
     setCreatingSpace(true);
     let conversationId: string | null = null;
+    let spaceCommitted = false;
+    let rollbackSafe = true;
     try {
       await runOperation(spaceType === 'group' ? 'ساخت گروه جدید' : 'ساخت کانال عمومی', async (advance) => {
         advance(14, 'اعتبارسنجی نام، توضیحات و نوع فضا');
@@ -385,14 +387,29 @@ export default function ChatView({ supabase, userId, notify }: { supabase: Supab
         const metadata = spaceType === 'group'
           ? await supabase.from('group_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, join_approval_required: spaceApproval })
           : await supabase.from('channel_spaces').insert({ conversation_id: conversationId, owner_id: userId, description, visibility: 'public' });
-        if (metadata.error) throw metadata.error;
+        if (metadata.error) {
+          const metadataTable = spaceType === 'group' ? 'group_spaces' : 'channel_spaces';
+          const { data: savedMetadata, error: verifyError } = await supabase.from(metadataTable)
+            .select('conversation_id').eq('conversation_id', conversationId).maybeSingle();
+          if (verifyError) {
+            rollbackSafe = false;
+            throw new Error('نتیجه ساخت گروه یا کانال نامشخص است؛ برای جلوگیری از حذف فضای احتمالا ساخته‌شده، پاک‌سازی خودکار متوقف شد.');
+          }
+          if (!savedMetadata) throw metadata.error;
+        }
+        spaceCommitted = true;
         advance(90, 'تنظیمات و عضویت مالک ثبت شد');
       });
       notify(spaceType === 'group' ? 'گروه ساخته شد.' : 'کانال عمومی ساخته شد.');
       setShowCreateSpace(false); setSpaceTitle(''); setSpaceDescription(''); setSpaceApproval(false);
-      await loadConversations(); setActive(conversationId);
+      try {
+        await loadConversations();
+        if (conversationId) setActive(conversationId);
+      } catch {
+        notify('فضا ساخته شد، اما تازه‌سازی فهرست گفتگوها انجام نشد؛ دوباره همگام‌سازی کنید.', 'error');
+      }
     } catch (error) {
-      if (conversationId) await supabase.from('conversations').delete().eq('id', conversationId).eq('created_by', userId);
+      if (conversationId && rollbackSafe && !spaceCommitted) await supabase.from('conversations').delete().eq('id', conversationId).eq('created_by', userId);
       notify('ساخت گروه یا کانال انجام نشد: ' + (error instanceof Error ? error.message : 'خطای نامشخص'), 'error');
     } finally { setCreatingSpace(false); }
   };
