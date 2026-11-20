@@ -2232,6 +2232,12 @@ html[data-kaveh-density="compact"] .settings-mini-preview-card { padding:8px; }
 .kaveh-auth-experience .signup-strength-panel{border-radius:15px;background:rgba(9,24,42,.72);border-color:rgba(126,184,232,.15)}
 .kaveh-auth-experience .signup-password-control>button{border-radius:11px;transition:background .2s ease,color .2s ease,transform .2s ease}
 .kaveh-auth-experience .signup-password-control>button:hover{transform:scale(1.04);background:rgba(48,126,188,.28)}
+/* Keep the visibility control on the physical right edge in RTL and LTR layouts.
+   Reserve that space so the icon never covers the entered password text. */
+.kaveh-auth-experience .signup-password-control{position:relative}
+.kaveh-auth-experience .signup-password-control .auth-input{padding-right:54px;padding-left:15px}
+.kaveh-auth-experience .signup-password-control>button{right:10px;left:auto;inset-inline-end:auto;z-index:2}
+
 .kaveh-auth-experience .auth-tip{border-color:rgba(128,184,230,.15);background:rgba(8,22,39,.32)}
 .kaveh-auth-experience .auth-tip>button{padding:13px 12px}
 .auth-light-mode .auth-card{background:linear-gradient(155deg,rgba(255,255,255,.97),rgba(239,247,255,.97));border-color:rgba(100,151,195,.28);box-shadow:0 28px 75px rgba(55,104,147,.16)}
