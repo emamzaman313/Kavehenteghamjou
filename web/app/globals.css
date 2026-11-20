@@ -2196,10 +2196,21 @@ html[data-kaveh-density="compact"] .settings-mini-preview-card { padding:8px; }
 @media(max-width:560px){.auth-theme-copy b{font-size:11px}.auth-theme-copy small{font-size:8px}.auth-theme-toggle{min-height:49px;gap:8px;padding-right:10px}.auth-theme-track{flex-basis:62px;width:62px;height:33px}.auth-theme-thumb{width:25px;height:25px}.auth-theme-toggle.is-light .auth-theme-thumb{left:33px}}
 @media(prefers-reduced-motion:reduce){.kaveh-auth-experience,.kaveh-auth-experience:before,.auth-theme-toggle,.auth-theme-thumb,.kaveh-auth-experience button{transition:none!important;animation:none!important}.kaveh-auth-experience:before{clip-path:none!important}}
 
-/* Global theme continuity: every signed-in area follows the same day/night state. */
-.app-frame.kaveh-premium-shell{transition:background-color .75s cubic-bezier(.22,1,.36,1),color .65s cubic-bezier(.22,1,.36,1)}
-.app-frame.kaveh-premium-shell .sidebar,.app-frame.kaveh-premium-shell .topbar,.app-frame.kaveh-premium-shell .content-scroll,.app-frame.kaveh-premium-shell .mobile-nav,.app-frame.kaveh-premium-shell .panel-card,.app-frame.kaveh-premium-shell .post-card,.app-frame.kaveh-premium-shell .settings-card,.app-frame.kaveh-premium-shell .welcome-card,.app-frame.kaveh-premium-shell .side-info-card,.app-frame.kaveh-premium-shell .community-card,.app-frame.kaveh-premium-shell .profile-main-card{transition:background-color .65s cubic-bezier(.22,1,.36,1),color .55s ease,border-color .55s ease,box-shadow .65s ease}
-.app-frame.kaveh-premium-shell .theme-toggle{position:relative;overflow:hidden;transition:transform .3s cubic-bezier(.2,.9,.25,1.25),background .45s ease,color .45s ease,box-shadow .45s ease}
+/* Fast, low-cost theme changes. Never animate large-area shadows during a palette swap. */
+.app-frame.kaveh-premium-shell{transition:background-color .16s ease,color .16s ease}
+.app-frame.kaveh-premium-shell .sidebar,
+.app-frame.kaveh-premium-shell .topbar,
+.app-frame.kaveh-premium-shell .mobile-nav,
+.app-frame.kaveh-premium-shell .panel-card,
+.app-frame.kaveh-premium-shell .post-card,
+.app-frame.kaveh-premium-shell .settings-card,
+.app-frame.kaveh-premium-shell .welcome-card,
+.app-frame.kaveh-premium-shell .side-info-card,
+.app-frame.kaveh-premium-shell .community-card,
+.app-frame.kaveh-premium-shell .profile-main-card{
+  transition:background-color .16s ease,color .16s ease,border-color .16s ease;
+}
+.app-frame.kaveh-premium-shell .theme-toggle{position:relative;overflow:hidden;transition:transform .18s ease,background-color .16s ease,color .16s ease,border-color .16s ease}
 .app-frame.kaveh-premium-shell .theme-toggle:hover{transform:translateY(-2px) rotate(-8deg);box-shadow:0 0 0 5px color-mix(in srgb,var(--remote-accent) 13%,transparent)}
 .app-frame.kaveh-premium-shell .theme-toggle:active{transform:scale(.9) rotate(12deg)}
 .app-frame.kaveh-premium-shell.theme-light .theme-toggle{background:linear-gradient(145deg,#fff2c9,#ffe3a1);color:#98621d;border-color:#f3d18d}
