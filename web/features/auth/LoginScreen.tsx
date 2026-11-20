@@ -245,10 +245,23 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
       await runOperation('ورود به حساب', async (advance) => {
         advance(18, 'آماده‌سازی اطلاعات ورود');
         advance(48, 'بررسی ایمیل و رمز عبور در سرور');
-        const { error: loginError } = await supabase.auth.signInWithPassword({
+        const enteredPassword = password;
+        const normalizedPassword = normalizePasswordDigits(enteredPassword);
+        let { error: loginError } = await supabase.auth.signInWithPassword({
           email: email.trim().toLowerCase(),
-          password,
+          password: normalizedPassword,
         });
+        const firstErrorCode = String((loginError as { code?: unknown } | null)?.code ?? '');
+        const isCredentialFailure = firstErrorCode === 'invalid_credentials' || firstErrorCode === 'invalid_login_credentials';
+        // Older Android builds could save Persian/Arabic digits verbatim.
+        // Retry the exact entered value only for credential failures, preserving those accounts.
+        if (loginError && isCredentialFailure && normalizedPassword !== enteredPassword) {
+          const legacyAttempt = await supabase.auth.signInWithPassword({
+            email: email.trim().toLowerCase(),
+            password: enteredPassword,
+          });
+          loginError = legacyAttempt.error;
+        }
         if (loginError) {
           const code = String((loginError as { code?: unknown }).code ?? '');
           if (code === 'invalid_credentials' || code === 'invalid_login_credentials') {
@@ -412,7 +425,7 @@ export default function LoginScreen({ supabase, configured }: { supabase: Supaba
         <label className="auth-label" htmlFor="login-password-email">آدرس ایمیل</label>
         <input id="login-password-email" className="auth-input" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={busy}/>
         <label className="auth-label" htmlFor="login-password">رمز عبور</label>
-        <div className="signup-password-control"><input id="login-password" className="auth-input" type={showLoginPassword ? "text" : "password"} autoComplete="current-password" dir="auto" placeholder="رمز عبور حساب" value={password} onChange={(event) => setPassword(normalizePasswordDigits(event.target.value))} required disabled={busy}/><button type="button" onClick={() => setShowLoginPassword(value => !value)} aria-label="نمایش یا پنهان‌کردن رمز">{showLoginPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div>
+        <div className="signup-password-control"><input id="login-password" className="auth-input" type={showLoginPassword ? "text" : "password"} autoComplete="current-password" dir="auto" placeholder="رمز عبور حساب" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy}/><button type="button" onClick={() => setShowLoginPassword(value => !value)} aria-label="نمایش یا پنهان‌کردن رمز">{showLoginPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div>
         <button className="google-button" type="submit" disabled={busy || !email.trim() || !password}>
           {busy ? <span className="spinner small"/> : <KeyRound size={18}/>}
           <span>{busy ? 'در حال ورود…' : 'ورود به حساب'}</span><ArrowLeft size={17}/>
