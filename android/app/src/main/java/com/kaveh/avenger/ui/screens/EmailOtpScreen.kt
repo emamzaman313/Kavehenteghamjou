@@ -275,7 +275,7 @@ fun EmailOtpScreen(
                     Spacer(Modifier.height(14.dp))
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = normalizePasswordDigits(it); errorMessage = "" },
+                        onValueChange = { password = if (setupPasswordMode) normalizePasswordDigits(it) else it; errorMessage = "" },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(if (setupPasswordMode) "انتخاب رمز عبور" else "رمز عبور") },
                         placeholder = { Text(if (setupPasswordMode) "حداقل ۱۰ نویسه؛ حروف کوچک و بزرگ، عدد و نماد" else "رمز حساب شما") },
