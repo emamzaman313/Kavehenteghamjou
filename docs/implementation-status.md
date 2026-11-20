@@ -181,3 +181,18 @@
 - CI برای Commit فعلی `97117704f89b2683cb7caef567682252db3a9521` در زمان ثبت: Android در حال اجرا، Web در صف، Security در صف. نتیجه نهایی هنوز تأیید نشده است.
 - تست واقعی دو حساب مستقل، نصب روی دستگاه فیزیکی، Android Release signing و تست دستی دسترس‌پذیری هنوز انجام نشده‌اند.
 - هیچ Production deployment/promotion، Merge یا Production migration انجام نشده است.
+
+
+---
+
+## Phase 1 follow-up — verified private downloads across Web and Android
+
+- Android chat attachments now include the persisted `sha256_hex` metadata when reading file assets. Before opening the Android save dialog, the download must pass both exact byte-size and SHA-256 validation using the shared `verifyFileIntegrity` helper. A missing or malformed digest fails closed; no unverified bytes are saved.
+- The Web chat and Vault download paths no longer open a signed URL directly. They download through the authenticated Supabase Storage client, which keeps private-bucket RLS in force, verify the Blob's exact size and SHA-256, and only then create a local browser download.
+- Added incremental Blob hashing in `web/lib/files.ts` and four unit tests covering a valid file, a size mismatch, a digest mismatch, and a missing/malformed digest.
+- The live Supabase inspection was read-only: `user-files` is still private with a 50,000,000-byte limit; the current `file_assets` table contained one row, no missing/blank digest rows and no oversized metadata rows. Owner-scoped file access, conversation-member shared reads, and attachment insertion tied to the sender and file owner were verified in the active RLS policies. No schema, policy or data changes were made.
+- Code commits: Android chat validation `25ccc3676ec548288ee5423547f3a3da012ccd04`; Web verified downloads `a30a7e15695a2f1b6a17489b903b85ebe0aee099` plus helper completion `c684faa3f133202256827f61e798ac884277670f`.
+- Exact-head CI for `c684faa3f133202256827f61e798ac884277670f`: Android CI success (unit tests and Debug APK/AAB), Web CI success (TypeScript, ESLint, unit tests and Next.js production build), and Security checks success (dependency review, dependency audit and Gitleaks).
+- Supabase Security Advisor still reports leaked-password protection disabled and flags the authenticated `public.create_support_ticket` SECURITY DEFINER function for review. The function was read-only inspected: it requires `auth.uid()`, validates inputs, has an empty search path and has no anon execute grant. It was not changed in this pass; leaked-password protection remains an owner-level Auth setting to review.
+- Manual multi-account Web/Android E2E, cross-account negative authorization tests, physical-device checks, Android Release signing and manual screen-reader/keyboard verification remain pending. This file-integrity slice is CI-validated, not a claim that all of Phase 1 or all product modules are complete.
+- No production migration, production data mutation, merge, Vercel deployment or production promotion was performed.
