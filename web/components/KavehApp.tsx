@@ -58,6 +58,7 @@ function KavehAppContent() {
   const [dark, setDark] = useState(true);
   const [themeHydrated, setThemeHydrated] = useState(false);
   const [appearance, setAppearance] = useState({ accent: '#168bff', background: '#07111f', surface: '#101b2c', radius: 16 });
+  const [homeSpotlight, setHomeSpotlight] = useState<{ text: string; image_path: string | null }>({ text: '', image_path: null });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [unread, setUnread] = useState(0);
   const [search, setSearch] = useState('');
@@ -147,15 +148,17 @@ function KavehAppContent() {
     const loadAppearance = async () => {
       const { data } = await supabase.from('platform_appearance_versions')
         .select('config').eq('is_published', true).maybeSingle();
-      const value = data?.config && typeof data.config === 'object'
-        ? (data.config as { appearance?: { accent?: string; background?: string; surface?: string; radius?: number } }).appearance
+      const config = data?.config && typeof data.config === 'object'
+        ? data.config as { appearance?: { accent?: string; background?: string; surface?: string; radius?: number }; homeSpotlight?: { text?: string; image_path?: string | null } }
         : undefined;
+      const value = config?.appearance;
       if (active && value) setAppearance({
         accent: value.accent ?? '#168bff',
         background: value.background ?? '#07111f',
         surface: value.surface ?? '#101b2c',
         radius: value.radius ?? 16,
       });
+      if (active) setHomeSpotlight({ text: config?.homeSpotlight?.text ?? '', image_path: config?.homeSpotlight?.image_path ?? null });
     };
     const refreshOnFocus = () => { if (document.visibilityState === 'visible') void loadAppearance(); };
     void loadAppearance();
@@ -275,6 +278,10 @@ function KavehAppContent() {
         <div className="topbar-title"><span className="eyebrow"><i/> KAVEH AVENGER <b>·</b> فضای اختصاصی</span><h2>{navItems.find((n) => n.id === tab)?.label ?? ({ notifications: 'اعلان‌ها', settings: 'تنظیمات', social: 'ریلز و موسیقی', support: isSupportStaff ? 'صندوق پشتیبانی' : 'پشتیبانی و ارتباط با مدیریت', admin: 'مدیریت' } as Record<string,string>)[tab]}</h2></div>
         <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" aria-label="جست‌وجوی اعضا" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>Enter ↵</kbd></label><button className="icon-button mobile-search-button" onClick={() => setTab('discover')} title="جست‌وجوی اعضا" aria-label="رفتن به جست‌وجوی اعضا"><Search size={19}/></button><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-label={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-pressed={!dark}><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
+      {tab === 'home' && (homeSpotlight.text || homeSpotlight.image_path) && <section className="home-admin-spotlight" aria-label="پیام مدیریت سایت">
+        {homeSpotlight.image_path && <img src={supabase.storage.from('post-media').getPublicUrl(homeSpotlight.image_path).data.publicUrl} alt="تصویر منتخب مدیریت"/>}
+        {homeSpotlight.text && <p>{homeSpotlight.text}</p>}
+      </section>}
       <div className="content-scroll">
         {publicProfileUsername ? <PublicProfileView supabase={supabase} viewerId={session.user.id} username={publicProfileUsername} notify={notify} onBack={closePublicProfile} onOpenChat={() => { closePublicProfile(); setTab('chats'); }}/> : <>
         <KavehPageStage activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
