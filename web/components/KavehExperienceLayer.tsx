@@ -25,6 +25,8 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const items = useMemo(() => destinations.filter((item) => item.id !== 'admin' || isAdmin), [isAdmin]);
   const filtered = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('fa');
@@ -47,7 +49,26 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
         }
         return;
       }
-      if (event.key === 'Escape') { setOpen(false); setQuery(''); }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        setQuery('');
+        triggerRef.current?.focus();
+      }
+      if (event.key === 'Tab') {
+        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled])');
+        if (focusable?.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+      }
       if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((n) => Math.min(n + 1, Math.max(0, filtered.length - 1))); }
       if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((n) => Math.max(0, n - 1)); }
       if (event.key === 'Enter') {
@@ -146,24 +167,24 @@ export default function KavehExperienceLayer({ isAdmin, onNavigate }: { isAdmin:
     <div className="kaveh-ambient-layer" aria-hidden="true"><span className="kaveh-ambient-orb kaveh-ambient-orb-one" /><span className="kaveh-ambient-orb kaveh-ambient-orb-two" /><span className="kaveh-ambient-grid" /></div>
     <div className="kaveh-pointer-glow" aria-hidden="true" />
     <div className="kaveh-scroll-progress" aria-hidden="true" />
-    <button type="button" className="kaveh-command-trigger" onClick={() => setOpen(true)} aria-label="باز کردن فرمان‌مرکز" title="فرمان‌مرکز (Ctrl یا ⌘ + K)">
+    <button type="button" className="kaveh-command-trigger" ref={triggerRef} onClick={() => setOpen(true)} aria-label="باز کردن فرمان‌مرکز" title="فرمان‌مرکز (Ctrl یا ⌘ + K)">
       <Command size={17} /><span>فرمان‌مرکز</span><kbd>⌘ K</kbd>
     </button>
     {open && <div className="kaveh-command-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) { setOpen(false); setQuery(''); }
+      if (event.target === event.currentTarget) { setOpen(false); setQuery(''); triggerRef.current?.focus(); }
     }}>
-      <section className="kaveh-command-dialog" role="dialog" aria-modal="true" aria-label="فرمان‌مرکز کاوه">
+      <section ref={dialogRef} className="kaveh-command-dialog" role="dialog" aria-modal="true" aria-label="فرمان‌مرکز کاوه">
         <header className="kaveh-command-heading">
           <div className="kaveh-command-brand"><span><Command size={18} /></span><div><strong>فرمان‌مرکز کاوه</strong><small>میانبرها و مسیرهای سریع فضای شما</small></div></div>
-          <button type="button" className="kaveh-command-close" onClick={() => { setOpen(false); setQuery(''); }} aria-label="بستن"><X size={18} /></button>
+          <button type="button" className="kaveh-command-close" onClick={() => { setOpen(false); setQuery(''); triggerRef.current?.focus(); }} aria-label="بستن"><X size={18} /></button>
         </header>
         <label className="kaveh-command-search"><Search size={18} />
-          <input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} placeholder="کجا می‌خواهی بروی؟ نام بخش را بنویس…" aria-label="جست‌وجوی فرمان‌ها" />
+          <input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} placeholder="کجا می‌خواهی بروی؟ نام بخش را بنویس…" aria-label="جست‌وجوی فرمان‌ها" role="combobox" aria-expanded="true" aria-controls="kaveh-command-results" aria-activedescendant={filtered[activeIndex] ? "kaveh-command-item-" + filtered[activeIndex].id : undefined} />
           <kbd>ESC</kbd>
         </label>
         <div className="kaveh-command-section-label"><span>دسترسی سریع</span><small>{filtered.length} مسیر</small></div>
-        <div className="kaveh-command-results" role="listbox" aria-label="بخش‌های کاوه">
-          {filtered.map((item, index) => <button type="button" role="option" aria-selected={activeIndex === index} key={item.id} className={'kaveh-command-item' + (activeIndex === index ? ' is-active' : '')}
+        <div id="kaveh-command-results" className="kaveh-command-results" role="listbox" aria-label="بخش‌های کاوه">
+          {filtered.map((item, index) => <button type="button" role="option" aria-selected={activeIndex === index} id={"kaveh-command-item-" + item.id} key={item.id} className={'kaveh-command-item' + (activeIndex === index ? ' is-active' : '')}
             onMouseEnter={() => setActiveIndex(index)} onClick={() => { onNavigate(item.id); setOpen(false); setQuery(''); }}>
             <span className="kaveh-command-item-icon"><item.icon size={18} /></span>
             <span className="kaveh-command-item-copy"><strong>{item.title}</strong><small>{item.description}</small></span>
