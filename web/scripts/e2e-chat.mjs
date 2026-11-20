@@ -9,6 +9,8 @@ const required = [
   'KAVEH_E2E_USER_A_PASSWORD',
   'KAVEH_E2E_USER_B_EMAIL',
   'KAVEH_E2E_USER_B_PASSWORD',
+  'KAVEH_E2E_USER_C_EMAIL',
+  'KAVEH_E2E_USER_C_PASSWORD',
 ];
 for (const name of required) {
   if (!process.env[name]) throw new Error(`Missing required environment variable: ${name}`);
@@ -19,6 +21,7 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
 const userA = createClient(url, key, options);
 const userB = createClient(url, key, options);
+const userC = createClient(url, key, options);
 const anonymous = createClient(url, key, options);
 const token = randomUUID();
 let channel;
@@ -45,12 +48,13 @@ function timeout(promise, ms, label) {
 }
 
 try {
-  const [a, b] = await Promise.all([
+  const [a, b, c] = await Promise.all([
     signIn(userA, process.env.KAVEH_E2E_USER_A_EMAIL, process.env.KAVEH_E2E_USER_A_PASSWORD, 'Account A'),
     signIn(userB, process.env.KAVEH_E2E_USER_B_EMAIL, process.env.KAVEH_E2E_USER_B_PASSWORD, 'Account B'),
+    signIn(userC, process.env.KAVEH_E2E_USER_C_EMAIL, process.env.KAVEH_E2E_USER_C_PASSWORD, 'Account C'),
   ]);
-  assert.notEqual(a.id, b.id, 'E2E accounts must be two distinct Supabase users');
-  pass('two independent accounts authenticated');
+  assert.equal(new Set([a.id, b.id, c.id]).size, 3, 'E2E must use three distinct Supabase users');
+  pass('three independent accounts authenticated (sender, recipient, unauthorized peer)');
 
   const { data: conversationId, error: createError } = await userA.rpc('create_direct_conversation', {
     p_other_user_id: b.id,
@@ -65,7 +69,14 @@ try {
     .maybeSingle();
   if (membershipError) throw new Error(`Account B membership query failed: ${membershipError.message}`);
   assert.ok(membership, 'Account B cannot see its own conversation membership');
-  pass('private conversation created and visible to both members');
+  const { data: outsiderMembership, error: outsiderMembershipError } = await userC
+    .from('conversation_members')
+    .select('conversation_id')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', c.id)
+    .maybeSingle();
+  assert.ok(outsiderMembershipError || !outsiderMembership, 'Account C unexpectedly sees membership in a private conversation');
+  pass('private conversation created for A and B; unrelated Account C cannot see membership');
 
   let resolveRealtime;
   const realtimeMessage = new Promise((resolve) => { resolveRealtime = resolve; });
@@ -106,7 +117,13 @@ try {
     .single();
   if (receiveError) throw new Error(`Account B message read failed: ${receiveError.message}`);
   assert.equal(receivedMessage.sender_id, a.id);
-  pass('message persisted and arrived over Realtime at the second account');
+  const { data: outsiderMessage, error: outsiderMessageError } = await userC
+    .from('messages')
+    .select('id')
+    .eq('id', sentMessage.id)
+    .maybeSingle();
+  assert.ok(outsiderMessageError || !outsiderMessage, 'Account C unexpectedly read a private conversation message');
+  pass('message persisted, arrived over Realtime at B, and remained unreadable to unrelated Account C');
 
   const readAt = new Date().toISOString();
   const { error: readUpdateError } = await userB
@@ -173,7 +190,15 @@ try {
   if (downloadError || !downloaded) throw new Error(`Account B file download failed: ${downloadError?.message ?? 'empty response'}`);
   const downloadedBytes = Buffer.from(await downloaded.arrayBuffer());
   assert.deepEqual(downloadedBytes, fileBytes, 'downloaded file bytes differ from uploaded bytes');
-  pass('private file uploaded, shared with conversation member, downloaded and SHA-256 verified');
+  const { data: outsiderAsset, error: outsiderAssetError } = await userC
+    .from('file_assets')
+    .select('id')
+    .eq('id', asset.id)
+    .maybeSingle();
+  assert.ok(outsiderAssetError || !outsiderAsset, 'Account C unexpectedly read private attachment metadata');
+  const { data: outsiderFile, error: outsiderFileError } = await userC.storage.from('user-files').download(objectPath);
+  assert.ok(outsiderFileError || !outsiderFile, 'Account C unexpectedly downloaded a private attachment');
+  pass('private file shared with B and verified; unrelated Account C denied metadata and object access');
 
   const { data: anonymousAsset, error: anonymousMetadataError } = await anonymous
     .from('file_assets')
@@ -189,5 +214,5 @@ try {
   console.log('Note: test records are intentionally retained for audit; this script does not delete production data.');
 } finally {
   if (channel) await userB.removeChannel(channel);
-  await Promise.allSettled([userA.auth.signOut(), userB.auth.signOut()]);
+  await Promise.allSettled([userA.auth.signOut(), userB.auth.signOut(), userC.auth.signOut()]);
 }
