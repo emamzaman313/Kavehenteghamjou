@@ -2,6 +2,9 @@ package com.kaveh.avenger.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -57,6 +60,11 @@ fun KavehTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     MaterialTheme(
         colorScheme = if (dark) KavehDark else KavehLight,
+        shapes = Shapes(
+            small = RoundedCornerShape(KavehRadius.small),
+            medium = RoundedCornerShape(KavehRadius.medium),
+            large = RoundedCornerShape(KavehRadius.large)
+        ),
         content = content
     )
 }
