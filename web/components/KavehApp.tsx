@@ -16,6 +16,7 @@ import ChatView from '@/features/chat/ChatView';
 import FilesView from '@/features/files/FilesView';
 import DiscoverView from '@/features/discover/DiscoverView';
 import ProfileView from '@/features/profile/ProfileView';
+import PublicProfileView from '@/features/profile/PublicProfileView';
 import NotificationsView from '@/features/notifications/NotificationsView';
 import SettingsView from '@/features/settings/SettingsView';
 import SocialHubView from '@/features/social/SocialHubView';
@@ -52,6 +53,7 @@ function KavehAppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(!supabase);
   const [tab, setTab] = useState<Tab>('home');
+  const [publicProfileUsername, setPublicProfileUsername] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dark, setDark] = useState(true);
   const [themeHydrated, setThemeHydrated] = useState(false);
@@ -190,6 +192,19 @@ function KavehAppContent() {
   }, [supabase, session, notify]);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
+  useEffect(() => {
+    const readPublicProfile = () => {
+      const value = new URLSearchParams(window.location.search).get('profile');
+      setPublicProfileUsername(value && /^[a-zA-Z0-9_]{1,30}$/.test(value) ? value : null);
+    };
+    readPublicProfile();
+    window.addEventListener('popstate', readPublicProfile);
+    return () => window.removeEventListener('popstate', readPublicProfile);
+  }, []);
+  const closePublicProfile = () => {
+    window.history.pushState({}, '', window.location.pathname);
+    setPublicProfileUsername(null);
+  };
 
   useEffect(() => {
     if (!supabase || !session?.user.id) return;
@@ -259,6 +274,7 @@ function KavehAppContent() {
         <div className="topbar-actions"><label className="global-search"><Search size={17}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجو در کاوه…" aria-label="جست‌وجوی اعضا" onKeyDown={(e) => { if (e.key === 'Enter') setTab('discover'); }}/><kbd>Enter ↵</kbd></label><button className="icon-button mobile-search-button" onClick={() => setTab('discover')} title="جست‌وجوی اعضا" aria-label="رفتن به جست‌وجوی اعضا"><Search size={19}/></button><button className="icon-button theme-toggle" onClick={() => setDark((v) => !v)} title={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-label={dark ? "تغییر به حالت روز" : "تغییر به حالت شب"} aria-pressed={!dark}><SunMoon size={19}/></button><button className="icon-button notification-button" onClick={() => setTab('notifications')} title="اعلان‌ها"><Bell size={19}/>{unread > 0 && <i/>}</button><button className="icon-button mobile-signout" onClick={() => void supabase.auth.signOut()} title="خروج از حساب" aria-label="خروج از حساب"><LogOut size={18}/></button><Avatar profile={profile} size="sm"/></div>
       </header>
       <div className="content-scroll">
+        {publicProfileUsername ? <PublicProfileView supabase={supabase} viewerId={session.user.id} username={publicProfileUsername} notify={notify} onBack={closePublicProfile} onOpenChat={() => { closePublicProfile(); setTab('chats'); }}/> : <>
         <KavehPageStage activeTab={tab} isAdmin={isAdmin} unread={unread} onNavigate={setTab} />
         {tab === 'home' && <FeedView supabase={supabase} userId={session.user.id} notify={notify} onGoChats={() => setTab('chats')}/>}
         {tab === 'chats' && <ChatView supabase={supabase} userId={session.user.id} notify={notify}/>}
@@ -272,6 +288,7 @@ function KavehAppContent() {
         {tab === 'settings' && <SettingsView supabase={supabase} userId={session.user.id} dark={dark} onTheme={setDark} notify={notify} onSignOut={() => void supabase.auth.signOut()}/>}
         {tab === 'admin' && isAdmin && <AdminAccessCodePanel supabase={supabase} notify={notify} role={adminRole === 'owner' || adminRole === 'admin' ? adminRole : 'moderator'}/>}
         {tab === 'admin' && !isAdmin && <section className="panel-card"><div className="notice notice-error">دسترسی مدیریت برای این حساب فعال نیست.</div></section>}
+        </>}
       </div>
       <nav className="mobile-nav" aria-label="ناوبری موبایل">{visibleNavItems.map((item) => <button key={item.id} className={tab === item.id ? 'active' : '' } aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}{isAdmin && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}><ShieldCheck size={19}/><span>مدیریت</span></button>}</nav>
     </main>
