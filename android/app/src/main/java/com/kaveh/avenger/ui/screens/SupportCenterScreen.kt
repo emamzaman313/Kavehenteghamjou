@@ -212,14 +212,33 @@ fun SupportCenterScreen(
         try {
             OperationProgressController.run("به‌روزرسانی درخواست پشتیبانی") { progress ->
                 progress.advance(22, "بررسی مجوز و اطلاعات تغییر")
-                supabase.postgrest.rpc(
-                    "update_support_ticket",
-                    buildJsonObject {
-                        put("p_ticket_id", JsonPrimitive(ticket.id))
-                        if (field == "status") put("p_status", JsonPrimitive(value))
-                        else put("p_priority", JsonPrimitive(value))
+                try {
+                    supabase.postgrest.rpc(
+                        "update_support_ticket",
+                        buildJsonObject {
+                            put("p_ticket_id", JsonPrimitive(ticket.id))
+                            if (field == "status") put("p_status", JsonPrimitive(value))
+                            else put("p_priority", JsonPrimitive(value))
+                        }
+                    )
+                } catch (rpcError: Exception) {
+                    val message = rpcError.message.orEmpty()
+                    if (!message.contains("PGRST202", ignoreCase = true) &&
+                        !message.contains("Could not find the function", ignoreCase = true)
+                    ) throw rpcError
+
+                    // Backward-compatible path until the additive RPC migration is applied.
+                    val now = java.time.Instant.now().toString()
+                    supabase.postgrest["support_tickets"].update({
+                        set(field, value)
+                        set("updated_at", now)
+                        if (field == "status") {
+                            set("resolved_at", if (value == "resolved" || value == "closed") now else null)
+                        }
+                    }) {
+                        filter { eq("id", ticket.id) }
                     }
-                )
+                }
                 progress.advance(78, "تغییر در سرور ثبت شد؛ دریافت وضعیت تازه")
                 refreshTickets()
             }
