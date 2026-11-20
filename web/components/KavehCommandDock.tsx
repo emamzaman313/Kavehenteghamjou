@@ -15,7 +15,7 @@ type Destination =
 type Route = { id: Destination; title: string; description: string; shortcut: string; icon: LucideIcon };
 
 const routes: Route[] = [
-  { id: 'home', title: 'خانه و جریان', description: 'پست‌ها و تازه‌ترین اتفاق‌ها', shortcut: 'H', icon: Home },
+  { id: 'home', title: 'خانه و تازه‌ها', description: 'پست‌ها و تازه‌ترین رویدادها', shortcut: 'H', icon: Home },
   { id: 'chats', title: 'گفتگوها', description: 'پیام‌ها، گروه‌ها و فضاهای گفتگو', shortcut: 'C', icon: MessageCircle },
   { id: 'world', title: 'جهان کاوه', description: 'مأموریت‌ها، رتبه‌ها و رویدادها', shortcut: 'W', icon: Activity },
   { id: 'discover', title: 'اکتشاف', description: 'افراد و محتوای تازه را پیدا کن', shortcut: 'E', icon: Compass },
@@ -202,14 +202,14 @@ export default function KavehCommandDock({
             <header className="kaveh-command-heading">
               <div className="kaveh-command-brand">
                 <span className="kaveh-command-brand-icon"><Sparkles size={18} /></span>
-                <span><strong id="kaveh-command-title">مرکز فرمان کاوه</strong><small>فضای شخصی، میان‌برهای هوشمند</small></span>
+                <span><strong id="kaveh-command-title">مرکز فرمان کاوه</strong><small>دسترسی سریع به بخش‌های کاوه</small></span>
               </div>
               <button type="button" className="kaveh-command-close" onClick={() => setOpen(false)} aria-label="بستن"><X size={17} /></button>
             </header>
 
             <div className="kaveh-command-current">
               <span className="kaveh-command-current-mark"><Activity size={15} /></span>
-              <span><small>در حال مشاهده</small><strong>{currentRoute?.title ?? 'فضای کاوه'}</strong></span>
+              <span><small>بخش فعلی</small><strong>{currentRoute?.title ?? 'فضای کاوه'}</strong></span>
               {unread > 0 && <button type="button" onClick={() => navigate('notifications')}><b>{unread > 99 ? '۹۹+' : unread}</b> اعلان خوانده‌نشده <ArrowLeft size={13} /></button>}
             </div>
 
@@ -219,7 +219,7 @@ export default function KavehCommandDock({
                 ref={inputRef}
                 value={query}
                 onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
-                placeholder="بخش موردنظرت را پیدا کن…"
+                placeholder="نام بخش یا قابلیت را جست‌وجو کن…"
                 aria-label="جست‌وجوی بخش‌ها"
                 autoComplete="off"
               />
@@ -251,7 +251,7 @@ export default function KavehCommandDock({
             </div>
 
             <footer className="kaveh-command-settings">
-              <div className="kaveh-command-settings-title"><Palette size={15} /><strong>شخصی‌سازی فضای کاوه</strong></div>
+              <div className="kaveh-command-settings-title"><Palette size={15} /><strong>تنظیمات ظاهری</strong></div>
               <div className="kaveh-command-palettes" aria-label="انتخاب رنگ تأکیدی">
                 {palettes.map((palette) => (
                   <button
@@ -274,7 +274,7 @@ export default function KavehCommandDock({
                 </button>
               </div>
             </footer>
-            <div className="kaveh-command-footnote"><span><Zap size={12} /> میان‌بر بازکردن</span><kbd>Ctrl</kbd><b>+</b><kbd>Shift</kbd><b>+</b><kbd>Space</kbd></div>
+            <div className="kaveh-command-footnote"><span><Zap size={12} /> میان‌بر باز کردن</span><kbd>Ctrl</kbd><b>+</b><kbd>Shift</kbd><b>+</b><kbd>Space</kbd></div>
           </section>
         </>
       )}
