@@ -55,15 +55,17 @@ export default function PublicProfileView({ supabase, viewerId, username, notify
     setBusy(true);
     const wasFollowing = following;
     const wasPending = pending;
+    const nextStatus = person.profile_visibility === 'followers' ? 'pending' : 'accepted';
     const result = wasFollowing || wasPending
       ? await supabase.from('follows').delete().eq('follower_id', viewerId).eq('following_id', person.id)
-      : await supabase.from('follows').insert({ follower_id: viewerId, following_id: person.id, status: 'pending' });
+      : await supabase.from('follows').upsert({ follower_id: viewerId, following_id: person.id, status: nextStatus }, { onConflict: 'follower_id,following_id' });
     setBusy(false);
     if (result.error) { notify('تغییر وضعیت دنبال‌کردن انجام نشد: ' + result.error.message, 'error'); return; }
-    setFollowing(false);
-    setPending(!wasFollowing && !wasPending);
+    setFollowing(!wasFollowing && !wasPending && nextStatus === 'accepted');
+    setPending(!wasFollowing && !wasPending && nextStatus === 'pending');
     if (wasFollowing) setFollowers(value => Math.max(0, value - 1));
-    notify(wasFollowing || wasPending ? 'ارتباط یا درخواست دنبال‌کردن لغو شد.' : 'درخواست دنبال‌کردن ارسال شد.');
+    if (!wasFollowing && !wasPending && nextStatus === 'accepted') setFollowers(value => value + 1);
+    notify(wasFollowing || wasPending ? 'دنبال‌کردن یا درخواست آن لغو شد.' : nextStatus === 'pending' ? 'درخواست دنبال‌کردن ارسال شد.' : 'اکنون این عضو را دنبال می‌کنی.');
   };
 
   const share = async () => {
