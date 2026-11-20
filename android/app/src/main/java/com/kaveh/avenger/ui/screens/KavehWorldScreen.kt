@@ -45,6 +45,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.util.UUID
+import com.kaveh.avenger.ui.progress.OperationProgressController
 
 @Serializable
 private data class WorldMissionRow(
@@ -360,7 +361,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                     scope.launch {
                                         busy = true
                                         try {
-                                            supabase.postgrest["daily_missions"].update({ set("active", !mission.active) }) { filter { eq("id", mission.id) } }
+                                            OperationProgressController.run("به‌روزرسانی مأموریت") { progress ->
+                                                progress.advance(28, "بررسی مجوز و وضعیت مأموریت")
+                                                supabase.postgrest["daily_missions"].update({ set("active", !mission.active) }) { filter { eq("id", mission.id) } }
+                                                progress.advance(90, "وضعیت مأموریت در سرور ثبت شد")
+                                            }
                                             refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "تغییر وضعیت مأموریت ناموفق بود." }
                                         finally { busy = false }
@@ -386,14 +391,18 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                         scope.launch {
                                             busy = true
                                             try {
-                                                if (joined.contains(event.id)) {
-                                                    supabase.postgrest["platform_event_participants"].delete {
-                                                        filter { eq("event_id", event.id); eq("user_id", userId) }
+                                                OperationProgressController.run(if (joined.contains(event.id)) "خروج از رویداد" else "ثبت‌نام در رویداد") { progress ->
+                                                    progress.advance(24, "بررسی وضعیت عضویت")
+                                                    if (joined.contains(event.id)) {
+                                                        supabase.postgrest["platform_event_participants"].delete {
+                                                            filter { eq("event_id", event.id); eq("user_id", userId) }
+                                                        }
+                                                        joined.remove(event.id)
+                                                    } else {
+                                                        supabase.postgrest["platform_event_participants"].insert(WorldParticipantInsert(event.id, userId))
+                                                        joined.add(event.id)
                                                     }
-                                                    joined.remove(event.id)
-                                                } else {
-                                                    supabase.postgrest["platform_event_participants"].insert(WorldParticipantInsert(event.id, userId))
-                                                    joined.add(event.id)
+                                                    progress.advance(90, "وضعیت شرکت در رویداد ثبت شد")
                                                 }
                                             } catch (exception: Exception) {
                                                 error = exception.message ?: "تغییر عضویت رویداد ناموفق بود."
@@ -408,7 +417,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                     scope.launch {
                                         busy = true
                                         try {
-                                            supabase.postgrest["platform_events"].update({ set("status", "archived") }) { filter { eq("id", event.id) } }
+                                            OperationProgressController.run("پایان دادن به رویداد") { progress ->
+                                                progress.advance(26, "بررسی رویداد و دسترسی مدیر")
+                                                supabase.postgrest["platform_events"].update({ set("status", "archived") }) { filter { eq("id", event.id) } }
+                                                progress.advance(90, "پایان رویداد در سرور ثبت شد")
+                                            }
                                             refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "پایان رویداد ناموفق بود." }
                                         finally { busy = false }
@@ -458,7 +471,12 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                             }
                                             busy = true
                                             try {
-                                                supabase.postgrest["daily_missions"].insert(WorldMissionInsert("android-${UUID.randomUUID()}", missionTitle.trim(), missionDescription.trim(), missionAction, target, reward, true, Instant.now().toString(), userId, missionBadgeCode.ifBlank { null }))
+                                                OperationProgressController.run("ساخت مأموریت") { progress ->
+                                                    progress.advance(22, "اعتبارسنجی عنوان، هدف و پاداش")
+                                                    progress.advance(52, "ثبت مأموریت در پایگاه داده")
+                                                    supabase.postgrest["daily_missions"].insert(WorldMissionInsert("android-${UUID.randomUUID()}", missionTitle.trim(), missionDescription.trim(), missionAction, target, reward, true, Instant.now().toString(), userId, missionBadgeCode.ifBlank { null }))
+                                                    progress.advance(90, "مأموریت با مجوز سرور ثبت شد")
+                                                }
                                                 missionTitle = ""; missionDescription = ""; missionBadgeCode = ""; refresh()
                                             } catch (exception: Exception) { error = exception.message ?: "ساخت مأموریت ناموفق بود." }
                                             finally { busy = false }
@@ -482,7 +500,12 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                             }
                                             busy = true
                                             try {
-                                                supabase.postgrest["platform_events"].insert(WorldEventInsert(eventTitle.trim(), eventSummary.trim(), eventBody.trim(), eventCategory, "published", Instant.now().toString(), 0, userId))
+                                                OperationProgressController.run("ایجاد و انتشار رویداد") { progress ->
+                                                    progress.advance(20, "اعتبارسنجی عنوان، توضیحات و دسته‌بندی")
+                                                    progress.advance(54, "ثبت رویداد در سرور")
+                                                    supabase.postgrest["platform_events"].insert(WorldEventInsert(eventTitle.trim(), eventSummary.trim(), eventBody.trim(), eventCategory, "published", Instant.now().toString(), 0, userId))
+                                                    progress.advance(92, "رویداد منتشر شد")
+                                                }
                                                 eventTitle = ""; eventSummary = ""; eventBody = ""; refresh()
                                             } catch (exception: Exception) { error = exception.message ?: "ساخت رویداد ناموفق بود." }
                                             finally { busy = false }
@@ -501,7 +524,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                         if (badgeCode.length < 3 || badgeTitle.trim().length < 2) { error = "کد یا عنوان نشان معتبر نیست."; return@launch }
                                         busy = true
                                         try {
-                                            supabase.postgrest["badges"].insert(WorldBadgeInsert(badgeCode, badgeTitle.trim(), badgeDescription.trim()))
+                                            OperationProgressController.run("ساخت نشان افتخار") { progress ->
+                                                progress.advance(26, "اعتبارسنجی شناسه و عنوان نشان")
+                                                supabase.postgrest["badges"].insert(WorldBadgeInsert(badgeCode, badgeTitle.trim(), badgeDescription.trim()))
+                                                progress.advance(90, "نشان در تالار افتخار ثبت شد")
+                                            }
                                             badgeCode = ""; badgeTitle = ""; badgeDescription = ""; refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "ساخت نشان ناموفق بود." }
                                         finally { busy = false }
@@ -514,7 +541,11 @@ fun KavehWorldScreen(supabase: SupabaseClient, userId: String, isAdmin: Boolean)
                                         if (awardUserId.isBlank() || selectedBadgeCode.isBlank()) { error = "شناسه کاربر و کد نشان لازم است."; return@launch }
                                         busy = true
                                         try {
-                                            supabase.postgrest["user_badges"].insert(WorldUserBadgeInsert(awardUserId, selectedBadgeCode, userId))
+                                            OperationProgressController.run("اعطای نشان به کاربر") { progress ->
+                                                progress.advance(24, "بررسی شناسه کاربر و مجوز مدیر")
+                                                supabase.postgrest["user_badges"].insert(WorldUserBadgeInsert(awardUserId, selectedBadgeCode, userId))
+                                                progress.advance(90, "اعطای نشان در سرور ثبت شد")
+                                            }
                                             awardUserId = ""; selectedBadgeCode = ""; refresh()
                                         } catch (exception: Exception) { error = exception.message ?: "اعطای نشان ناموفق بود." }
                                         finally { busy = false }
